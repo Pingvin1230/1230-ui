@@ -142,10 +142,10 @@ These tasks are **mandatory** for GitHub publication and deployment on any serve
 - [ ] "Generating title..." indicator in UI
 
 **Stage B: Manual editing (Frontend)**
-- [ ] Add inline title editing in ChatPage (click → input → Enter to save)
-- [ ] Add "Edit title" button in breadcrumbs (Pencil icon)
-- [ ] Endpoint `PATCH /api/sessions/:id/title` — updates title in Hermes DB
-- [ ] Auto-save via debounce (500ms)
+- ✅ Add inline title editing in ChatPage (click → input → Enter to save)
+- ✅ Add "Edit title" button in breadcrumbs (Pencil icon)
+- ✅ Endpoint `PATCH /api/sessions/:id/title` — updates title in Hermes DB
+- ✅ Auto-save via debounce (500ms)
 
 **Stage C: UI improvements**
 - [ ] Show "Generating title..." skeleton while LLM works
@@ -165,7 +165,7 @@ These tasks are **mandatory** for GitHub publication and deployment on any serve
 
 ### 0.5. Session Management (CRUD)
 **Role:** Backend + Frontend  
-**Files:** `server.js`, `scripts/delete_session.py` (new), `src/pages/SessionsPage.tsx`, `src/pages/ChatPage.tsx`  
+**Files:** `server.js`, `src/pages/SessionsPage.tsx`, `src/pages/ChatPage.tsx`  
 **Description:** Currently user cannot delete session — list gets cluttered with test/failed sessions  
 **Problem:**
 - No "Delete session" button
@@ -175,15 +175,14 @@ These tasks are **mandatory** for GitHub publication and deployment on any serve
 **Tasks:**
 
 **Session deletion:**
-- [ ] Create `scripts/delete_session.py` — deletes session from Hermes DB (cascade: session + messages)
-- [ ] Endpoint `DELETE /api/sessions/:id` — calls script
-- [ ] "Delete" button in SessionsPage (Trash icon, with confirm modal)
-- [ ] "Delete" button in ChatPage (in breadcrumbs menu or header)
-- [ ] Redirect to `/sessions` after deletion
+- ✅ Endpoint `DELETE /api/sessions/:id` — proxies to Hermes REST API (no Python script needed)
+- ✅ "Delete" button in SessionsPage (Trash icon, with confirm modal)
+- ✅ "Delete" button in ChatPage (in breadcrumbs menu or header)
+- ✅ Redirect to `/sessions` after deletion
 
 **Renaming:**
-- [ ] Endpoint `PATCH /api/sessions/:id/title` — updates title (can combine with task #0)
-- [ ] Inline editing in SessionsPage (double-click → input → Enter)
+- ✅ Endpoint `PATCH /api/sessions/:id/title` — proxies to Hermes REST API
+- ✅ Inline editing in ChatPage (click → input → Enter)
 
 **Optional (can be in P1):**
 - [ ] Pin important sessions (displayed first)
@@ -192,7 +191,8 @@ These tasks are **mandatory** for GitHub publication and deployment on any serve
 
 **Priority:** HIGH (important for data management)  
 **Complexity:** Medium (2-3 hours for basic deletion)  
-**Dependencies:** Task #0 (renaming overlaps)
+**Dependencies:** Task #0 (renaming overlaps)  
+**Status:** ✅ COMPLETED (2026-06-04) — deletion and renaming via Hermes REST API
 
 ---
 
