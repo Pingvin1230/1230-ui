@@ -61,6 +61,23 @@ export const api = {
     return data.sessionId;
   },
 
+  async deleteSession(sessionId: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/api/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete session');
+  },
+
+  async updateSessionTitle(sessionId: string, title: string): Promise<Session> {
+    const res = await fetch(`${API_BASE}/api/sessions/${sessionId}/title`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+    if (!res.ok) throw new Error('Failed to update session title');
+    return res.json();
+  },
+
   sendMessage(
     messages: ChatMessage[],
     options: {

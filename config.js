@@ -29,7 +29,6 @@ const config = {
   scripts: {
     saveMessages: path.join(__dirname, 'scripts', 'save_messages.py'),
     syncProviders: path.join(__dirname, 'scripts', 'sync_providers.py'),
-    createSession: path.join(__dirname, 'scripts', 'create_session.py'),
   }
 };
 

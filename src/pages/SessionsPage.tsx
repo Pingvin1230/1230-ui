@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Virtuoso } from 'react-virtuoso';
 import { api } from '../lib/api';
-import { RefreshCw, Plus, MessageSquare, Sparkles, Loader2, SearchX } from 'lucide-react';
+import { RefreshCw, Plus, MessageSquare, Sparkles, Loader2, SearchX, Trash2 } from 'lucide-react';
 import type { Session } from '../types/api';
 import { formatTimeAgo, formatFullDateTime } from '../lib/time';
 import { useSearchStore } from '../store/searchStore';
@@ -64,8 +64,25 @@ export function SessionsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const query = useSearchStore((s) => s.query);
   const setQuery = useSearchStore((s) => s.setQuery);
+
+  async function handleDelete(sessionId: string) {
+    try {
+      setDeletingSessionId(sessionId);
+      await api.deleteSession(sessionId);
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      setTotal((prev) => prev - 1);
+      setConfirmDeleteId(null);
+    } catch (err) {
+      console.error('Failed to delete session:', err);
+      setError('Failed to delete session');
+    } finally {
+      setDeletingSessionId(null);
+    }
+  }
 
   const loadSessions = useCallback(async () => {
     try {
@@ -284,46 +301,101 @@ export function SessionsPage() {
                     : session.preview
                   : 'Untitled session');
               return (
-                <Link
-                  to={`/chat/${session.id}`}
-                  className="block bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-2 hover:border-blue-300 dark:hover:border-blue-600 transition-all hover:shadow-sm"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-4 mb-2">
-                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
-                        {title}
-                      </h3>
-                      <span
-                        className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap flex-shrink-0"
-                        title={formatFullDateTime(session.startedAt)}
-                      >
-                        {formatTimeAgo(session.startedAt)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      {session.model && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                          {session.model}
+                <div className="relative group">
+                  <Link
+                    to={`/chat/${session.id}`}
+                    className="block bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-2 hover:border-blue-300 dark:hover:border-blue-600 transition-all hover:shadow-sm pr-12"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-4 mb-2">
+                        <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                          {title}
+                        </h3>
+                        <span
+                          className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap flex-shrink-0"
+                          title={formatFullDateTime(session.startedAt)}
+                        >
+                          {formatTimeAgo(session.startedAt)}
                         </span>
+                      </div>
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        {session.model && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                            {session.model}
+                          </span>
+                        )}
+                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                          {session.source}
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                          <MessageSquare className="w-3 h-3" />
+                          {session.messageCount}
+                        </span>
+                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-mono text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800">
+                          #{session.id.slice(0, 8)}
+                        </span>
+                      </div>
+                      {session.preview && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                          {session.preview}
+                        </p>
                       )}
-                      <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                        {session.source}
-                      </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                        <MessageSquare className="w-3 h-3" />
-                        {session.messageCount}
-                      </span>
-                      <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-mono text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800">
-                        #{session.id.slice(0, 8)}
-                      </span>
                     </div>
-                    {session.preview && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                        {session.preview}
-                      </p>
+                  </Link>
+                  
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setConfirmDeleteId(session.id);
+                    }}
+                    disabled={deletingSessionId === session.id}
+                    className="absolute top-4 right-4 p-2 rounded-lg text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
+                    aria-label="Delete session"
+                    title="Delete session"
+                  >
+                    {deletingSessionId === session.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
                     )}
-                  </div>
-                </Link>
+                  </button>
+
+                  {confirmDeleteId === session.id && (
+                    <div className="absolute inset-0 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 rounded-lg p-4 mb-2 flex flex-col items-center justify-center gap-3 z-10">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        Delete this session?
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDelete(session.id);
+                          }}
+                          disabled={deletingSessionId === session.id}
+                          className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                          {deletingSessionId === session.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                          Delete
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setConfirmDeleteId(null);
+                          }}
+                          className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               );
             }}
             components={{

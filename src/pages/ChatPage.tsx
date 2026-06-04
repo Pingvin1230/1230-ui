@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useLocation, Link } from 'react-router-dom';
+import { useParams, useLocation, Link, useNavigate } from 'react-router-dom';
 import { api, type ChatMessage, type ChatError } from '../lib/api';
 import type { Message, Session } from '../types/api';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import ToolCall from '../components/ToolCall';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { ShieldAlert, Plus, Copy, Check, RefreshCw, Bot, User, AlertCircle, ChevronRight } from 'lucide-react';
+import { ShieldAlert, Plus, Copy, Check, RefreshCw, Bot, User, AlertCircle, ChevronRight, Trash2, Pencil, Loader2 } from 'lucide-react';
 import { NoMessagesIllustration } from '../assets/illustrations';
 import { formatTimeAgo, formatFullDateTime } from '../lib/time';
 import 'highlight.js/styles/github-dark.css';
@@ -42,6 +42,54 @@ export function ChatPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<number | null>(null);
   const [retryTrigger, setRetryTrigger] = useState(0);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editingTitle, setEditingTitle] = useState('');
+  const [isSavingTitle, setIsSavingTitle] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+
+  async function handleDeleteSession() {
+    if (!id) return;
+    try {
+      setIsDeleting(true);
+      await api.deleteSession(id);
+      navigate('/sessions');
+    } catch (err) {
+      console.error('Failed to delete session:', err);
+      setError({
+        type: 'server_error',
+        message: 'Failed to delete session',
+        retryable: false,
+      });
+      setIsDeleting(false);
+      setConfirmDelete(false);
+    }
+  }
+
+  async function handleSaveTitle() {
+    if (!id || !editingTitle.trim()) {
+      setIsEditingTitle(false);
+      return;
+    }
+    try {
+      setIsSavingTitle(true);
+      const updatedSession = await api.updateSessionTitle(id, editingTitle.trim());
+      setSession(updatedSession);
+      setIsEditingTitle(false);
+    } catch (err) {
+      console.error('Failed to update title:', err);
+    } finally {
+      setIsSavingTitle(false);
+    }
+  }
+
+  function handleStartEditTitle() {
+    setEditingTitle(session?.title || '');
+    setIsEditingTitle(true);
+    setTimeout(() => titleInputRef.current?.focus(), 0);
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -328,18 +376,103 @@ export function ChatPage() {
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-        <nav className="flex items-center gap-1.5" aria-label="Breadcrumb">
-          <Link
-            to="/sessions"
-            className="text-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 flex-shrink-0"
-          >
-            Sessions
-          </Link>
-          <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate min-w-0">
-            {session?.title || 'Session'}
-          </h1>
-        </nav>
+        <div className="flex items-center justify-between gap-2">
+          <nav className="flex items-center gap-1.5 min-w-0 flex-1" aria-label="Breadcrumb">
+            <Link
+              to="/sessions"
+              className="text-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 flex-shrink-0"
+            >
+              Sessions
+            </Link>
+            <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+            
+            {isEditingTitle ? (
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <input
+                  ref={titleInputRef}
+                  type="text"
+                  value={editingTitle}
+                  onChange={(e) => setEditingTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveTitle();
+                    if (e.key === 'Escape') setIsEditingTitle(false);
+                  }}
+                  disabled={isSavingTitle}
+                  className="text-lg font-semibold text-gray-900 dark:text-gray-100 bg-transparent border-b-2 border-blue-500 outline-none min-w-0 flex-1 disabled:opacity-50"
+                  placeholder="Session title"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveTitle}
+                  disabled={isSavingTitle || !editingTitle.trim()}
+                  className="p-1 rounded text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 flex-shrink-0"
+                  aria-label="Save title"
+                >
+                  {isSavingTitle ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingTitle(false)}
+                  disabled={isSavingTitle}
+                  className="p-1 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 flex-shrink-0"
+                  aria-label="Cancel editing"
+                >
+                  <AlertCircle className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate min-w-0">
+                  {session?.title || 'Session'}
+                </h1>
+                <button
+                  type="button"
+                  onClick={handleStartEditTitle}
+                  className="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label="Edit title"
+                  title="Edit title"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
+          </nav>
+          
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {confirmDelete ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleDeleteSession}
+                  disabled={isDeleting}
+                  className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                  {isDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={isDeleting}
+                  className="px-2 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 text-xs rounded transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                disabled={isDeleting}
+                className="p-1.5 rounded text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
+                aria-label="Delete session"
+                title="Delete session"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
         <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           {session?.model} • {session?.source}
         </div>

@@ -17,7 +17,6 @@ const HERMES_PYTHON_PATH = config.hermesPythonPath;
 const HERMES_AGENT_PATH = config.hermesAgentPath;
 const SAVE_MESSAGES_SCRIPT = config.scripts.saveMessages;
 const SYNC_PROVIDERS_SCRIPT = config.scripts.syncProviders;
-const CREATE_SESSION_SCRIPT = config.scripts.createSession;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'dist')));
@@ -727,43 +726,98 @@ app.post('/api/sessions', async (req, res) => {
   }
 
   try {
-    const { spawn } = await import('child_process');
-    const args = [CREATE_SESSION_SCRIPT, model];
-    if (title) args.push(title);
-
-    const pythonProcess = spawn(HERMES_PYTHON_PATH, args, {
-      cwd: __dirname,
-      env: { ...process.env, HERMES_DB_PATH }
+    const response = await fetch(`${HERMES_API_URL}/api/sessions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${HERMES_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ model, title, source: 'webui' })
     });
 
-    let stdout = '';
-    let stderr = '';
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Hermes API error:', response.status, errorText);
+      return res.status(response.status).json({ 
+        error: 'Failed to create session', 
+        details: errorText 
+      });
+    }
 
-    pythonProcess.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
+    const data = await response.json();
+    const sessionId = data.session?.id;
 
-    pythonProcess.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
+    if (!sessionId) {
+      return res.status(500).json({ error: 'No session ID in response' });
+    }
 
-    pythonProcess.on('close', (code) => {
-      if (code === 0) {
-        res.json({ success: true, sessionId: stdout.trim() });
-      } else {
-        console.error('Python script error:', stderr);
-        res.status(500).json({ error: 'Failed to create session', details: stderr });
-      }
-    });
-
-    pythonProcess.on('error', (error) => {
-      console.error('Failed to spawn Python process:', error);
-      res.status(500).json({ error: 'Failed to execute create script' });
-    });
-
+    res.json({ success: true, sessionId });
   } catch (error) {
     console.error('Error creating session:', error);
     res.status(500).json({ error: 'Failed to create session' });
+  }
+});
+
+app.delete('/api/sessions/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const response = await fetch(`${HERMES_API_URL}/api/sessions/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${HERMES_API_KEY}`
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Hermes API delete error:', response.status, errorText);
+      return res.status(response.status).json({ 
+        error: 'Failed to delete session', 
+        details: errorText 
+      });
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Error deleting session:', error);
+    res.status(500).json({ error: 'Failed to delete session' });
+  }
+});
+
+app.patch('/api/sessions/:id/title', async (req, res) => {
+  const { id } = req.params;
+  const { title } = req.body;
+
+  if (!title || typeof title !== 'string') {
+    return res.status(400).json({ error: 'title is required and must be a string' });
+  }
+
+  try {
+    const response = await fetch(`${HERMES_API_URL}/api/sessions/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${HERMES_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ title })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Hermes API update error:', response.status, errorText);
+      return res.status(response.status).json({ 
+        error: 'Failed to update session title', 
+        details: errorText 
+      });
+    }
+
+    const data = await response.json();
+    res.json(data.session);
+  } catch (error) {
+    console.error('Error updating session title:', error);
+    res.status(500).json({ error: 'Failed to update session title' });
   }
 });
 
