@@ -428,7 +428,7 @@ export function ChatPage() {
                 <button
                   type="button"
                   onClick={handleStartEditTitle}
-                  className="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex-shrink-0"
                   aria-label="Edit title"
                   title="Edit title"
                 >
