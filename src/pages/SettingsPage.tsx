@@ -1,0 +1,440 @@
+import { useState, useEffect } from 'react';
+import { api } from '../lib/api';
+import { Download, Wrench, Loader2, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { Modal } from '../components/Modal';
+
+interface Model {
+  id: number;
+  model_id: string;
+  display_name: string;
+  enabled: number;
+}
+
+interface Provider {
+  id: number;
+  name: string;
+  display_name: string;
+  env_var: string;
+  base_url: string;
+  sync_status: string;
+  last_synced_at: string | null;
+  models: Model[];
+  enabledCount: number;
+  totalCount: number;
+}
+
+export function SettingsPage() {
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedProvider, setExpandedProvider] = useState<number | null>(null);
+  const [executing, setExecuting] = useState<string | null>(null);
+  const [pendingCommand, setPendingCommand] = useState<'update' | 'doctor' | null>(null);
+  const [execResult, setExecResult] = useState<{
+    command: string;
+    success: boolean;
+    output: string;
+  } | null>(null);
+  const [modelsData, setModelsData] = useState<Awaited<ReturnType<typeof api.getModels>> | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string>(
+    () => localStorage.getItem('selectedModel') ?? ''
+  );
+
+  useEffect(() => {
+    loadProviders();
+    loadModels();
+  }, []);
+
+  async function loadModels() {
+    try {
+      const data = await api.getModels();
+      setModelsData(data);
+      const saved = localStorage.getItem('selectedModel');
+      if (saved && Object.values(data.providers).some((p) => p.models.some((m) => m.id === saved))) {
+        setSelectedModel(saved);
+      } else if (data.default) {
+        setSelectedModel(data.default.id);
+      }
+    } catch (err) {
+      console.error('Failed to load models:', err);
+    }
+  }
+
+  async function loadProviders() {
+    try {
+      setLoading(true);
+      const data = await api.getModelProviders();
+      setProviders(data);
+      setError(null);
+    } catch (err) {
+      setError('Failed to load model providers');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSync() {
+    try {
+      setSyncing(true);
+      setError(null);
+      const result = await api.syncModelProviders();
+      
+      if (result.success) {
+        await loadProviders();
+      } else {
+        setError(result.error || 'Sync failed');
+      }
+    } catch (err) {
+      setError('Failed to sync providers');
+      console.error(err);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function handleToggleModel(modelId: number) {
+    try {
+      const result = await api.toggleModel(modelId);
+      if (result.success) {
+        await loadProviders();
+      }
+    } catch (err) {
+      console.error('Failed to toggle model:', err);
+    }
+  }
+
+  async function handleExecCommand(command: 'update' | 'doctor') {
+    try {
+      setExecuting(command);
+      setExecResult(null);
+      const result = await api.execSystemCommand(command);
+      setExecResult({
+        command,
+        success: result.success,
+        output: result.output || result.error || 'No output'
+      });
+    } catch (err) {
+      setExecResult({
+        command,
+        success: false,
+        output: err instanceof Error ? err.message : 'Unknown error'
+      });
+    } finally {
+      setExecuting(null);
+    }
+  }
+
+  function formatTimestamp(ts: string | null): string {
+    if (!ts) return 'Never';
+    const date = new Date(ts);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  }
+
+  return (
+    <div className="h-full flex flex-col px-4 md:px-6 py-4">
+      <div className="max-w-3xl w-full mx-auto mb-6">
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Settings</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Web UI configuration</p>
+      </div>
+
+      <div className="flex-1 overflow-auto">
+        <div className="max-w-3xl mx-auto space-y-6">
+
+          {/* General Section */}
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+            <h3 className="font-medium text-sm text-gray-900 dark:text-gray-100 mb-3">General</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+              Default model used when creating new sessions
+            </p>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              Default model
+            </label>
+            {modelsData ? (
+              <select
+                value={selectedModel}
+                onChange={(e) => {
+                  setSelectedModel(e.target.value);
+                  localStorage.setItem('selectedModel', e.target.value);
+                }}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {Object.entries(modelsData.providers).map(([providerId, provider]) => (
+                  <optgroup key={providerId} label={provider.name}>
+                    {provider.models.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                        {modelsData.default?.id === m.id ? ' (default)' : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            ) : (
+              <div className="text-sm text-gray-500 dark:text-gray-400">Loading models…</div>
+            )}
+          </div>
+
+          {/* Model Providers Section */}
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">
+            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-gray-900 dark:text-gray-100">Model Providers</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Manage available models for chat sessions
+                </p>
+              </div>
+              <button
+                onClick={handleSync}
+                disabled={syncing || loading}
+                className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded transition-colors disabled:cursor-not-allowed"
+              >
+                {syncing ? 'Syncing...' : 'Sync All'}
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="px-4 py-8 flex items-center justify-center">
+                <div className="spinner"></div>
+              </div>
+            ) : error ? (
+              <div className="px-4 py-4">
+                <div className="bg-red-500/10 border border-red-500/20 rounded p-3">
+                  <p className="text-sm text-red-500">{error}</p>
+                  <button
+                    onClick={loadProviders}
+                    className="mt-2 px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            ) : providers.length === 0 ? (
+              <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                <p className="text-sm">No providers configured</p>
+                <p className="text-xs mt-1">Click "Sync All" to fetch providers from Hermes</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                {providers.map((provider) => (
+                  <div key={provider.id}>
+                    <button
+                      onClick={() => setExpandedProvider(expandedProvider === provider.id ? null : provider.id)}
+                      className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    >
+                      <div className="flex-1 text-left">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-900 dark:text-gray-100">
+                            {provider.display_name || provider.name}
+                          </span>
+                          {provider.sync_status === 'ok' ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                              Synced
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                              {provider.sync_status}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          <span>{provider.enabledCount}/{provider.totalCount} models enabled</span>
+                          <span>•</span>
+                          <span>Synced {formatTimestamp(provider.last_synced_at)}</span>
+                        </div>
+                      </div>
+                      <svg
+                        className={`w-5 h-5 text-gray-400 transition-transform ${
+                          expandedProvider === provider.id ? 'rotate-180' : ''
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {expandedProvider === provider.id && (
+                      <div className="px-4 pb-3 space-y-1">
+                        {provider.models.length === 0 ? (
+                          <p className="text-sm text-gray-500 dark:text-gray-400 py-2">
+                            No models available
+                          </p>
+                        ) : (
+                          provider.models.map((model) => (
+                            <label
+                              key={model.id}
+                              className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={model.enabled === 1}
+                                onChange={() => handleToggleModel(model.id)}
+                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600"
+                              />
+                              <span className={`text-sm ${model.enabled ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`}>
+                                {model.display_name || model.model_id}
+                              </span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Hermes Commands Section */}
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+            <h3 className="font-medium text-sm text-gray-900 dark:text-gray-100 mb-3">Hermes Commands</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+              Execute Hermes system commands
+            </p>
+            <div className="space-y-2">
+              <button
+                onClick={() => setPendingCommand('update')}
+                disabled={executing !== null}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              >
+                {executing === 'update' ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                <span>{executing === 'update' ? 'Updating...' : 'Hermes Update'}</span>
+              </button>
+              <button
+                onClick={() => setPendingCommand('doctor')}
+                disabled={executing !== null}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm bg-amber-600 hover:bg-amber-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              >
+                {executing === 'doctor' ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Wrench className="w-4 h-4" />
+                )}
+                <span>{executing === 'doctor' ? 'Running...' : 'Hermes Doctor Fix'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Connection Status Section */}
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+            <h3 className="font-medium text-sm text-gray-900 dark:text-gray-100 mb-2">Connection status</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Hermes Agent: <span className="text-green-500">Connected</span>
+            </p>
+          </div>
+
+          {/* About Section */}
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+            <h3 className="font-medium text-sm text-gray-900 dark:text-gray-100 mb-2">About</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              1230.UI v0.1.0 (Phase 2)
+            </p>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Confirm Modal */}
+      <Modal
+        isOpen={pendingCommand !== null}
+        onClose={() => setPendingCommand(null)}
+        size="md"
+      >
+        <div className="p-6">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {pendingCommand === 'update' ? 'Hermes Update' : 'Hermes Doctor Fix'}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                This will restart the Hermes server. Active sessions will be interrupted.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => setPendingCommand(null)}
+              className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const cmd = pendingCommand;
+                setPendingCommand(null);
+                if (cmd) handleExecCommand(cmd);
+              }}
+              className="px-4 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors"
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Command Result Modal */}
+      <Modal
+        isOpen={execResult !== null}
+        onClose={() => setExecResult(null)}
+        size="xl"
+        title={
+          execResult
+            ? `${execResult.command === 'update' ? 'Hermes Update' : 'Hermes Doctor Fix'}${
+                execResult.success ? '' : ' (failed)'
+              }`
+            : ''
+        }
+      >
+        {execResult && (
+          <>
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex items-center gap-2 mb-3">
+                {execResult.success ? (
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                ) : (
+                  <XCircle className="w-5 h-5 text-red-600" />
+                )}
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {execResult.success ? 'Completed successfully' : 'Command failed'}
+                </span>
+              </div>
+              <pre className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono bg-gray-50 dark:bg-gray-900 p-3 rounded">
+                {execResult.output}
+              </pre>
+            </div>
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                type="button"
+                onClick={() => setExecResult(null)}
+                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </>
+        )}
+      </Modal>
+    </div>
+  );
+}
