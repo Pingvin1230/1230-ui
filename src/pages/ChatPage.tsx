@@ -10,6 +10,7 @@ import { NoMessagesIllustration } from '../assets/illustrations';
 import { formatTimeAgo, formatFullDateTime } from '../lib/time';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useNotifications } from '../hooks/useNotifications';
+import { useNotificationsStore } from '../store/notificationsStore';
 import 'highlight.js/styles/github-dark.css';
 
 export function ChatPage() {
@@ -51,7 +52,7 @@ export function ChatPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-  const notificationsEnabled = localStorage.getItem('notificationsEnabled') === 'true';
+  const { enabled: notificationsEnabled } = useNotificationsStore();
   const { notify, setBadge, clearBadge } = useNotifications({
     enabled: notificationsEnabled,
   });

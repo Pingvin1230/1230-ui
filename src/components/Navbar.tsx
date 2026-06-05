@@ -3,6 +3,7 @@ import { useRef, useEffect, useState, type ChangeEvent } from 'react';
 import { Settings, LogOut, Search, Sun, Moon, Bell, BellOff } from 'lucide-react';
 import { useThemeStore } from '../store/themeStore';
 import { useSearchStore } from '../store/searchStore';
+import { useNotificationsStore } from '../store/notificationsStore';
 
 interface NavbarProps {
   isSidebarOpen: boolean;
@@ -11,6 +12,7 @@ interface NavbarProps {
 
 export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
   const { isDarkMode, toggleDarkMode } = useThemeStore();
+  const { enabled: notificationsEnabled, toggle: toggleNotifications } = useNotificationsStore();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [, setSearchParams] = useSearchParams();
@@ -18,9 +20,6 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
   const setQuery = useSearchStore((s) => s.setQuery);
   const [localInput, setLocalInput] = useState(query);
   const debounceRef = useRef<number | null>(null);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(
-    () => localStorage.getItem('notificationsEnabled') === 'true'
-  );
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -63,11 +62,9 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
     if (typeof Notification === 'undefined') return;
     if (Notification.permission === 'default') {
       const result = await Notification.requestPermission();
-      if (result === 'granted') setNotificationsEnabled(true);
+      if (result === 'granted') toggleNotifications();
     } else if (Notification.permission === 'granted') {
-      setNotificationsEnabled(prev => !prev);
-    } else {
-      setNotificationsEnabled(false);
+      toggleNotifications();
     }
   };
 

@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import { Download, Wrench, Loader2, CheckCircle, XCircle, AlertTriangle, Sun, Moon, Bell, BellOff } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { useThemeStore } from '../store/themeStore';
+import { useNotificationsStore } from '../store/notificationsStore';
 
 interface Model {
   id: number;
@@ -26,6 +27,7 @@ interface Provider {
 
 export function SettingsPage() {
   const { isDarkMode, toggleDarkMode } = useThemeStore();
+  const { enabled: notificationsEnabled, setEnabled: setNotificationsEnabled } = useNotificationsStore();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -42,16 +44,9 @@ export function SettingsPage() {
   const [selectedModel, setSelectedModel] = useState<string>(
     () => localStorage.getItem('selectedModel') ?? ''
   );
-  const [notificationsEnabled, setNotificationsEnabled] = useState(
-    () => localStorage.getItem('notificationsEnabled') === 'true'
-  );
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
     typeof Notification !== 'undefined' ? Notification.permission : 'denied'
   );
-
-  useEffect(() => {
-    localStorage.setItem('notificationsEnabled', String(notificationsEnabled));
-  }, [notificationsEnabled]);
 
   const handleNotificationsToggle = async () => {
     if (typeof Notification === 'undefined') return;
@@ -60,7 +55,7 @@ export function SettingsPage() {
       setNotificationPermission(result);
       if (result === 'granted') setNotificationsEnabled(true);
     } else if (Notification.permission === 'granted') {
-      setNotificationsEnabled(prev => !prev);
+      setNotificationsEnabled(!notificationsEnabled);
     } else {
       setNotificationsEnabled(false);
     }
