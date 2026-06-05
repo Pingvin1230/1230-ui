@@ -203,15 +203,15 @@ export function SessionsPage() {
         </div>
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 animate-pulse">
+            <div key={i} className="bg-bg-primary border border-border-default rounded-lg p-4 animate-pulse">
               <div className="flex-1">
-                <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2" />
+                <div className="h-5 bg-bg-muted rounded w-3/4 mb-2" />
                 <div className="flex gap-2 mb-3">
-                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-20" />
-                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-16" />
+                  <div className="h-4 bg-bg-muted rounded w-20" />
+                  <div className="h-4 bg-bg-muted rounded w-16" />
                 </div>
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-full mb-1" />
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />
+                <div className="h-4 bg-bg-muted rounded w-full mb-1" />
+                <div className="h-4 bg-bg-muted rounded w-2/3" />
               </div>
             </div>
           ))}
@@ -260,9 +260,9 @@ export function SessionsPage() {
             <MessageSquare className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Sessions</h1>
+            <h1 className="text-2xl font-semibold text-fg-primary">Sessions</h1>
             {hasSessions && (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-fg-muted">
                 {sessions.length} of {total} {total === 1 ? 'session' : 'sessions'}
               </p>
             )}
@@ -278,7 +278,7 @@ export function SessionsPage() {
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
               showArchived
                 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                : 'text-fg-secondary hover:bg-bg-secondary'
             }`}
             aria-label="Toggle archived sessions"
           >
@@ -290,7 +290,7 @@ export function SessionsPage() {
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
               bulkMode
                 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                : 'text-fg-secondary hover:bg-bg-secondary'
             }`}
             aria-label="Select sessions"
           >
@@ -299,10 +299,10 @@ export function SessionsPage() {
           </button>
           <button
             onClick={() => loadSessions(showArchived)}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+            className="p-2 hover:bg-bg-secondary rounded-lg transition-colors"
             aria-label="Refresh sessions"
           >
-            <RefreshCw className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+            <RefreshCw className="w-5 h-5 text-fg-secondary" />
           </button>
           <Link
             to="/new"
@@ -322,7 +322,7 @@ export function SessionsPage() {
           <div className="flex gap-2">
             <button
               onClick={() => { setSelectedIds(new Set()); setBulkMode(false); }}
-              className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              className="px-3 py-1.5 text-sm text-fg-secondary hover:bg-bg-secondary rounded-lg transition-colors"
             >
               Cancel
             </button>
@@ -358,11 +358,11 @@ export function SessionsPage() {
 
       {!hasSessions ? (
         <div className="text-center py-16">
-          <NoSessionsIllustration className="w-24 h-24 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+          <NoSessionsIllustration className="w-24 h-24 mx-auto mb-4 text-fg-muted" />
+          <h2 className="text-xl font-semibold text-fg-primary mb-2">
             No sessions yet
           </h2>
-          <p className="text-gray-500 dark:text-gray-400 mb-6">
+          <p className="text-fg-muted mb-6">
             Create your first session to start a conversation
           </p>
           <Link
@@ -375,19 +375,19 @@ export function SessionsPage() {
         </div>
       ) : isSearching && !hasFiltered ? (
         <div className="text-center py-16">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 mb-4">
-            <SearchX className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-bg-secondary mb-4">
+            <SearchX className="w-8 h-8 text-fg-muted" />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+          <h2 className="text-xl font-semibold text-fg-primary mb-2">
             No sessions match &quot;{query}&quot;
           </h2>
-          <p className="text-gray-500 dark:text-gray-400 mb-6">
+          <p className="text-fg-muted mb-6">
             Searching loaded sessions only
           </p>
           <button
             type="button"
             onClick={() => setQuery('')}
-            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 rounded-lg transition-colors text-sm font-medium"
+            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-fg-primary rounded-lg transition-colors text-sm font-medium"
           >
             Clear search
           </button>
@@ -395,7 +395,7 @@ export function SessionsPage() {
       ) : (
         <>
           {isSearching && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
+            <p className="text-xs text-fg-muted flex-shrink-0">
               Searching loaded sessions — {filteredSessions.length} of {sessions.length} match
             </p>
           )}
@@ -409,9 +409,9 @@ export function SessionsPage() {
                 const isPinned = item.name === 'Pinned';
                 const isArchived = item.name === 'Archived';
                 return (
-                  <div className="flex items-center gap-2 py-3 sticky top-0 bg-gray-100 dark:bg-gray-800">
+                  <div className="flex items-center gap-2 py-3 sticky top-0 bg-bg-secondary">
                     {isPinned && <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />}
-                    <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    <h2 className="text-sm font-semibold text-fg-muted uppercase tracking-wide">
                       {item.name}
                     </h2>
                     {isArchived && <Archive className="w-4 h-4 text-gray-400" />}
@@ -440,12 +440,12 @@ export function SessionsPage() {
                   )}
                   <Link
                     to={`/chat/${session.id}`}
-                    className={`block bg-white dark:bg-gray-800 border rounded-lg p-4 transition-all hover:shadow-sm ${
+                    className={`block bg-bg-primary border rounded-lg p-4 transition-all hover:shadow-sm ${
                       bulkMode ? 'pl-10' : ''
                     } ${
                       session.pinned === 1
                         ? 'border-yellow-300 dark:border-yellow-700 hover:border-yellow-400 dark:hover:border-yellow-600'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
+                        : 'border-border-default hover:border-blue-300 dark:hover:border-blue-600'
                     }`}
                   >
                     <div className="flex-1 min-w-0">
@@ -454,7 +454,7 @@ export function SessionsPage() {
                           {session.pinned === 1 && (
                             <Star className="w-4 h-4 text-yellow-500 fill-yellow-500 flex-shrink-0" />
                           )}
-                          <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                          <h3 className="font-semibold text-fg-primary truncate">
                             {title}
                           </h3>
                         </div>
@@ -464,7 +464,7 @@ export function SessionsPage() {
                               {session.archived !== 1 && (
                                 <button
                                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleTogglePin(session); }}
-                                  className="p-1 rounded text-gray-400 hover:text-yellow-500 dark:hover:text-yellow-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                  className="p-1 rounded text-fg-muted hover:text-yellow-500 dark:hover:text-yellow-400 hover:bg-bg-secondary transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
                                   aria-label={session.pinned === 1 ? 'Unpin session' : 'Pin session'}
                                 >
                                   <Star className={`w-4 h-4 ${session.pinned === 1 ? 'fill-yellow-500 text-yellow-500' : ''}`} />
@@ -472,7 +472,7 @@ export function SessionsPage() {
                               )}
                               <button
                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleToggleArchive(session); }}
-                                className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                className="p-1 rounded text-fg-muted hover:text-fg-secondary hover:bg-bg-secondary transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
                                 aria-label={session.archived === 1 ? 'Unarchive session' : 'Archive session'}
                               >
                                 <Archive className="w-4 h-4" />
@@ -480,7 +480,7 @@ export function SessionsPage() {
                             </>
                           )}
                           <span
-                            className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap"
+                            className="text-xs text-fg-muted whitespace-nowrap"
                             title={formatFullDateTime(session.startedAt)}
                           >
                             {formatTimeAgo(session.startedAt)}
@@ -505,7 +505,7 @@ export function SessionsPage() {
                         </span>
                       </div>
                       {session.preview && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                        <p className="text-sm text-fg-secondary line-clamp-2">
                           {session.preview}
                         </p>
                       )}
@@ -540,7 +540,7 @@ export function SessionsPage() {
             <button
               type="button"
               onClick={() => setShowBulkConfirm(false)}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 rounded-lg transition-colors text-sm font-medium"
+              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-fg-primary rounded-lg transition-colors text-sm font-medium"
             >
               Cancel
             </button>

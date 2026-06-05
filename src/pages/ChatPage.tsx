@@ -322,17 +322,17 @@ export function ChatPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 mb-4">
             <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+          <h2 className="text-xl font-semibold text-fg-primary mb-2">
             Session not found
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+          <p className="text-sm text-fg-muted mb-6">
             {loadError}
           </p>
           <div className="flex flex-col sm:flex-row gap-2 justify-center">
             <button
               type="button"
               onClick={() => setRetryTrigger(prev => prev + 1)}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 rounded-lg transition-colors text-sm font-medium"
+              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-fg-primary rounded-lg transition-colors text-sm font-medium"
             >
               Try again
             </button>
@@ -351,19 +351,19 @@ export function ChatPage() {
   if (loading) {
     return (
       <div className="flex flex-col h-full">
-        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-          <div className="h-5 w-40 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-          <div className="h-3 w-24 bg-gray-200 dark:bg-gray-700 rounded mt-2 animate-pulse" />
+        <div className="px-4 py-3 border-b border-border-default bg-bg-primary">
+          <div className="h-5 w-40 bg-bg-muted rounded animate-pulse" />
+          <div className="h-3 w-24 bg-bg-muted rounded mt-2 animate-pulse" />
         </div>
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-4xl mx-auto p-4 space-y-3">
             {[0, 1, 2].map((i) => (
               <div key={i} className={`flex gap-3 ${i % 2 === 0 ? '' : 'flex-row-reverse'}`}>
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
-                <div className="flex-1 min-w-0 rounded-lg p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 animate-pulse space-y-2">
-                  <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-full" />
-                  <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-5/6" />
-                  {i === 0 && <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />}
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-bg-muted animate-pulse" />
+                <div className="flex-1 min-w-0 rounded-lg p-4 bg-bg-primary border border-border-default animate-pulse space-y-2">
+                  <div className="h-3 bg-bg-muted rounded w-full" />
+                  <div className="h-3 bg-bg-muted rounded w-5/6" />
+                  {i === 0 && <div className="h-3 bg-bg-muted rounded w-2/3" />}
                 </div>
               </div>
             ))}
@@ -375,16 +375,16 @@ export function ChatPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+      <div className="px-4 py-3 border-b border-border-default bg-bg-primary">
         <div className="flex items-center justify-between gap-2">
           <nav className="flex items-center gap-1.5 min-w-0 flex-1" aria-label="Breadcrumb">
             <Link
               to="/sessions"
-              className="text-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 flex-shrink-0"
+              className="text-sm text-fg-muted hover:text-blue-600 dark:hover:text-blue-400 flex-shrink-0"
             >
               Sessions
             </Link>
-            <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+            <ChevronRight className="w-3.5 h-3.5 text-fg-muted flex-shrink-0" />
             
             {isEditingTitle ? (
               <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -398,7 +398,7 @@ export function ChatPage() {
                     if (e.key === 'Escape') setIsEditingTitle(false);
                   }}
                   disabled={isSavingTitle}
-                  className="text-lg font-semibold text-gray-900 dark:text-gray-100 bg-transparent border-b-2 border-blue-500 outline-none min-w-0 flex-1 disabled:opacity-50"
+                  className="text-lg font-semibold text-fg-primary bg-transparent border-b-2 border-blue-500 outline-none min-w-0 flex-1 disabled:opacity-50"
                   placeholder="Session title"
                 />
                 <button
@@ -414,7 +414,7 @@ export function ChatPage() {
                   type="button"
                   onClick={() => setIsEditingTitle(false)}
                   disabled={isSavingTitle}
-                  className="p-1 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 flex-shrink-0"
+                  className="p-1 rounded text-fg-muted hover:bg-bg-secondary disabled:opacity-50 flex-shrink-0"
                   aria-label="Cancel editing"
                 >
                   <AlertCircle className="w-4 h-4" />
@@ -422,13 +422,13 @@ export function ChatPage() {
               </div>
             ) : (
               <>
-                <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate min-w-0">
+                <h1 className="text-lg font-semibold text-fg-primary truncate min-w-0">
                   {session?.title || 'Session'}
                 </h1>
                 <button
                   type="button"
                   onClick={handleStartEditTitle}
-                  className="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex-shrink-0"
+                  className="p-1 rounded text-fg-muted hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex-shrink-0"
                   aria-label="Edit title"
                   title="Edit title"
                 >
@@ -454,7 +454,7 @@ export function ChatPage() {
                   type="button"
                   onClick={() => setConfirmDelete(false)}
                   disabled={isDeleting}
-                  className="px-2 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 text-xs rounded transition-colors disabled:opacity-50"
+                  className="px-2 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-fg-primary text-xs rounded transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -464,7 +464,7 @@ export function ChatPage() {
                 type="button"
                 onClick={() => setConfirmDelete(true)}
                 disabled={isDeleting}
-                className="p-1.5 rounded text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
+                className="p-1.5 rounded text-fg-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
                 aria-label="Delete session"
                 title="Delete session"
               >
@@ -473,7 +473,7 @@ export function ChatPage() {
             )}
           </div>
         </div>
-        <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <div className="text-sm text-fg-muted mt-1">
           {session?.model} • {session?.source}
         </div>
       </div>
@@ -482,11 +482,11 @@ export function ChatPage() {
         <div className="max-w-4xl mx-auto p-4 space-y-3">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center py-24 text-center">
-              <NoMessagesIllustration className="w-24 h-24 mb-4 text-gray-400 dark:text-gray-500" />
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
+              <NoMessagesIllustration className="w-24 h-24 mb-4 text-fg-muted" />
+              <h2 className="text-lg font-semibold text-fg-primary mb-1">
                 Start a conversation
               </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm">
+              <p className="text-sm text-fg-muted max-w-sm">
                 Send a message to get a response from Hermes.
               </p>
             </div>
@@ -513,17 +513,17 @@ export function ChatPage() {
                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-700 dark:text-blue-300">
                     <User className="w-4 h-4" />
                   </div>
-                  <div className="flex-1 min-w-0 relative rounded-lg p-4 bg-gray-100 dark:bg-gray-800 border-2 border-blue-500 text-gray-900 dark:text-gray-100">
+                  <div className="flex-1 min-w-0 relative rounded-lg p-4 bg-bg-secondary border-2 border-blue-500 text-fg-primary">
                     <MarkdownRenderer content={msg.content || ''} className="user-message" />
                     <div className="flex items-center justify-between mt-2">
-                      <div className="text-xs text-gray-500 dark:text-gray-400" title={formatFullDateTime(msg.timestamp)}>
+                      <div className="text-xs text-fg-muted" title={formatFullDateTime(msg.timestamp)}>
                         {formatTimeAgo(msg.timestamp)}
                       </div>
                       <button
                         type="button"
                         onClick={() => handleCopyMessage(msg.id, msg.content || '')}
                         aria-label={copiedMessageId === msg.id ? 'Message copied' : 'Copy message'}
-                        className="p-1 rounded text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity hover:bg-black/5 dark:hover:bg-white/10"
+                        className="p-1 rounded text-fg-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity hover:bg-bg-secondary"
                       >
                         {copiedMessageId === msg.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
@@ -535,13 +535,13 @@ export function ChatPage() {
 
             return (
               <div key={msg.id} className="flex gap-3 group">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-bg-muted flex items-center justify-center text-fg-secondary">
                   <Bot className="w-4 h-4" />
                 </div>
-                <div className="flex-1 min-w-0 relative rounded-lg p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100">
+                <div className="flex-1 min-w-0 relative rounded-lg p-4 bg-bg-primary border border-border-default text-fg-primary">
                   <MarkdownRenderer content={msg.content || ''} className="assistant-message" />
                   <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
+                    <div className="flex items-center gap-2 text-xs text-fg-muted">
                       <span title={formatFullDateTime(msg.timestamp)}>
                         {formatTimeAgo(msg.timestamp)}
                       </span>
@@ -557,7 +557,7 @@ export function ChatPage() {
                         type="button"
                         onClick={() => handleCopyMessage(msg.id, msg.content || '')}
                         aria-label={copiedMessageId === msg.id ? 'Message copied' : 'Copy message'}
-                        className="p-1 rounded text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10"
+                        className="p-1 rounded text-fg-muted hover:bg-bg-secondary"
                       >
                         {copiedMessageId === msg.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
@@ -566,7 +566,7 @@ export function ChatPage() {
                         onClick={handleRetry}
                         disabled={sending}
                         aria-label="Regenerate response"
-                        className="p-1 rounded text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="p-1 rounded text-fg-muted hover:bg-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
                       </button>
@@ -602,7 +602,7 @@ export function ChatPage() {
 
           {streamingContent && (
             <div key="streaming" className="max-w-3xl">
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              <div className="bg-bg-primary rounded-lg p-4 border border-border-default">
                 <MarkdownRenderer content={streamingContent} />
               </div>
             </div>
@@ -610,8 +610,8 @@ export function ChatPage() {
           
           {isWaitingForResponse && !streamingContent && activeToolCalls.size === 0 && (
             <div key="waiting" className="max-w-3xl">
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+              <div className="bg-bg-primary rounded-lg p-4 border border-border-default">
+                <div className="flex items-center gap-2 text-fg-muted">
                   <div className="flex gap-1">
                     <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
                     <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
@@ -647,7 +647,7 @@ export function ChatPage() {
       </div>
 
       {error && (
-        <div className="px-4 py-3 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+        <div className="px-4 py-3 bg-bg-primary border-t border-border-default">
           <div className="max-w-4xl mx-auto">
             <ErrorMessage
               error={error}
@@ -656,7 +656,7 @@ export function ChatPage() {
             <button
               onClick={() => setError(null)}
               aria-label="Close error message"
-              className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 mt-2"
+              className="text-xs text-fg-muted hover:text-fg-secondary mt-2"
             >
               Close
             </button>
@@ -664,7 +664,7 @@ export function ChatPage() {
         </div>
       )}
 
-      <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+      <div className="p-4 border-t border-border-default bg-bg-primary">
         <div className="max-w-4xl mx-auto">
           {isSessionBlocked ? (
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
@@ -706,7 +706,7 @@ export function ChatPage() {
                 placeholder="Type a message..."
                 disabled={sending}
                 rows={1}
-                className="flex-1 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 resize-none overflow-y-auto"
+                className="flex-1 px-4 py-2 rounded-lg border border-border-default bg-bg-secondary text-fg-primary focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 resize-none overflow-y-auto"
               />
               {sending ? (
                 <button

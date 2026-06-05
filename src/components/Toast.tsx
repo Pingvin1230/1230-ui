@@ -103,7 +103,7 @@ function ToastViewport({
             type="button"
             onClick={() => onDismiss(t.id)}
             aria-label="Dismiss notification"
-            className="flex-shrink-0 -mr-1 -mt-1 p-1 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+            className="flex-shrink-0 -mr-1 -mt-1 p-1 rounded hover:bg-bg-secondary transition-colors"
           >
             <X className="w-4 h-4" />
           </button>

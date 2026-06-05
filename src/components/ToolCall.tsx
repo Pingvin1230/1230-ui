@@ -6,21 +6,21 @@ interface ToolCallProps {
 
 export default function ToolCall({ toolName, content, timestamp }: ToolCallProps) {
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-hidden">
+    <div className="rounded-lg border border-border-default bg-bg-secondary overflow-hidden">
       <details className="group">
-        <summary className="flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+        <summary className="flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-bg-secondary transition-colors">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono px-2 py-0.5 bg-gray-200 dark:bg-gray-600 rounded text-gray-700 dark:text-gray-300">
+            <span className="text-xs font-mono px-2 py-0.5 bg-gray-200 dark:bg-gray-600 rounded text-fg-secondary">
               {toolName}
             </span>
-            <span className="text-xs text-gray-400 dark:text-gray-500">Tool call</span>
+            <span className="text-xs text-fg-muted">Tool call</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 dark:text-gray-500">
+            <span className="text-xs text-fg-muted">
               {new Date(timestamp * 1000).toLocaleTimeString()}
             </span>
             <svg
-              className="w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform group-open:rotate-180"
+              className="w-4 h-4 text-fg-muted transition-transform group-open:rotate-180"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -29,8 +29,8 @@ export default function ToolCall({ toolName, content, timestamp }: ToolCallProps
             </svg>
           </div>
         </summary>
-        <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700">
-          <pre className="text-xs font-mono text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-words overflow-x-auto">
+        <div className="px-4 py-3 border-t border-border-default">
+          <pre className="text-xs font-mono text-fg-secondary whitespace-pre-wrap break-words overflow-x-auto">
             {content}
           </pre>
         </div>

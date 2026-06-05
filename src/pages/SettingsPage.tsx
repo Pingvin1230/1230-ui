@@ -144,20 +144,20 @@ export function SettingsPage() {
   return (
     <div className="h-full flex flex-col px-4 md:px-6 py-4">
       <div className="max-w-3xl w-full mx-auto mb-6">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Settings</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Web UI configuration</p>
+        <h1 className="text-xl font-semibold text-fg-primary">Settings</h1>
+        <p className="text-sm text-fg-muted mt-1">Web UI configuration</p>
       </div>
 
       <div className="flex-1 overflow-auto">
         <div className="max-w-3xl mx-auto space-y-6">
 
           {/* General Section */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <h3 className="font-medium text-sm text-gray-900 dark:text-gray-100 mb-3">General</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          <div className="bg-bg-primary border border-border-default rounded-lg p-4">
+            <h3 className="font-medium text-sm text-fg-primary mb-3">General</h3>
+            <p className="text-xs text-fg-muted mb-3">
               Default model used when creating new sessions
             </p>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+            <label className="block text-xs font-medium text-fg-secondary mb-1.5">
               Default model
             </label>
             {modelsData ? (
@@ -167,7 +167,7 @@ export function SettingsPage() {
                   setSelectedModel(e.target.value);
                   localStorage.setItem('selectedModel', e.target.value);
                 }}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-border-default bg-bg-primary text-fg-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {Object.entries(modelsData.providers).map(([providerId, provider]) => (
                   <optgroup key={providerId} label={provider.name}>
@@ -181,16 +181,16 @@ export function SettingsPage() {
                 ))}
               </select>
             ) : (
-              <div className="text-sm text-gray-500 dark:text-gray-400">Loading models…</div>
+              <div className="text-sm text-fg-muted">Loading models…</div>
             )}
           </div>
 
           {/* Model Providers Section */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">
-            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <div className="bg-bg-primary border border-border-default rounded-lg">
+            <div className="px-4 py-3 border-b border-border-default flex items-center justify-between">
               <div>
-                <h3 className="font-medium text-gray-900 dark:text-gray-100">Model Providers</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                <h3 className="font-medium text-fg-primary">Model Providers</h3>
+                <p className="text-xs text-fg-muted mt-0.5">
                   Manage available models for chat sessions
                 </p>
               </div>
@@ -220,21 +220,21 @@ export function SettingsPage() {
                 </div>
               </div>
             ) : providers.length === 0 ? (
-              <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+              <div className="px-4 py-8 text-center text-fg-muted">
                 <p className="text-sm">No providers configured</p>
                 <p className="text-xs mt-1">Click "Sync All" to fetch providers from Hermes</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-200 dark:divide-gray-700">
+              <div className="divide-y divide-border-default">
                 {providers.map((provider) => (
                   <div key={provider.id}>
                     <button
                       onClick={() => setExpandedProvider(expandedProvider === provider.id ? null : provider.id)}
-                      className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      className="w-full px-4 py-3 flex items-center justify-between hover:bg-bg-secondary transition-colors"
                     >
                       <div className="flex-1 text-left">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-900 dark:text-gray-100">
+                          <span className="font-medium text-fg-primary">
                             {provider.display_name || provider.name}
                           </span>
                           {provider.sync_status === 'ok' ? (
@@ -247,16 +247,16 @@ export function SettingsPage() {
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center gap-3 mt-1 text-xs text-fg-muted">
                           <span>{provider.enabledCount}/{provider.totalCount} models enabled</span>
                           <span>•</span>
                           <span>Synced {formatTimestamp(provider.last_synced_at)}</span>
                         </div>
                       </div>
-                      <svg
-                        className={`w-5 h-5 text-gray-400 transition-transform ${
-                          expandedProvider === provider.id ? 'rotate-180' : ''
-                        }`}
+                        <svg
+                          className={`w-5 h-5 text-fg-muted transition-transform ${
+                            expandedProvider === provider.id ? 'rotate-180' : ''
+                          }`}
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -268,14 +268,14 @@ export function SettingsPage() {
                     {expandedProvider === provider.id && (
                       <div className="px-4 pb-3 space-y-1">
                         {provider.models.length === 0 ? (
-                          <p className="text-sm text-gray-500 dark:text-gray-400 py-2">
+                          <p className="text-sm text-fg-muted py-2">
                             No models available
                           </p>
                         ) : (
                           provider.models.map((model) => (
                             <label
                               key={model.id}
-                              className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+                              className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-bg-secondary cursor-pointer"
                             >
                               <input
                                 type="checkbox"
@@ -283,7 +283,7 @@ export function SettingsPage() {
                                 onChange={() => handleToggleModel(model.id)}
                                 className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600"
                               />
-                              <span className={`text-sm ${model.enabled ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`}>
+                              <span className={`text-sm ${model.enabled ? 'text-fg-primary' : 'text-fg-muted'}`}>
                                 {model.display_name || model.model_id}
                               </span>
                             </label>
@@ -298,9 +298,9 @@ export function SettingsPage() {
           </div>
 
           {/* Hermes Commands Section */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <h3 className="font-medium text-sm text-gray-900 dark:text-gray-100 mb-3">Hermes Commands</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          <div className="bg-bg-primary border border-border-default rounded-lg p-4">
+            <h3 className="font-medium text-sm text-fg-primary mb-3">Hermes Commands</h3>
+            <p className="text-xs text-fg-muted mb-3">
               Execute Hermes system commands
             </p>
             <div className="space-y-2">
@@ -332,17 +332,17 @@ export function SettingsPage() {
           </div>
 
           {/* Connection Status Section */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <h3 className="font-medium text-sm text-gray-900 dark:text-gray-100 mb-2">Connection status</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+          <div className="bg-bg-primary border border-border-default rounded-lg p-4">
+            <h3 className="font-medium text-sm text-fg-primary mb-2">Connection status</h3>
+            <p className="text-sm text-fg-muted">
               Hermes Agent: <span className="text-green-500">Connected</span>
             </p>
           </div>
 
           {/* About Section */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <h3 className="font-medium text-sm text-gray-900 dark:text-gray-100 mb-2">About</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+          <div className="bg-bg-primary border border-border-default rounded-lg p-4">
+            <h3 className="font-medium text-sm text-fg-primary mb-2">About</h3>
+            <p className="text-sm text-fg-muted">
               1230.UI v0.1.0 (Phase 2)
             </p>
           </div>
@@ -362,10 +362,10 @@ export function SettingsPage() {
               <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              <h3 className="text-lg font-semibold text-fg-primary">
                 {pendingCommand === 'update' ? 'Hermes Update' : 'Hermes Doctor Fix'}
               </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              <p className="text-sm text-fg-secondary mt-1">
                 This will restart the Hermes server. Active sessions will be interrupted.
               </p>
             </div>
@@ -374,7 +374,7 @@ export function SettingsPage() {
             <button
               type="button"
               onClick={() => setPendingCommand(null)}
-              className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="px-4 py-2 text-sm text-fg-secondary hover:bg-bg-secondary rounded-lg transition-colors"
             >
               Cancel
             </button>
@@ -415,15 +415,15 @@ export function SettingsPage() {
                 ) : (
                   <XCircle className="w-5 h-5 text-red-600" />
                 )}
-                <span className="text-sm text-gray-600 dark:text-gray-400">
+                <span className="text-sm text-fg-secondary">
                   {execResult.success ? 'Completed successfully' : 'Command failed'}
                 </span>
               </div>
-              <pre className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono bg-gray-50 dark:bg-gray-900 p-3 rounded">
+              <pre className="text-sm text-fg-primary whitespace-pre-wrap font-mono bg-bg-secondary p-3 rounded">
                 {execResult.output}
               </pre>
             </div>
-            <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="p-4 border-t border-border-default">
               <button
                 type="button"
                 onClick={() => setExecResult(null)}

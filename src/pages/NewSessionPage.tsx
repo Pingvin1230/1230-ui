@@ -102,12 +102,12 @@ export function NewSessionPage() {
     return (
       <div className="p-6 max-w-4xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">New Session</h1>
+          <h1 className="text-2xl font-semibold text-fg-primary">New Session</h1>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 animate-pulse space-y-4">
-          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4" />
-          <div className="h-9 bg-gray-200 dark:bg-gray-700 rounded w-full" />
-          <div className="h-24 bg-gray-200 dark:bg-gray-700 rounded w-full" />
+        <div className="bg-bg-primary border border-border-default rounded-lg p-6 animate-pulse space-y-4">
+          <div className="h-4 bg-bg-muted rounded w-1/4" />
+          <div className="h-9 bg-bg-muted rounded w-full" />
+          <div className="h-24 bg-bg-muted rounded w-full" />
         </div>
       </div>
     );
@@ -116,18 +116,18 @@ export function NewSessionPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">New Session</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Create a new conversation with Hermes</p>
+        <h1 className="text-2xl font-semibold text-fg-primary">New Session</h1>
+        <p className="text-sm text-fg-muted mt-1">Create a new conversation with Hermes</p>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Start a New Conversation</h2>
+      <div className="bg-bg-primary border border-border-default rounded-lg p-6">
+        <h2 className="text-lg font-semibold text-fg-primary mb-4">Start a New Conversation</h2>
         <div className="space-y-3">
           {models ? (
             <select
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 rounded-lg border border-border-default bg-bg-primary text-fg-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {Object.entries(models.providers).map(([providerId, provider]) => (
                 <optgroup key={providerId} label={provider.name}>
@@ -142,8 +142,8 @@ export function NewSessionPage() {
             </select>
           ) : (
             <div className="flex flex-col items-center text-center py-6">
-              <NoModelsIllustration className="w-20 h-20 mb-3 text-gray-400 dark:text-gray-500" />
-              <p className="text-gray-500 dark:text-gray-400 text-sm">
+              <NoModelsIllustration className="w-20 h-20 mb-3 text-fg-muted" />
+              <p className="text-fg-muted text-sm">
                 No models available
               </p>
             </div>
@@ -166,7 +166,7 @@ export function NewSessionPage() {
               placeholder="Type a message..."
               disabled={sending}
               rows={3}
-              className="flex-1 px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 resize-none overflow-y-auto"
+              className="flex-1 px-4 py-3 rounded-lg border border-border-default bg-bg-primary text-fg-primary placeholder-fg-muted focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 resize-none overflow-y-auto"
             />
             <button
               type="button"
@@ -183,7 +183,7 @@ export function NewSessionPage() {
 
       {sessions.length > 0 && (
         <div className="mt-8">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Recent Sessions</h2>
+          <h2 className="text-lg font-semibold text-fg-primary mb-3">Recent Sessions</h2>
           <div className="space-y-2">
             {sessions.slice(0, 5).map((session) => {
               const titleText = session.title ||
@@ -196,20 +196,20 @@ export function NewSessionPage() {
                 <Link
                   key={session.id}
                   to={`/chat/${session.id}`}
-                  className="block bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-blue-300 dark:hover:border-blue-600 transition-all hover:shadow-sm"
+                  className="block bg-bg-primary border border-border-default rounded-lg p-4 hover:border-blue-300 dark:hover:border-blue-600 transition-all hover:shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-4 mb-2">
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                    <h3 className="font-semibold text-fg-primary truncate">
                       {titleText}
                     </h3>
                     <span
-                      className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap flex-shrink-0"
+                      className="text-xs text-fg-muted whitespace-nowrap flex-shrink-0"
                       title={formatFullDateTime(session.startedAt)}
                     >
                       {formatTimeAgo(session.startedAt)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center gap-2 text-xs text-fg-muted">
                     {session.model && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
                         {session.model}
