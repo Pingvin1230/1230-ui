@@ -545,9 +545,12 @@ npm run preview               # Preview production build
 
 ### Beta (Planned)
 - [x] Session management (delete, rename, pin, archive, bulk actions)
+- [x] Keyboard shortcuts (`Ctrl/Cmd + K`, `Ctrl/Cmd + N`, `Ctrl/Cmd + Enter`)
+- [x] Browser notifications for new messages
+- [x] Tool call history visualization
+- [x] UI controls relocation (theme/notifications toggles in Navbar + Settings)
 - [ ] Message editing and branching
 - [ ] Session export (Markdown, JSON)
-- [ ] Keyboard shortcuts
 
 ### v1.0 (Stable)
 - [ ] Smart session titles (LLM generation)
@@ -556,6 +559,25 @@ npm run preview               # Preview production build
 - [ ] CI/CD pipeline
 - [ ] Performance optimizations
 - [ ] Documentation improvements
+
+## Changelog
+
+### 2026-06-05 — Session Creation & Message Handling Fixes
+- **Fixed session creation** — corrected HERMES_DB_PATH to match Hermes API database location (`/root/.hermes/state.db`)
+- **Fixed message duplication** — initialMessage now stored in ref and sent only when session has no existing messages
+- **Fixed session visibility** — sessions created via API now appear in session list immediately
+- **Fixed React StrictMode issues** — removed duplicate useEffect that caused message duplication in development mode
+
+### 2026-06-05 — Security & UX Enhancements
+- **Configuration validation** — zod schema validation at startup with helpful error messages
+- **Input sanitization** — XSS protection via `xss` package
+- **Rate limiting** — express-rate-limit for API endpoints (100 req/min general, 30 req/min chat, 5 req/5min system commands)
+- **CORS configuration** — configurable trusted domains via `CORS_ORIGINS` env var
+- **Security headers** — helmet middleware (CSP, X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy)
+- **Keyboard shortcuts** — `Ctrl/Cmd + K` (search), `Ctrl/Cmd + N` (new session), `Ctrl/Cmd + Enter` (send)
+- **Browser notifications** — Notification API + Badge API with toggle in Navbar and Settings
+- **Tool call history** — expandable list of completed tool calls during streaming
+- **UI controls relocation** — theme/notifications toggles moved to Navbar and Settings page
 
 ## Contributing
 

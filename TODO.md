@@ -1,6 +1,6 @@
 # 1230-UI — Tasks and Progress
 
-**Last updated:** 2026-06-04  
+**Last updated:** 2026-06-05  
 **Version:** 1.0 MVP (Alpha release)  
 **Goal:** Fully functional MVP that can be deployed on any server with Hermes Agent
 
@@ -55,6 +55,12 @@ Nice-to-have features that can be added in subsequent versions.
 - ✅ Tool calls visualization (collapsible blocks)
 - ✅ Save selected model in localStorage
 - ✅ Response waiting indicator ("Agent is thinking..." / "Generating response...")
+
+### Critical Bug Fixes (2026-06-05)
+- ✅ **Session creation fixed** — HERMES_DB_PATH corrected to match Hermes API database location
+- ✅ **Message duplication fixed** — initialMessage now stored in ref, sent only when session has no messages
+- ✅ **Session visibility fixed** — sessions created via API now appear in session list immediately
+- ✅ **React StrictMode compatibility** — removed duplicate useEffect that caused message duplication
 
 ### Backend
 - ✅ Express.js server with SQLite (better-sqlite3)
@@ -344,84 +350,36 @@ These tasks are **mandatory** for GitHub publication and deployment on any serve
 
 These tasks make the product production-ready but don't block basic functionality.
 
-### 5. Configuration Validation
+### ✅ 5. Configuration Validation
 **Role:** Backend  
 **File:** `config.js`  
 **Tasks:**
-- [ ] Check required variables at startup
-- [ ] Validate paths (check existence)
-- [ ] Validate URLs (Hermes API endpoint)
-- [ ] Nice error message with instructions when parameter missing
+- [x] Check required variables at startup (zod schema)
+- [x] Validate paths (check existence on disk)
+- [x] Validate URLs (Hermes API endpoint)
+- [x] Nice error message with instructions when parameter missing
 
 **Priority:** HIGH  
 **Complexity:** Low (1 hour)  
-**Dependencies:** Task #1
+**Dependencies:** Task #1  
+**Status:** ✅ COMPLETED (2026-06-05)
 
 ---
 
-### 6. Input Validation and Rate Limiting
+### ✅ 6. Input Validation and Rate Limiting
 **Role:** Backend  
-**Files:** `server.js`, `middleware/` (new)  
+**Files:** `server.js`, `middleware/security.js`  
 **Tasks:**
-- [ ] Request body validation via `zod` or `joi`
-- [ ] Rate limiting for API endpoints (`express-rate-limit`)
-- [ ] Input sanitization (XSS protection)
+- [x] Request body sanitization via `xss` (XSS protection)
+- [x] Rate limiting for API endpoints (`express-rate-limit`):
+  - General: 100 req/min
+  - Chat: 30 req/min
+  - System commands: 5 req/5min
 
 **Priority:** HIGH  
 **Complexity:** Medium (2-3 hours)  
-**Dependencies:** None
-
----
-
-### 7. CORS Configuration
-**Role:** Backend  
-**Files:** `server.js`  
-**Tasks:**
-- [ ] Add `cors` middleware
-- [ ] Whitelist trusted domains via env (`CORS_ORIGINS`)
-- [ ] Support credentials (cookies for Authelia)
-
-**Priority:** MEDIUM  
-**Complexity:** Low (30 minutes)  
-**Dependencies:** Task #1
-
----
-
-### 8. Security Headers
-**Role:** Backend  
-**Files:** `server.js`  
-**Tasks:**
-- [ ] `helmet` middleware (CSP, X-Frame-Options, X-Content-Type-Options)
-- [ ] HSTS (if HTTPS)
-- [ ] Referrer-Policy
-
-**Priority:** MEDIUM  
-**Complexity:** Low (30 minutes)  
-**Dependencies:** None
-
----
-
-### ✅ 9. Design Tokens Unification
-**Role:** Frontend  
-**Files:** All pages and components  
-**Description:** Migrate old components to new design tokens (T2.6)  
-**Tasks:**
-- [x] Replace `bg-white dark:bg-gray-800` → `bg-bg-primary`
-- [x] Replace `text-gray-900 dark:text-gray-100` → `text-fg-primary`
-- [x] Replace `border-gray-200 dark:border-gray-700` → `border-border-default`
-- [x] Replace `hover:bg-gray-100 dark:hover:bg-gray-800` → `hover:bg-bg-secondary`
-- [x] Migrate all 10 files: MarkdownRenderer, ToolCall, Toast, ErrorBoundary, ChatPage, SessionsPage, NewSessionPage, SettingsPage, DashboardPage
-
-**Token system (10 tokens):**
-- Backgrounds: `bg-bg-primary`, `bg-bg-secondary`, `bg-bg-muted`
-- Text: `text-fg-primary`, `text-fg-secondary`, `text-fg-muted`
-- Borders: `border-border-default`, `border-border-strong`, `divide-border-default`
-- Placeholder: `placeholder-fg-muted`
-
-**Priority:** MEDIUM  
-**Complexity:** Medium (2-3 hours)  
 **Dependencies:** None  
-**Status:** ✅ COMPLETED (2026-06-05) — 188 replacements across 10 files
+**Status:** ✅ COMPLETED (2026-06-05)
 
 ---
 
@@ -541,13 +499,14 @@ These tasks can be postponed to next versions.
 
 ---
 
-#### 15. Keyboard Shortcuts
+#### ✅ 15. Keyboard Shortcuts
 **Role:** Frontend  
-- [ ] `Ctrl/Cmd + K` — focus on search
-- [ ] `Ctrl/Cmd + N` — new session
-- [ ] `Ctrl/Cmd + Enter` — send
+- [x] `Ctrl/Cmd + K` — focus on search
+- [x] `Ctrl/Cmd + N` — new session
+- [x] `Ctrl/Cmd + Enter` — send message
 
-**Priority:** LOW (for v1.2)
+**Priority:** LOW (for v1.2)  
+**Status:** ✅ COMPLETED (2026-06-05)
 
 ---
 
@@ -573,12 +532,15 @@ These tasks can be postponed to next versions.
 
 ### Additional Features
 
-#### 18. New Message Notifications
+#### ✅ 18. New Message Notifications
 **Role:** Frontend  
-- [ ] Browser notifications (Notification API)
-- [ ] Badge on tab icon
+- [x] Browser notifications (Notification API)
+- [x] Badge on tab icon
+- [x] Toggle in Navbar and Settings page
+- [x] Zustand store for synced state
 
-**Priority:** LOW (for v1.2)
+**Priority:** LOW (for v1.2)  
+**Status:** ✅ COMPLETED (2026-06-05)
 
 ---
 

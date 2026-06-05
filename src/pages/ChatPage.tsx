@@ -16,7 +16,7 @@ import 'highlight.js/styles/github-dark.css';
 export function ChatPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
-  const initialMessage = (location.state as { initialMessage?: string })?.initialMessage;
+  const initialMessageRef = useRef((location.state as { initialMessage?: string })?.initialMessage);
   const [session, setSession] = useState<Session | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,6 +115,11 @@ export function ChatPage() {
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
+    initialSentRef.current = false;
+    
+    // Сохраняем initialMessage из location.state, если он есть
+    const newInitialMessage = (location.state as { initialMessage?: string })?.initialMessage;
+    initialMessageRef.current = newInitialMessage;
     
     (async () => {
       try {
@@ -129,7 +134,6 @@ export function ChatPage() {
       }
       
       try {
-        setLoading(true);
         const messagesData = await api.getMessages(id);
         if (cancelled) return;
         setMessages(messagesData);
@@ -174,20 +178,18 @@ export function ChatPage() {
   }, [clearBadge]);
 
   useEffect(() => {
-    initialSentRef.current = false;
-  }, [id]);
-
-  useEffect(() => {
-    if (!loading && session && initialMessage && !initialSentRef.current) {
+    const initialMessage = initialMessageRef.current;
+    // Отправляем initialMessage только если:
+    // 1. Есть initialMessage из location.state
+    // 2. Сессия загружена
+    // 3. Ещё не отправляли в этой сессии
+    // 4. В сессии НЕТ сообщений (значит это первый заход после создания)
+    if (!loading && session && initialMessage && !initialSentRef.current && messages.length === 0) {
       initialSentRef.current = true;
-      setInput(initialMessage);
-      setTimeout(() => {
-        setInput('');
-        doSend(initialMessage);
-      }, 100);
+      doSend(initialMessage);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- doSend is intentionally excluded: initialMessage should only be sent once when available, not on every doSend recreation. initialSentRef prevents duplicate sends.
-  }, [loading, session, initialMessage]);
+  }, [loading, session, messages.length]);
 
   async function saveMessage(sessionId: string, role: string, content: string, toolName?: string) {
     try {
