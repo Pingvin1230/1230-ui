@@ -25,12 +25,16 @@ export function useNotifications({ enabled }: UseNotificationsOptions) {
     if (!enabledRef.current) return;
     if (typeof Notification === 'undefined') return;
     if (Notification.permission !== 'granted') return;
+    if (document.visibilityState === 'visible') return;
 
-    new Notification(title, {
-      body,
-      icon: '/favicon.ico',
-      tag: '1230-ui',
-    });
+    try {
+      new Notification(title, {
+        body,
+        requireInteraction: true,
+      });
+    } catch {
+      // silently ignore
+    }
   }, []);
 
   const setBadge = useCallback((count: number) => {
