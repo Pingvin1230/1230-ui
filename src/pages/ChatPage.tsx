@@ -26,6 +26,8 @@ export function ChatPage() {
   const [processStatus, setProcessStatus] = useState<'thinking' | 'generating' | 'executing_tool'>('thinking');
   const [executingTool, setExecutingTool] = useState<string | null>(null);
   const [activeToolCalls, setActiveToolCalls] = useState<Map<string, { toolName: string; label?: string }>>(new Map());
+  const [completedToolCalls, setCompletedToolCalls] = useState<Array<{ id: string; toolName: string; label?: string }>>([]);
+  const [showToolCallHistory, setShowToolCallHistory] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [error, setError] = useState<ChatError | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -251,6 +253,10 @@ export function ChatPage() {
       onToolCallEnd: (id) => {
         setActiveToolCalls(prev => {
           const next = new Map(prev);
+          const completed = next.get(id);
+          if (completed) {
+            setCompletedToolCalls(prev => [...prev, { id, ...completed }]);
+          }
           next.delete(id);
           return next;
         });
@@ -259,6 +265,8 @@ export function ChatPage() {
         console.log('[ChatPage] onDone called, content length:', fullContent?.length);
         setIsWaitingForResponse(false);
         setActiveToolCalls(new Map());
+        setCompletedToolCalls([]);
+        setShowToolCallHistory(false);
         setExecutingTool(null);
         const latencyMs = streamStartedAtRef.current ? Date.now() - streamStartedAtRef.current : undefined;
         streamStartedAtRef.current = null;
@@ -627,6 +635,38 @@ export function ChatPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {completedToolCalls.length > 0 && (
+            <div key="completed-tools" className="max-w-3xl">
+              <button
+                type="button"
+                onClick={() => setShowToolCallHistory(prev => !prev)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border-default bg-bg-secondary hover:bg-bg-muted transition-colors text-sm text-fg-secondary"
+              >
+                <span className={`transition-transform ${showToolCallHistory ? 'rotate-45' : ''}`}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                </span>
+                {completedToolCalls.length} completed tool{completedToolCalls.length > 1 ? 's' : ''}
+              </button>
+
+              {showToolCallHistory && (
+                <div className="mt-2 space-y-1">
+                  {completedToolCalls.map(tc => (
+                    <div
+                      key={tc.id}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs text-fg-muted"
+                    >
+                      <Check className="w-3.5 h-3.5 text-green-500" />
+                      <span className="font-mono px-1.5 py-0.5 rounded bg-bg-muted">{tc.toolName}</span>
+                      {tc.label && <span>{tc.label}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
