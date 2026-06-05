@@ -5,6 +5,7 @@ import Database from 'better-sqlite3';
 import helmet from 'helmet';
 import cors from 'cors';
 import config from './config.js';
+import { apiLimiter, chatLimiter, execLimiter, sanitizeMiddleware } from './middleware/security.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,6 +31,7 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.use(sanitizeMiddleware);
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // Request logging middleware
@@ -220,7 +222,7 @@ app.get('/api/system/status', async (req, res) => {
 });
 
 // Execute Hermes commands
-app.post('/api/system/exec', async (req, res) => {
+app.post('/api/system/exec', execLimiter, async (req, res) => {
   const { command } = req.body;
   
   if (!['update', 'doctor'].includes(command)) {
@@ -590,7 +592,7 @@ app.get('/api/models', (req, res) => {
   }
 });
 
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', chatLimiter, async (req, res) => {
   const { messages, session_id, model, stream = true } = req.body;
 
   if (!messages || !Array.isArray(messages)) {
@@ -861,7 +863,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Save message to database
-app.post('/api/messages', async (req, res) => {
+app.post('/api/messages', apiLimiter, async (req, res) => {
   const { sessionId, role, content, toolName } = req.body;
 
   if (!sessionId || !role || !content) {
@@ -910,7 +912,7 @@ app.post('/api/messages', async (req, res) => {
 });
 
 // Create new session
-app.post('/api/sessions', async (req, res) => {
+app.post('/api/sessions', apiLimiter, async (req, res) => {
   const { model, title } = req.body;
 
   if (!model) {
@@ -1048,7 +1050,7 @@ app.get('/api/models/providers', (req, res) => {
 });
 
 // Sync providers from Hermes
-app.post('/api/models/sync', async (req, res) => {
+app.post('/api/models/sync', apiLimiter, async (req, res) => {
   try {
     const { spawn } = await import('child_process');
     
