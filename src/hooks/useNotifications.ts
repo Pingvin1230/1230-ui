@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface UseNotificationsOptions {
   enabled: boolean;
@@ -8,6 +8,11 @@ export function useNotifications({ enabled }: UseNotificationsOptions) {
   const [permission, setPermission] = useState<NotificationPermission>(
     typeof Notification !== 'undefined' ? Notification.permission : 'denied'
   );
+  const enabledRef = useRef(enabled);
+
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
 
   const requestPermission = useCallback(async () => {
     if (typeof Notification === 'undefined') return 'unsupported';
@@ -17,7 +22,7 @@ export function useNotifications({ enabled }: UseNotificationsOptions) {
   }, []);
 
   const notify = useCallback((title: string, body?: string) => {
-    if (!enabled) return;
+    if (!enabledRef.current) return;
     if (typeof Notification === 'undefined') return;
     if (Notification.permission !== 'granted') return;
 
@@ -26,7 +31,7 @@ export function useNotifications({ enabled }: UseNotificationsOptions) {
       icon: '/favicon.ico',
       tag: '1230-ui',
     });
-  }, [enabled]);
+  }, []);
 
   const setBadge = useCallback((count: number) => {
     if ('setAppBadge' in navigator) {

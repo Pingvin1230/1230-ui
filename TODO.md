@@ -648,6 +648,62 @@ These tasks can be postponed to next versions.
 
 ---
 
+### 25. Multi-Agent Federation (1230UI as OS)
+
+**Role:** Fullstack  
+**Files:** `server.js`, `src/pages/`, new `src/pages/ClusterPage.tsx`, new `routes/federation.js`  
+**Description:** Transform 1230UI from single-agent WebUI into multi-agent OS. Allow one 1230UI installation to communicate with multiple Hermes agents on different servers.
+
+**Design document:** `FEDERATION_DESIGN.md`
+
+**Architecture: Symmetric Federation**
+- Each 1230UI is an equal node (no master/slave)
+- Two API layers: Federation API (what each node exposes) + Orchestration API (cluster management on home node)
+- Lazy polling for status, SSE proxy for chat streaming
+- Graceful degradation when nodes offline
+
+**Phases:**
+
+**Phase 1 — Federation Identity + Health**
+- [ ] Add `remote_nodes` and `node_cache` tables to uiDb
+- [ ] Federation auth middleware (X-Federation-Node-Id + Bearer token)
+- [ ] `GET /api/federation/identity` — return node info
+- [ ] `GET /api/federation/health` — return health status
+- [ ] `GET/POST/DELETE /api/cluster/nodes` — node registry CRUD
+- [ ] `POST /api/cluster/nodes/:id/ping` — health check with latency
+- [ ] `GET /api/cluster/status` — aggregated status of all nodes
+- [ ] UI: ClusterPage with node list, status indicators, add/remove nodes
+
+**Phase 2 — Federation Sessions**
+- [ ] `GET /api/federation/sessions` — expose local sessions to other nodes
+- [ ] `GET /api/federation/sessions/:id` — single session details
+- [ ] `GET /api/federation/sessions/:id/messages` — session messages
+- [ ] `GET /api/cluster/sessions` — aggregate sessions from all nodes (or filter by nodeId)
+- [ ] UI: SessionsPage shows sessions grouped by node, node badge on each session
+
+**Phase 3 — Federation Chat (SSE proxy)**
+- [ ] `POST /api/federation/chat` — proxy chat to local Hermes
+- [ ] `POST /api/cluster/chat/:nodeId` — full SSE proxy to remote node
+- [ ] UI: ChatPage supports selecting target node for chat
+- [ ] Node selector in NewSessionPage
+
+**Phase 4 — Cluster Aggregation**
+- [ ] Cross-node session search
+- [ ] Unified dashboard with stats from all nodes
+- [ ] Node capability detection and UI adaptation
+
+**Technical decisions:**
+- Full proxy for SSE streaming (not redirect)
+- 30-second polling for node health (not WebSocket)
+- `node_cache` table for graceful degradation
+- Capability-based routing (hide unsupported features per node)
+
+**Priority:** LOW (far future, after v1.0 stable)  
+**Complexity:** High (20-40 hours total)  
+**Dependencies:** Stable v1.0, multiple servers with 1230UI deployed
+
+---
+
 ## 🐛 Known Issues
 
 ### Frontend
