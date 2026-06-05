@@ -5,9 +5,11 @@ import type { Message, Session } from '../types/api';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import ToolCall from '../components/ToolCall';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { ShieldAlert, Plus, Copy, Check, RefreshCw, Bot, User, AlertCircle, ChevronRight, Trash2, Pencil, Loader2 } from 'lucide-react';
+import { ShieldAlert, Plus, Copy, Check, RefreshCw, Bot, User, AlertCircle, ChevronRight, Trash2, Pencil, Loader2, Bell, BellOff } from 'lucide-react';
 import { NoMessagesIllustration } from '../assets/illustrations';
 import { formatTimeAgo, formatFullDateTime } from '../lib/time';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useNotifications } from '../hooks/useNotifications';
 import 'highlight.js/styles/github-dark.css';
 
 export function ChatPage() {
@@ -49,6 +51,28 @@ export function ChatPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const [notificationsEnabled, setNotificationsEnabled] = useState(
+    () => localStorage.getItem('notificationsEnabled') === 'true'
+  );
+  const { permission, requestPermission, notify, setBadge, clearBadge } = useNotifications({
+    enabled: notificationsEnabled,
+  });
+
+  useEffect(() => {
+    localStorage.setItem('notificationsEnabled', String(notificationsEnabled));
+  }, [notificationsEnabled]);
+
+  useKeyboardShortcuts([
+    {
+      key: 'Enter',
+      metaKey: true,
+      action: () => {
+        if (!isSessionBlocked && !sending && input.trim()) {
+          handleSend();
+        }
+      },
+    },
+  ]);
 
   async function handleDeleteSession() {
     if (!id) return;
@@ -132,7 +156,7 @@ export function ChatPage() {
       if (diff > 0) setUnreadCount((prev) => prev + diff);
     }
     prevMessageCountRef.current = messages.length;
-  }, [messages, streamingContent]);
+  }, [messages, streamingContent, clearBadge]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -142,12 +166,15 @@ export function ChatPage() {
       if (atBottom !== isAtBottomRef.current) {
         isAtBottomRef.current = atBottom;
         setIsAtBottom(atBottom);
-        if (atBottom) setUnreadCount(0);
+        if (atBottom) {
+          setUnreadCount(0);
+          clearBadge();
+        }
       }
     };
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [clearBadge]);
 
   useEffect(() => {
     if (!loading && session && initialMessage && !initialSentRef.current) {
@@ -252,6 +279,14 @@ export function ChatPage() {
         setStreamingContent('');
         setSending(false);
         abortRef.current = null;
+
+        if (!isAtBottomRef.current) {
+          setUnreadCount(prev => prev + 1);
+          setBadge(unreadCount + 1);
+        }
+
+        const preview = fullContent.slice(0, 100) + (fullContent.length > 100 ? '...' : '');
+        notify('Response received', preview);
 
         await saveMessage(id!, 'user', userContent);
         await saveMessage(id!, 'assistant', fullContent);
@@ -471,6 +506,28 @@ export function ChatPage() {
                 <Trash2 className="w-4 h-4" />
               </button>
             )}
+            <button
+              type="button"
+              onClick={async () => {
+                if (permission === 'default') {
+                  const result = await requestPermission();
+                  if (result === 'granted') setNotificationsEnabled(true);
+                } else if (permission === 'granted') {
+                  setNotificationsEnabled(prev => !prev);
+                } else {
+                  setNotificationsEnabled(false);
+                }
+              }}
+              className={`p-1.5 rounded transition-colors ${
+                notificationsEnabled
+                  ? 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                  : 'text-fg-muted hover:bg-bg-secondary'
+              }`}
+              aria-label={notificationsEnabled ? 'Disable notifications' : 'Enable notifications'}
+              title={notificationsEnabled ? 'Notifications on' : 'Notifications off'}
+            >
+              {notificationsEnabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+            </button>
           </div>
         </div>
         <div className="text-sm text-fg-muted mt-1">

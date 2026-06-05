@@ -1,12 +1,14 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { Navbar } from './Navbar';
 import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
 import { useThemeStore } from '../store/themeStore';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
 export function Layout() {
   const { isDarkMode } = useThemeStore();
+  const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
 
   useEffect(() => {
@@ -25,6 +27,22 @@ export function Layout() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useKeyboardShortcuts([
+    {
+      key: 'k',
+      metaKey: true,
+      action: () => {
+        const input = document.querySelector<HTMLInputElement>('input[aria-label="Search sessions"]');
+        input?.focus();
+      },
+    },
+    {
+      key: 'n',
+      metaKey: true,
+      action: () => navigate('/new'),
+    },
+  ]);
 
   const mainMarginLeft = isSidebarOpen ? 'md:ml-72' : 'md:ml-0';
 
