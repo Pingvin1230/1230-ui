@@ -2,6 +2,8 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
+import helmet from 'helmet';
+import cors from 'cors';
 import config from './config.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -17,6 +19,15 @@ const HERMES_PYTHON_PATH = config.hermesPythonPath;
 const HERMES_AGENT_PATH = config.hermesAgentPath;
 const SAVE_MESSAGES_SCRIPT = config.scripts.saveMessages;
 const SYNC_PROVIDERS_SCRIPT = config.scripts.syncProviders;
+
+app.use(helmet({
+  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
+}));
+
+app.use(cors({
+  origin: config.corsOrigins,
+  credentials: true,
+}));
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'dist')));

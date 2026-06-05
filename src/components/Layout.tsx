@@ -29,7 +29,7 @@ export function Layout() {
   const mainMarginLeft = isSidebarOpen ? 'md:ml-72' : 'md:ml-0';
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-800">
+    <div className="min-h-screen bg-bg-secondary">
       <Navbar isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} />
       <Sidebar isSidebarOpen={isSidebarOpen} />
       <div className={`transition-all duration-300 ease-in-out ${mainMarginLeft} h-screen flex flex-col`}>

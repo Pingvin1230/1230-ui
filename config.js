@@ -25,6 +25,11 @@ const config = {
   // Python
   hermesPythonPath: process.env.HERMES_PYTHON_PATH || 'python3',
   
+  // CORS
+  corsOrigins: process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+    : ['http://localhost:3001'],
+
   // Scripts (relative to project root)
   scripts: {
     saveMessages: path.join(__dirname, 'scripts', 'save_messages.py'),

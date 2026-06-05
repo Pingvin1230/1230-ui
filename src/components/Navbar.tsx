@@ -57,7 +57,7 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-md">
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-bg-primary text-fg-primary shadow-md">
       <div className="h-16 flex items-center justify-between">
         <div
           className={`${isSidebarOpen ? 'sm:w-72' : 'w-auto sm:w-16'} flex items-center ${isSidebarOpen ? 'sm:justify-center' : 'sm:justify-start'} transition-all duration-300 ease-in-out px-4 relative flex-shrink-0`}
@@ -81,14 +81,14 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
 
         <div className="hidden md:flex flex-1 justify-center px-4">
           <div className="w-full max-w-md relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted pointer-events-none" />
             <input
               type="text"
               value={localInput}
               onChange={handleSearchChange}
               placeholder="Search sessions..."
               aria-label="Search sessions"
-              className="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-9 pr-4 py-2 rounded-lg border border-border-default bg-bg-secondary text-fg-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
