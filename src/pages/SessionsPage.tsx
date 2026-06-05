@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Virtuoso } from 'react-virtuoso';
 import { api } from '../lib/api';
 import { RefreshCw, Plus, MessageSquare, Sparkles, Loader2, SearchX, Star, Archive, Trash2, CheckSquare, Square, Eye } from 'lucide-react';
@@ -86,6 +86,7 @@ export function SessionsPage() {
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
   const query = useSearchStore((s) => s.query);
   const setQuery = useSearchStore((s) => s.setQuery);
+  const location = useLocation();
 
   const loadSessions = useCallback(async (includeArchived = false) => {
     try {
@@ -108,7 +109,7 @@ export function SessionsPage() {
     (async () => {
       try {
         setLoading(true);
-        const data = await api.getSessions(PAGE_SIZE, 0);
+        const data = await api.getSessions(PAGE_SIZE, 0, showArchived);
         if (cancelled) return;
         setSessions(data.sessions);
         setTotal(data.total);
@@ -125,7 +126,7 @@ export function SessionsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [location.key, showArchived]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;

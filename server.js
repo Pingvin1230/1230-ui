@@ -342,10 +342,10 @@ app.get('/api/sessions', (req, res) => {
   }
 });
 
-app.get('/api/sessions/:id', (req, res) => {
+app.get('/api/sessions/:id', async (req, res) => {
   try {
     const session = db.prepare(`
-      SELECT 
+      SELECT
         id,
         title,
         source,
@@ -359,11 +359,37 @@ app.get('/api/sessions/:id', (req, res) => {
       WHERE id = ?
     `).get(req.params.id);
 
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
+    if (session) {
+      return res.json(session);
     }
 
-    res.json(session);
+    // Fallback: fetch from Hermes API (for newly created sessions not yet in state.db)
+    try {
+      const response = await fetch(`${HERMES_API_URL}/api/sessions/${req.params.id}`, {
+        headers: { 'Authorization': `Bearer ${HERMES_API_KEY}` },
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const s = data.session;
+        return res.json({
+          id: s.id,
+          title: s.title || 'Untitled session',
+          source: s.source || 'webui',
+          model: s.model || 'unknown',
+          startedAt: s.created_at || Math.floor(Date.now() / 1000),
+          endedAt: null,
+          messageCount: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+        });
+      }
+    } catch (apiErr) {
+      console.error('Hermes API fallback failed:', apiErr.message);
+    }
+
+    return res.status(404).json({ error: 'Session not found' });
   } catch (error) {
     console.error('Error fetching session:', error);
     res.status(500).json({ error: 'Failed to fetch session' });
@@ -943,6 +969,13 @@ app.post('/api/sessions', apiLimiter, async (req, res) => {
 
     if (!sessionId) {
       return res.status(500).json({ error: 'No session ID in response' });
+    }
+
+    // Wait for Hermes to sync session to state.db (up to 5 seconds)
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const session = db.prepare('SELECT id FROM sessions WHERE id = ?').get(sessionId);
+      if (session) break;
+      await new Promise(r => setTimeout(r, 500));
     }
 
     res.json({ success: true, sessionId });

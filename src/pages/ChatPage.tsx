@@ -174,6 +174,10 @@ export function ChatPage() {
   }, [clearBadge]);
 
   useEffect(() => {
+    initialSentRef.current = false;
+  }, [id]);
+
+  useEffect(() => {
     if (!loading && session && initialMessage && !initialSentRef.current) {
       initialSentRef.current = true;
       setInput(initialMessage);
