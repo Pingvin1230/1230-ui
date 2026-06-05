@@ -1,6 +1,6 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import { useRef, useEffect, useState, type ChangeEvent } from 'react';
-import { Settings, LogOut, Search } from 'lucide-react';
+import { Settings, LogOut, Search, Sun, Moon, Bell, BellOff } from 'lucide-react';
 import { useThemeStore } from '../store/themeStore';
 import { useSearchStore } from '../store/searchStore';
 
@@ -10,7 +10,7 @@ interface NavbarProps {
 }
 
 export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
-  const { isDarkMode } = useThemeStore();
+  const { isDarkMode, toggleDarkMode } = useThemeStore();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [, setSearchParams] = useSearchParams();
@@ -18,6 +18,9 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
   const setQuery = useSearchStore((s) => s.setQuery);
   const [localInput, setLocalInput] = useState(query);
   const debounceRef = useRef<number | null>(null);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(
+    () => localStorage.getItem('notificationsEnabled') === 'true'
+  );
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -56,6 +59,18 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
     }, 250);
   };
 
+  const handleNotificationsToggle = async () => {
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission === 'default') {
+      const result = await Notification.requestPermission();
+      if (result === 'granted') setNotificationsEnabled(true);
+    } else if (Notification.permission === 'granted') {
+      setNotificationsEnabled(prev => !prev);
+    } else {
+      setNotificationsEnabled(false);
+    }
+  };
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-bg-primary text-fg-primary shadow-md">
       <div className="h-16 flex items-center justify-between">
@@ -64,7 +79,7 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
         >
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className={`flex items-center text-gray-500 dark:text-gray-500 ${isSidebarOpen ? 'sm:absolute sm:left-4' : 'sm:relative'}`}
+            className={`flex items-center text-fg-muted ${isSidebarOpen ? 'sm:absolute sm:left-4' : 'sm:relative'}`}
             aria-label={isSidebarOpen ? 'Collapse Sidebar' : 'Expand Sidebar'}
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
@@ -93,32 +108,56 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
           </div>
         </div>
 
-        <div className="flex items-center justify-end px-4 sm:px-6 lg:px-8 flex-shrink-0">
+        <div className="flex items-center justify-end gap-2 px-4 sm:px-6 lg:px-8 flex-shrink-0">
+          <button
+            type="button"
+            onClick={handleNotificationsToggle}
+            className={`p-1.5 rounded transition-colors ${
+              notificationsEnabled
+                ? 'text-blue-600 dark:text-blue-400 hover:bg-bg-secondary'
+                : 'text-fg-muted hover:bg-bg-secondary'
+            }`}
+            aria-label={notificationsEnabled ? 'Disable notifications' : 'Enable notifications'}
+            title={notificationsEnabled ? 'Notifications on' : 'Notifications off'}
+          >
+            {notificationsEnabled ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleDarkMode}
+            className="p-1.5 rounded text-fg-muted hover:bg-bg-secondary transition-colors"
+            aria-label="Toggle Dark Mode"
+            title="Toggle Dark Mode"
+          >
+            {isDarkMode ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5" />}
+          </button>
+
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
               className="flex items-center"
               aria-label="User Menu"
             >
-              <div className="h-8 w-8 rounded-full border-2 border-green-500 bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-300">U</span>
+              <div className="h-8 w-8 rounded-full border-2 border-green-500 bg-bg-muted flex items-center justify-center">
+                <span className="text-sm font-medium text-fg-secondary">U</span>
               </div>
             </button>
 
             {isDropdownOpen && (
-              <div className="absolute right-0 top-full mt-2 min-w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 border border-gray-200 dark:border-gray-700">
+              <div className="absolute right-0 top-full mt-2 min-w-48 bg-bg-primary rounded-md shadow-lg py-1 border border-border-default">
                 <Link
                   to="/settings"
                   onClick={() => setIsDropdownOpen(false)}
-                  className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  className="flex items-center px-4 py-2 text-sm text-fg-secondary hover:bg-bg-secondary"
                 >
                   <Settings className="h-4 w-4 mr-2" />
                   Settings
                 </Link>
-                <hr className="my-1 border-gray-200 dark:border-gray-700" />
+                <hr className="my-1 border-border-default" />
                 <button
                   onClick={() => setIsDropdownOpen(false)}
-                  className="w-full flex items-center text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  className="w-full flex items-center text-left px-4 py-2 text-sm text-fg-secondary hover:bg-bg-secondary"
                 >
                   <LogOut className="h-4 w-4 mr-2" />
                   Logout

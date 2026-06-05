@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { Download, Wrench, Loader2, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { Download, Wrench, Loader2, CheckCircle, XCircle, AlertTriangle, Sun, Moon, Bell, BellOff } from 'lucide-react';
 import { Modal } from '../components/Modal';
+import { useThemeStore } from '../store/themeStore';
 
 interface Model {
   id: number;
@@ -24,6 +25,7 @@ interface Provider {
 }
 
 export function SettingsPage() {
+  const { isDarkMode, toggleDarkMode } = useThemeStore();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -40,6 +42,29 @@ export function SettingsPage() {
   const [selectedModel, setSelectedModel] = useState<string>(
     () => localStorage.getItem('selectedModel') ?? ''
   );
+  const [notificationsEnabled, setNotificationsEnabled] = useState(
+    () => localStorage.getItem('notificationsEnabled') === 'true'
+  );
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
+    typeof Notification !== 'undefined' ? Notification.permission : 'denied'
+  );
+
+  useEffect(() => {
+    localStorage.setItem('notificationsEnabled', String(notificationsEnabled));
+  }, [notificationsEnabled]);
+
+  const handleNotificationsToggle = async () => {
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission === 'default') {
+      const result = await Notification.requestPermission();
+      setNotificationPermission(result);
+      if (result === 'granted') setNotificationsEnabled(true);
+    } else if (Notification.permission === 'granted') {
+      setNotificationsEnabled(prev => !prev);
+    } else {
+      setNotificationsEnabled(false);
+    }
+  };
 
   useEffect(() => {
     loadProviders();
@@ -154,6 +179,54 @@ export function SettingsPage() {
           {/* General Section */}
           <div className="bg-bg-primary border border-border-default rounded-lg p-4">
             <h3 className="font-medium text-sm text-fg-primary mb-3">General</h3>
+
+            {/* Theme Toggle */}
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-border-default">
+              <div>
+                <p className="text-sm text-fg-primary">Appearance</p>
+                <p className="text-xs text-fg-muted mt-0.5">
+                  {isDarkMode ? 'Dark mode' : 'Light mode'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleDarkMode}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border-default bg-bg-secondary hover:bg-bg-muted transition-colors text-sm text-fg-secondary"
+              >
+                {isDarkMode ? <Sun className="w-4 h-4 text-yellow-500" /> : <Moon className="w-4 h-4" />}
+                {isDarkMode ? 'Dark' : 'Light'}
+              </button>
+            </div>
+
+            {/* Notifications Toggle */}
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-border-default">
+              <div>
+                <p className="text-sm text-fg-primary">Notifications</p>
+                <p className="text-xs text-fg-muted mt-0.5">
+                  {notificationPermission === 'denied'
+                    ? 'Blocked by browser'
+                    : notificationsEnabled
+                      ? 'Enabled — alerts when tab is inactive'
+                      : 'Disabled'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleNotificationsToggle}
+                disabled={notificationPermission === 'denied'}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border-default transition-colors text-sm ${
+                  notificationPermission === 'denied'
+                    ? 'opacity-50 cursor-not-allowed text-fg-muted'
+                    : notificationsEnabled
+                      ? 'text-blue-600 dark:text-blue-400 hover:bg-bg-muted'
+                      : 'text-fg-secondary hover:bg-bg-muted'
+                }`}
+              >
+                {notificationsEnabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+                {notificationsEnabled ? 'On' : 'Off'}
+              </button>
+            </div>
+
             <p className="text-xs text-fg-muted mb-3">
               Default model used when creating new sessions
             </p>

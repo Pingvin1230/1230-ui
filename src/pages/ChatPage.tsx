@@ -5,7 +5,7 @@ import type { Message, Session } from '../types/api';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import ToolCall from '../components/ToolCall';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { ShieldAlert, Plus, Copy, Check, RefreshCw, Bot, User, AlertCircle, ChevronRight, Trash2, Pencil, Loader2, Bell, BellOff } from 'lucide-react';
+import { ShieldAlert, Plus, Copy, Check, RefreshCw, Bot, User, AlertCircle, ChevronRight, Trash2, Pencil, Loader2 } from 'lucide-react';
 import { NoMessagesIllustration } from '../assets/illustrations';
 import { formatTimeAgo, formatFullDateTime } from '../lib/time';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -51,16 +51,10 @@ export function ChatPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(
-    () => localStorage.getItem('notificationsEnabled') === 'true'
-  );
-  const { permission, requestPermission, notify, setBadge, clearBadge } = useNotifications({
+  const notificationsEnabled = localStorage.getItem('notificationsEnabled') === 'true';
+  const { notify, setBadge, clearBadge } = useNotifications({
     enabled: notificationsEnabled,
   });
-
-  useEffect(() => {
-    localStorage.setItem('notificationsEnabled', String(notificationsEnabled));
-  }, [notificationsEnabled]);
 
   useKeyboardShortcuts([
     {
@@ -506,28 +500,6 @@ export function ChatPage() {
                 <Trash2 className="w-4 h-4" />
               </button>
             )}
-            <button
-              type="button"
-              onClick={async () => {
-                if (permission === 'default') {
-                  const result = await requestPermission();
-                  if (result === 'granted') setNotificationsEnabled(true);
-                } else if (permission === 'granted') {
-                  setNotificationsEnabled(prev => !prev);
-                } else {
-                  setNotificationsEnabled(false);
-                }
-              }}
-              className={`p-1.5 rounded transition-colors ${
-                notificationsEnabled
-                  ? 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-                  : 'text-fg-muted hover:bg-bg-secondary'
-              }`}
-              aria-label={notificationsEnabled ? 'Disable notifications' : 'Enable notifications'}
-              title={notificationsEnabled ? 'Notifications on' : 'Notifications off'}
-            >
-              {notificationsEnabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
-            </button>
           </div>
         </div>
         <div className="text-sm text-fg-muted mt-1">

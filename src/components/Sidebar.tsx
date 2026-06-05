@@ -1,14 +1,11 @@
 import { NavLink } from 'react-router-dom';
-import { Home, MessageSquare, Plus, Settings, Sun, Moon } from 'lucide-react';
-import { useThemeStore } from '../store/themeStore';
+import { Home, MessageSquare, Plus, Settings } from 'lucide-react';
 
 interface SidebarProps {
   isSidebarOpen: boolean;
 }
 
 export function Sidebar({ isSidebarOpen }: SidebarProps) {
-  const { isDarkMode, toggleDarkMode } = useThemeStore();
-
   if (!isSidebarOpen) return null;
 
   return (
@@ -71,24 +68,6 @@ export function Sidebar({ isSidebarOpen }: SidebarProps) {
           <span className="font-medium">Settings</span>
         </NavLink>
       </nav>
-
-      <div className="mt-auto p-3">
-        <div className="border-t border-border-default pt-3">
-          <div className="flex items-center justify-end">
-            <button
-              onClick={toggleDarkMode}
-              className="flex items-center justify-center text-fg-secondary hover:bg-bg-muted rounded-lg px-2 py-1 transition-colors duration-200"
-              aria-label="Toggle Dark Mode"
-            >
-              {isDarkMode ? (
-                <Sun className="h-6 w-6 text-yellow-500" />
-              ) : (
-                <Moon className="h-6 w-6 text-fg-muted" />
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
     </aside>
   );
 }
