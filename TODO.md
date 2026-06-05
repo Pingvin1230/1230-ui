@@ -602,11 +602,67 @@ These tasks can be postponed to next versions.
 
 #### 24. Internationalization (i18n)
 **Role:** Frontend  
-- [ ] react-i18next
-- [ ] Russian and English
-- [ ] Extract strings from UI
+**Files:** `src/i18n/` (new), all pages and components  
+**Library:** `react-i18next` + `i18next`  
+**Estimated time:** 4-5 hours  
+**Description:** Add multi-language support to make the interface accessible to non-English speakers.
 
-**Priority:** LOW (for v1.3)
+**Tasks:**
+
+**Setup (30 min):**
+- [ ] Install dependencies: `npm install react-i18next i18next i18next-browser-languagedetector`
+- [ ] Create `src/i18n/index.ts` — initialize i18next with language detection
+- [ ] Import i18n in `main.tsx`
+- [ ] Configure language detection (browser language + localStorage fallback)
+
+**Extract strings (2-3 hours):**
+- [ ] Create `src/i18n/en.json` — English translations (base language)
+- [ ] Replace hardcoded strings in `ChatPage.tsx` (~25 strings)
+- [ ] Replace hardcoded strings in `SessionsPage.tsx` (~15 strings)
+- [ ] Replace hardcoded strings in `DashboardPage.tsx` (~10 strings)
+- [ ] Replace hardcoded strings in `SettingsPage.tsx` (~20 strings)
+- [ ] Replace hardcoded strings in `NewSessionPage.tsx` (~8 strings)
+- [ ] Replace hardcoded strings in components: `Layout.tsx`, `MobileNav.tsx`, `Modal.tsx`, `Toast.tsx`, `ErrorMessage.tsx`, `ToolCall.tsx` (~15 strings)
+- [ ] Handle dynamic strings with interpolation: `{{count}} sessions`, `{{toolName}}...`
+- [ ] Handle pluralization: "1 session" vs "2 sessions"
+
+**Add languages (1 hour):**
+- [ ] Create `src/i18n/ru.json` — Russian translations
+- [ ] Test all pages with Russian language
+- [ ] Verify pluralization works correctly
+
+**UI controls (30 min):**
+- [ ] Add language selector in Settings page (dropdown: English, Russian)
+- [ ] Save language preference to localStorage
+- [ ] Apply language change without page reload
+
+**Testing (30 min):**
+- [ ] Test language switching
+- [ ] Test browser language detection
+- [ ] Test pluralization edge cases (0, 1, 2, 5, 21)
+- [ ] Test dynamic strings (error messages, tool names)
+
+**Example structure:**
+```
+src/i18n/
+├── index.ts       ← i18next initialization
+├── en.json        ← English (base)
+└── ru.json        ← Russian
+```
+
+**Example usage:**
+```tsx
+import { useTranslation } from 'react-i18next';
+
+function ChatPage() {
+  const { t } = useTranslation();
+  return <button>{t('chat.send')}</button>;
+}
+```
+
+**Priority:** MEDIUM (for v1.1)  
+**Complexity:** Medium (4-5 hours)  
+**Dependencies:** None (can be done anytime)
 
 ---
 
