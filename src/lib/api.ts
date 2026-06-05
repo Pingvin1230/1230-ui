@@ -19,8 +19,8 @@ export interface ChatError {
 }
 
 export const api = {
-  async getSessions(limit = 20, offset = 0): Promise<{ sessions: Session[]; total: number; limit: number; offset: number }> {
-    const res = await fetch(`${API_BASE}/api/sessions?limit=${limit}&offset=${offset}`);
+  async getSessions(limit = 20, offset = 0, includeArchived = false): Promise<{ sessions: Session[]; total: number; limit: number; offset: number }> {
+    const res = await fetch(`${API_BASE}/api/sessions?limit=${limit}&offset=${offset}&includeArchived=${includeArchived ? 1 : 0}`);
     if (!res.ok) throw new Error('Failed to fetch sessions');
     return res.json();
   },
@@ -378,6 +378,31 @@ export const api = {
   async toggleModel(modelId: number): Promise<{ success: boolean; id: number; enabled: number }> {
     const res = await fetch(`${API_BASE}/api/models/models/${modelId}/toggle`, { method: 'PATCH' });
     if (!res.ok) throw new Error('Failed to toggle model');
+    return res.json();
+  },
+
+  async togglePin(id: string): Promise<{ success: boolean; pinned: number }> {
+    const res = await fetch(`${API_BASE}/api/sessions/${id}/pin`, { method: 'PATCH' });
+    if (!res.ok) throw new Error('Failed to toggle pin');
+    return res.json();
+  },
+
+  async toggleArchive(id: string): Promise<{ success: boolean; archived: number }> {
+    const res = await fetch(`${API_BASE}/api/sessions/${id}/archive`, { method: 'PATCH' });
+    if (!res.ok) throw new Error('Failed to toggle archive');
+    return res.json();
+  },
+
+  async bulkDeleteSessions(ids: string[]): Promise<{ success: boolean; deletedCount: number }> {
+    const res = await fetch(`${API_BASE}/api/sessions/bulk`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({ error: 'Failed to bulk delete sessions' }));
+      throw new Error(data.error || 'Failed to bulk delete sessions');
+    }
     return res.json();
   }
 };

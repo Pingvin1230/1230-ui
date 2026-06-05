@@ -9,6 +9,8 @@ export interface Session {
   inputTokens: number;
   outputTokens: number;
   preview?: string;
+  pinned?: number;
+  archived?: number;
 }
 
 export interface ToolCall {

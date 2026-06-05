@@ -2,28 +2,44 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Virtuoso } from 'react-virtuoso';
 import { api } from '../lib/api';
-import { RefreshCw, Plus, MessageSquare, Sparkles, Loader2, SearchX, Trash2 } from 'lucide-react';
+import { RefreshCw, Plus, MessageSquare, Sparkles, Loader2, SearchX, Star, Archive, Trash2, CheckSquare, Square, Eye } from 'lucide-react';
 import type { Session } from '../types/api';
 import { formatTimeAgo, formatFullDateTime } from '../lib/time';
 import { useSearchStore } from '../store/searchStore';
 import { NoSessionsIllustration } from '../assets/illustrations';
+import { Modal } from '../components/Modal';
 
 const PAGE_SIZE = 20;
 
-function groupSessionsByDate(sessions: Session[]): Record<string, Session[]> {
+function groupSessionsByDate(sessions: Session[], showArchived: boolean): Record<string, Session[]> {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterday = new Date(today.getTime() - 86400000);
   const weekStart = new Date(today.getTime() - 7 * 86400000);
 
   const groups: Record<string, Session[]> = {
+    Pinned: [],
     Today: [],
     Yesterday: [],
     'This Week': [],
     Older: [],
+    Archived: [],
   };
 
   sessions.forEach((session) => {
+    const isArchived = session.archived === 1;
+    const isPinned = session.pinned === 1;
+
+    if (isArchived) {
+      if (showArchived) groups.Archived.push(session);
+      return;
+    }
+
+    if (isPinned) {
+      groups.Pinned.push(session);
+      return;
+    }
+
     const sessionDate = new Date(session.startedAt * 1000);
     const sessionDay = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate());
 
@@ -64,30 +80,17 @@ export function SessionsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
-  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showArchived, setShowArchived] = useState(false);
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
   const query = useSearchStore((s) => s.query);
   const setQuery = useSearchStore((s) => s.setQuery);
 
-  async function handleDelete(sessionId: string) {
-    try {
-      setDeletingSessionId(sessionId);
-      await api.deleteSession(sessionId);
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-      setTotal((prev) => prev - 1);
-      setConfirmDeleteId(null);
-    } catch (err) {
-      console.error('Failed to delete session:', err);
-      setError('Failed to delete session');
-    } finally {
-      setDeletingSessionId(null);
-    }
-  }
-
-  const loadSessions = useCallback(async () => {
+  const loadSessions = useCallback(async (includeArchived = false) => {
     try {
       setLoading(true);
-      const data = await api.getSessions(PAGE_SIZE, 0);
+      const data = await api.getSessions(PAGE_SIZE, 0, includeArchived);
       setSessions(data.sessions);
       setTotal(data.total);
       setHasMore(data.sessions.length < data.total);
@@ -128,7 +131,7 @@ export function SessionsPage() {
     if (loadingMore || !hasMore) return;
     try {
       setLoadingMore(true);
-      const data = await api.getSessions(PAGE_SIZE, sessions.length);
+      const data = await api.getSessions(PAGE_SIZE, sessions.length, showArchived);
       setSessions((prev) => [...prev, ...data.sessions]);
       setHasMore(sessions.length + data.sessions.length < data.total);
     } catch (err) {
@@ -136,7 +139,54 @@ export function SessionsPage() {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, sessions.length]);
+  }, [loadingMore, hasMore, sessions.length, showArchived]);
+
+  async function handleTogglePin(session: Session) {
+    try {
+      const result = await api.togglePin(session.id);
+      setSessions(prev => prev.map(s =>
+        s.id === session.id ? { ...s, pinned: result.pinned } : s
+      ));
+    } catch (err) {
+      console.error('Failed to toggle pin:', err);
+    }
+  }
+
+  async function handleToggleArchive(session: Session) {
+    try {
+      const result = await api.toggleArchive(session.id);
+      if (result.archived === 1) {
+        setSessions(prev => prev.filter(s => s.id !== session.id));
+        setTotal(t => t - 1);
+      } else {
+        await loadSessions(showArchived);
+      }
+    } catch (err) {
+      console.error('Failed to toggle archive:', err);
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleBulkDelete() {
+    try {
+      await api.bulkDeleteSessions(Array.from(selectedIds));
+      setSessions(prev => prev.filter(s => !selectedIds.has(s.id)));
+      setTotal(t => t - selectedIds.size);
+      setSelectedIds(new Set());
+      setBulkMode(false);
+      setShowBulkConfirm(false);
+    } catch (err) {
+      console.error('Failed to bulk delete:', err);
+    }
+  }
 
   if (loading) {
     return (
@@ -176,7 +226,7 @@ export function SessionsPage() {
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
           <p className="text-red-600 dark:text-red-400 font-medium">{error}</p>
           <button
-            onClick={loadSessions}
+            onClick={() => loadSessions(showArchived)}
             className="mt-3 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
           >
             Retry
@@ -198,7 +248,7 @@ export function SessionsPage() {
       })
     : sessions;
   const hasFiltered = filteredSessions.length > 0;
-  const filteredGrouped = groupSessionsByDate(filteredSessions);
+  const filteredGrouped = groupSessionsByDate(filteredSessions, showArchived);
   const flatItems = flattenGrouped(filteredGrouped);
   const isSearching = query.trim().length > 0;
 
@@ -220,7 +270,35 @@ export function SessionsPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={loadSessions}
+            onClick={() => {
+              const next = !showArchived;
+              setShowArchived(next);
+              loadSessions(next);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
+              showArchived
+                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+            }`}
+            aria-label="Toggle archived sessions"
+          >
+            <Eye className="w-4 h-4" />
+            Archived
+          </button>
+          <button
+            onClick={() => { setBulkMode(!bulkMode); setSelectedIds(new Set()); }}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
+              bulkMode
+                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+            }`}
+            aria-label="Select sessions"
+          >
+            <CheckSquare className="w-4 h-4" />
+            Select
+          </button>
+          <button
+            onClick={() => loadSessions(showArchived)}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
             aria-label="Refresh sessions"
           >
@@ -235,6 +313,48 @@ export function SessionsPage() {
           </Link>
         </div>
       </div>
+
+      {bulkMode && selectedIds.size > 0 && (
+        <div className="flex items-center justify-between mb-4 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+            {selectedIds.size} selected
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setSelectedIds(new Set()); setBulkMode(false); }}
+              className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  for (const id of selectedIds) {
+                    await api.toggleArchive(id);
+                  }
+                  setSessions(prev => prev.filter(s => !selectedIds.has(s.id)));
+                  setTotal(t => t - selectedIds.size);
+                  setSelectedIds(new Set());
+                  setBulkMode(false);
+                } catch (err) {
+                  console.error('Failed to bulk archive:', err);
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 rounded-lg transition-colors"
+            >
+              <Archive className="w-3.5 h-3.5" />
+              Archive
+            </button>
+            <button
+              onClick={() => setShowBulkConfirm(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
 
       {!hasSessions ? (
         <div className="text-center py-16">
@@ -286,10 +406,16 @@ export function SessionsPage() {
             increaseViewportBy={400}
             itemContent={(_, item) => {
               if (item.type === 'header') {
+                const isPinned = item.name === 'Pinned';
+                const isArchived = item.name === 'Archived';
                 return (
-                  <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide py-3 sticky top-0 bg-gray-100 dark:bg-gray-800">
-                    {item.name}
-                  </h2>
+                  <div className="flex items-center gap-2 py-3 sticky top-0 bg-gray-100 dark:bg-gray-800">
+                    {isPinned && <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />}
+                    <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                      {item.name}
+                    </h2>
+                    {isArchived && <Archive className="w-4 h-4 text-gray-400" />}
+                  </div>
                 );
               }
               const session = item.session;
@@ -300,23 +426,66 @@ export function SessionsPage() {
                     ? session.preview.slice(0, 70) + '...'
                     : session.preview
                   : 'Untitled session');
+              const isSelected = selectedIds.has(session.id);
+
               return (
-                <div className="relative group">
+                <div className="mb-2 group relative">
+                  {bulkMode && (
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleSelect(session.id); }}
+                      className="absolute z-10 left-3 top-1/2 -translate-y-1/2 p-1"
+                    >
+                      {isSelected ? <CheckSquare className="w-5 h-5 text-blue-500" /> : <Square className="w-5 h-5 text-gray-400" />}
+                    </button>
+                  )}
                   <Link
                     to={`/chat/${session.id}`}
-                    className="block bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-2 hover:border-blue-300 dark:hover:border-blue-600 transition-all hover:shadow-sm pr-12"
+                    className={`block bg-white dark:bg-gray-800 border rounded-lg p-4 transition-all hover:shadow-sm ${
+                      bulkMode ? 'pl-10' : ''
+                    } ${
+                      session.pinned === 1
+                        ? 'border-yellow-300 dark:border-yellow-700 hover:border-yellow-400 dark:hover:border-yellow-600'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
+                    }`}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-4 mb-2">
-                        <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
-                          {title}
-                        </h3>
-                        <span
-                          className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap flex-shrink-0"
-                          title={formatFullDateTime(session.startedAt)}
-                        >
-                          {formatTimeAgo(session.startedAt)}
-                        </span>
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          {session.pinned === 1 && (
+                            <Star className="w-4 h-4 text-yellow-500 fill-yellow-500 flex-shrink-0" />
+                          )}
+                          <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                            {title}
+                          </h3>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {!bulkMode && (
+                            <>
+                              {session.archived !== 1 && (
+                                <button
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleTogglePin(session); }}
+                                  className="p-1 rounded text-gray-400 hover:text-yellow-500 dark:hover:text-yellow-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                  aria-label={session.pinned === 1 ? 'Unpin session' : 'Pin session'}
+                                >
+                                  <Star className={`w-4 h-4 ${session.pinned === 1 ? 'fill-yellow-500 text-yellow-500' : ''}`} />
+                                </button>
+                              )}
+                              <button
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleToggleArchive(session); }}
+                                className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                aria-label={session.archived === 1 ? 'Unarchive session' : 'Archive session'}
+                              >
+                                <Archive className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                          <span
+                            className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap"
+                            title={formatFullDateTime(session.startedAt)}
+                          >
+                            {formatTimeAgo(session.startedAt)}
+                          </span>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         {session.model && (
@@ -342,59 +511,6 @@ export function SessionsPage() {
                       )}
                     </div>
                   </Link>
-                  
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setConfirmDeleteId(session.id);
-                    }}
-                    disabled={deletingSessionId === session.id}
-                    className="absolute top-4 right-4 p-2 rounded-lg text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
-                    aria-label="Delete session"
-                    title="Delete session"
-                  >
-                    {deletingSessionId === session.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="w-4 h-4" />
-                    )}
-                  </button>
-
-                  {confirmDeleteId === session.id && (
-                    <div className="absolute inset-0 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 rounded-lg p-4 mb-2 flex flex-col items-center justify-center gap-3 z-10">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        Delete this session?
-                      </p>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleDelete(session.id);
-                          }}
-                          disabled={deletingSessionId === session.id}
-                          className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          {deletingSessionId === session.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                          Delete
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setConfirmDeleteId(null);
-                          }}
-                          className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               );
             }}
@@ -409,6 +525,35 @@ export function SessionsPage() {
           />
         </>
       )}
+
+      <Modal
+        isOpen={showBulkConfirm}
+        onClose={() => setShowBulkConfirm(false)}
+        title="Delete sessions"
+        size="sm"
+      >
+        <div className="p-4 space-y-4">
+          <p className="text-sm text-fg-secondary">
+            Delete {selectedIds.size} session{selectedIds.size === 1 ? '' : 's'}? This action cannot be undone.
+          </p>
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => setShowBulkConfirm(false)}
+              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 rounded-lg transition-colors text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors text-sm font-medium"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -123,49 +123,9 @@ Nice-to-have features that can be added in subsequent versions.
 
 These tasks are **mandatory** for GitHub publication and deployment on any server.
 
-### 0. Smart Session Titles + Editing
+### ✅ 0.5. Session Management (CRUD)
 **Role:** Backend + Frontend  
-**Files:** `server.js`, `scripts/generate_title.py` (new), `src/pages/ChatPage.tsx`, `src/lib/api.ts`  
-**Description:** Current implementation simply truncates first 60 characters of message — poor UX for long technical messages  
-**Problem:** 
-- Titles like "Help me figure out this error in..." are useless
-- No ability to change title after creation
-- Session list looks unprofessional
-
-**Solution (3 stages):**
-
-**Stage A: LLM title generation (Backend)**
-- [ ] Create `scripts/generate_title.py` — script for generating title via Hermes API
-- [ ] Logic: after first assistant response completes, send context (user message + assistant response) to LLM with prompt "Generate short title (3-7 words) for this session"
-- [ ] Add endpoint `POST /api/sessions/:id/generate-title` — calls script, updates title in DB
-- [ ] Automatic call in ChatPage after first streaming response completes (if title is empty or auto-generated)
-- [ ] "Generating title..." indicator in UI
-
-**Stage B: Manual editing (Frontend)**
-- ✅ Add inline title editing in ChatPage (click → input → Enter to save)
-- ✅ Add "Edit title" button in breadcrumbs (Pencil icon)
-- ✅ Endpoint `PATCH /api/sessions/:id/title` — updates title in Hermes DB
-- ✅ Auto-save via debounce (500ms)
-
-**Stage C: UI improvements**
-- [ ] Show "Generating title..." skeleton while LLM works
-- [ ] Fallback to auto-generation (first 60 characters) if LLM unavailable
-- [ ] "Regenerate title" button in ChatPage (RefreshCw icon next to title)
-
-**Priority:** CRITICAL (blocks normal UX)  
-**Complexity:** Medium-High (4-6 hours)  
-**Dependencies:** None (can run in parallel with #1)
-
-**Alternatives:**
-- LLM generation only (no editing) — faster, but user can't fix bad titles
-- Editing only (no LLM) — user must come up with titles themselves (poor UX)
-- **Combined approach (recommended)** — LLM suggests, user can change
-
----
-
-### 0.5. Session Management (CRUD)
-**Role:** Backend + Frontend  
-**Files:** `server.js`, `src/pages/SessionsPage.tsx`, `src/pages/ChatPage.tsx`  
+**Files:** `server.js`, `src/pages/ChatPage.tsx`, `src/lib/api.ts`  
 **Description:** Currently user cannot delete session — list gets cluttered with test/failed sessions  
 **Problem:**
 - No "Delete session" button
@@ -175,24 +135,23 @@ These tasks are **mandatory** for GitHub publication and deployment on any serve
 **Tasks:**
 
 **Session deletion:**
-- ✅ Endpoint `DELETE /api/sessions/:id` — proxies to Hermes REST API (no Python script needed)
-- ✅ "Delete" button in SessionsPage (Trash icon, with confirm modal)
-- ✅ "Delete" button in ChatPage (in breadcrumbs menu or header)
+- ✅ Endpoint `DELETE /api/sessions/:id` — deletes session + messages from Hermes state.db
+- ✅ "Delete" button in ChatPage (Trash2 icon in header, with confirm modal)
 - ✅ Redirect to `/sessions` after deletion
 
 **Renaming:**
-- ✅ Endpoint `PATCH /api/sessions/:id/title` — proxies to Hermes REST API
-- ✅ Inline editing in ChatPage (click → input → Enter)
+- ✅ Endpoint `PATCH /api/sessions/:id/title` — updates title in Hermes DB
+- ✅ Inline title editing in ChatPage breadcrumbs (click → input → Enter to save, Esc to cancel, blur to save)
 
 **Optional (can be in P1):**
-- [ ] Pin important sessions (displayed first)
-- [ ] Archiving (hide from main list, but don't delete)
-- [ ] Bulk actions (select multiple → delete)
+- ✅ Pin important sessions (displayed first in "Pinned" group)
+- ✅ Archiving (hide from main list, toggle to show)
+- ✅ Bulk actions (select multiple → delete with confirm modal)
 
 **Priority:** HIGH (important for data management)  
 **Complexity:** Medium (2-3 hours for basic deletion)  
 **Dependencies:** Task #0 (renaming overlaps)  
-**Status:** ✅ COMPLETED (2026-06-04) — deletion and renaming via Hermes REST API
+**Status:** ✅ Full CRUD completed — delete, rename, pin, archive, bulk delete (2026-06-05)
 
 ---
 
@@ -478,6 +437,29 @@ These tasks make the product production-ready but don't block basic functionalit
 
 These tasks can be postponed to next versions.
 
+### 0. Smart Session Titles — LLM Generation
+**Role:** Backend + Frontend  
+**Files:** `server.js`, `scripts/generate_title.py` (new), `src/pages/ChatPage.tsx`  
+**Description:** Auto-generate titles via LLM after first assistant response (Stage A only — Stage B manual editing is already done)
+
+**Stage A: LLM title generation (Backend)**
+- [ ] Create `scripts/generate_title.py` — script for generating title via Hermes API
+- [ ] Logic: after first assistant response completes, send context (user message + assistant response) to LLM with prompt "Generate short title (3-7 words) for this session"
+- [ ] Add endpoint `POST /api/sessions/:id/generate-title` — calls script, updates title in DB
+- [ ] Automatic call in ChatPage after first streaming response completes (if title is empty or auto-generated)
+- [ ] "Generating title..." indicator in UI
+
+**Stage C: UI improvements**
+- [ ] Show "Generating title..." skeleton while LLM works
+- [ ] Fallback to auto-generation (first 60 characters) if LLM unavailable
+- [ ] "Regenerate title" button in ChatPage (RefreshCw icon next to title)
+
+**Priority:** LOW (for v1.1)  
+**Complexity:** Medium (2-3 hours)  
+**Dependencies:** None (manual title editing already done)
+
+---
+
 ### Testing
 
 #### 11. Backend Unit Tests
@@ -656,8 +638,7 @@ These tasks can be postponed to next versions.
 
 ### Backend Developer
 **Critical (P0):**
-- #0 Smart titles (LLM generation, endpoint for generate-title)
-- #0.5 Session management (delete_session.py, endpoints)
+- #0.5 Session management (endpoints for delete, rename, pin, archive, bulk)
 - #1 Centralized configuration
 - #2 .gitignore
 - #3 Setup script for installation
@@ -669,13 +650,13 @@ These tasks can be postponed to next versions.
 - #8 Security headers
 
 **Enhancements (P2):**
+- #0 Smart titles (LLM generation, endpoint for generate-title)
 - #11 Unit tests
 - #19 CI/CD pipeline
 
 ### Frontend Developer
 **Critical (P0):**
-- #0 Smart titles (inline editing, UI for generation)
-- #0.5 Session management (delete/rename buttons)
+- #0.5 Session management (delete/rename/pin/archive buttons, bulk actions)
 - #0.7 Agent work visualization (real-time tool call rendering, indicators)
 - #0.8 UI text and error messages internationalization
 - #4 Fix lint errors in ChatPage
@@ -703,10 +684,10 @@ These tasks can be postponed to next versions.
 ## 🔍 What Else Might Be Missing
 
 ### Critical for MVP (check)
-1. **✅ Session titles** — task #0 (LLM + editing)
-2. **✅ Session deletion** — task #0.5 (CRUD)
-3. **✅ Agent work visualization** — task #0.7 (real-time tool calls)
-4. **✅ Internationalization** — task #0.8 (Russian → English)
+1. **✅ Session deletion** — task #0.5 (full CRUD: delete, rename, pin, archive, bulk)
+2. **✅ Agent work visualization** — task #0.7 (real-time tool calls)
+3. **✅ Internationalization** — task #0.8 (Russian → English)
+4. **⚠️ Smart session titles (LLM)** — task #0 (moved to P2, manual editing done)
 5. **⚠️ Provider health-check** — currently if provider unavailable, error only when sending message
    - Possibly add endpoint `GET /api/models/health` to check provider availability
    - UI: status indicator in Settings (green/yellow/red)
@@ -718,7 +699,6 @@ These tasks can be postponed to next versions.
 - Tags/folders for sessions
 - Per-session model parameters (model selection for each session separately)
 - Message edit/branch (editing sent messages)
-- Bulk actions (mass deletion)
 - Reactions to messages
 - Multi-user (session separation by users)
 - Webhooks/Telegram integration

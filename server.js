@@ -46,13 +46,22 @@ app.use((req, res, next) => {
   next();
 });
 
-let db, uiDb;
+let db, uiDb, hermesDbWrite;
 try {
   db = new Database(HERMES_DB_PATH, { readonly: true });
   console.log(`Connected to Hermes DB: ${HERMES_DB_PATH}`);
 } catch (error) {
   console.error(`Failed to connect to Hermes DB: ${error}`);
   process.exit(1);
+}
+
+try {
+  hermesDbWrite = new Database(HERMES_DB_PATH);
+  hermesDbWrite.pragma('journal_mode = WAL');
+  hermesDbWrite.pragma('busy_timeout = 1000');
+  console.log(`Connected to Hermes DB (writable): ${HERMES_DB_PATH}`);
+} catch (error) {
+  console.warn(`Failed to open writable Hermes DB connection (delete disabled): ${error}`);
 }
 
 try {
@@ -84,6 +93,12 @@ try {
       key TEXT PRIMARY KEY,
       value TEXT,
       updated_at INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS session_meta (
+      session_id TEXT PRIMARY KEY,
+      pinned INTEGER DEFAULT 0,
+      archived INTEGER DEFAULT 0
     );
   `);
   console.log('UI DB tables initialized');
@@ -261,29 +276,53 @@ app.get('/api/sessions', (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 20;
     const offset = parseInt(req.query.offset) || 0;
+    const includeArchived = req.query.includeArchived === '1';
 
-    const total = db.prepare('SELECT COUNT(*) as count FROM sessions').get();
-    
     const sessions = db.prepare(`
       SELECT 
-        id,
-        title,
-        source,
-        model,
-        started_at as startedAt,
-        ended_at as endedAt,
-        message_count as messageCount,
-        input_tokens as inputTokens,
-        output_tokens as outputTokens,
+        s.id,
+        s.title,
+        s.source,
+        s.model,
+        s.started_at as startedAt,
+        s.ended_at as endedAt,
+        s.message_count as messageCount,
+        s.input_tokens as inputTokens,
+        s.output_tokens as outputTokens,
         (SELECT content FROM messages 
          WHERE session_id = s.id AND role = 'user' 
          ORDER BY timestamp ASC LIMIT 1) as preview
       FROM sessions s
-      ORDER BY started_at DESC
-      LIMIT ? OFFSET ?
-    `).all(limit, offset);
+      ORDER BY s.started_at DESC
+    `).all();
 
-    res.json({ sessions, total: total.count, limit, offset });
+    const metaAll = uiDb.prepare('SELECT session_id, pinned, archived FROM session_meta').all();
+    const metaMap = {};
+    for (const m of metaAll) {
+      metaMap[m.session_id] = m;
+    }
+
+    let filtered = sessions.map(s => ({
+      ...s,
+      pinned: metaMap[s.id]?.pinned ?? 0,
+      archived: metaMap[s.id]?.archived ?? 0,
+    }));
+
+    if (!includeArchived) {
+      filtered = filtered.filter(s => s.archived !== 1);
+    }
+
+    const total = filtered.length;
+
+    const pinned = filtered.filter(s => s.pinned === 1);
+    const notPinned = filtered.filter(s => s.pinned !== 1);
+    pinned.sort((a, b) => b.startedAt - a.startedAt);
+    notPinned.sort((a, b) => b.startedAt - a.startedAt);
+    const sorted = [...pinned, ...notPinned];
+
+    const paged = sorted.slice(offset, offset + limit);
+
+    res.json({ sessions: paged, total, limit, offset });
   } catch (error) {
     console.error('Error fetching sessions:', error);
     res.status(500).json({ error: 'Failed to fetch sessions' });
@@ -315,6 +354,148 @@ app.get('/api/sessions/:id', (req, res) => {
   } catch (error) {
     console.error('Error fetching session:', error);
     res.status(500).json({ error: 'Failed to fetch session' });
+  }
+});
+
+app.patch('/api/sessions/:id/title', (req, res) => {
+  try {
+    if (!hermesDbWrite) {
+      return res.status(503).json({ error: 'Session rename unavailable — writable DB connection failed' });
+    }
+
+    const sessionId = req.params.id;
+    const { title } = req.body;
+
+    if (!title || typeof title !== 'string' || !title.trim()) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+
+    const session = db.prepare('SELECT id FROM sessions WHERE id = ?').get(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const trimmedTitle = title.trim();
+
+    try {
+      hermesDbWrite.prepare('UPDATE sessions SET title = ? WHERE id = ?').run(trimmedTitle, sessionId);
+    } catch (e) {
+      if (e.message && e.message.includes('UNIQUE constraint failed')) {
+        return res.status(409).json({ error: 'Session with this title already exists' });
+      }
+      throw e;
+    }
+
+    res.json({ success: true, title: trimmedTitle });
+  } catch (error) {
+    console.error('Error updating session title:', error);
+    res.status(500).json({ error: 'Failed to update session title' });
+  }
+});
+
+app.delete('/api/sessions/:id', (req, res) => {
+  try {
+    if (!hermesDbWrite) {
+      return res.status(503).json({ error: 'Session deletion unavailable — writable DB connection failed' });
+    }
+
+    const sessionId = req.params.id;
+
+    const session = db.prepare('SELECT id FROM sessions WHERE id = ?').get(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const run = hermesDbWrite.transaction(() => {
+      hermesDbWrite.prepare('DELETE FROM messages WHERE session_id = ?').run(sessionId);
+      hermesDbWrite.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
+    });
+    run();
+
+    uiDb.prepare('DELETE FROM session_meta WHERE session_id = ?').run(sessionId);
+
+    res.json({ success: true, deletedSessionId: sessionId });
+  } catch (error) {
+    console.error('Error deleting session:', error);
+    res.status(500).json({ error: 'Failed to delete session' });
+  }
+});
+
+app.patch('/api/sessions/:id/pin', (req, res) => {
+  try {
+    const sessionId = req.params.id;
+
+    const session = db.prepare('SELECT id FROM sessions WHERE id = ?').get(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const meta = uiDb.prepare('SELECT pinned FROM session_meta WHERE session_id = ?').get(sessionId);
+    const currentValue = meta ? meta.pinned : 0;
+    const newValue = currentValue ? 0 : 1;
+
+    uiDb.prepare('INSERT OR REPLACE INTO session_meta (session_id, pinned) VALUES (?, ?)').run(sessionId, newValue);
+
+    res.json({ success: true, pinned: newValue });
+  } catch (error) {
+    console.error('Error toggling pin:', error);
+    res.status(500).json({ error: 'Failed to toggle pin' });
+  }
+});
+
+app.patch('/api/sessions/:id/archive', (req, res) => {
+  try {
+    const sessionId = req.params.id;
+
+    const session = db.prepare('SELECT id FROM sessions WHERE id = ?').get(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const meta = uiDb.prepare('SELECT archived FROM session_meta WHERE session_id = ?').get(sessionId);
+    const currentValue = meta ? meta.archived : 0;
+    const newValue = currentValue ? 0 : 1;
+
+    uiDb.prepare('INSERT OR REPLACE INTO session_meta (session_id, archived) VALUES (?, ?)').run(sessionId, newValue);
+
+    res.json({ success: true, archived: newValue });
+  } catch (error) {
+    console.error('Error toggling archive:', error);
+    res.status(500).json({ error: 'Failed to toggle archive' });
+  }
+});
+
+app.delete('/api/sessions/bulk', (req, res) => {
+  try {
+    if (!hermesDbWrite) {
+      return res.status(503).json({ error: 'Bulk deletion unavailable — writable DB connection failed' });
+    }
+
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids array is required' });
+    }
+
+    const run = hermesDbWrite.transaction((sessionId) => {
+      hermesDbWrite.prepare('DELETE FROM messages WHERE session_id = ?').run(sessionId);
+      hermesDbWrite.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
+      uiDb.prepare('DELETE FROM session_meta WHERE session_id = ?').run(sessionId);
+    });
+
+    let deletedCount = 0;
+    for (const id of ids) {
+      try {
+        run(id);
+        deletedCount++;
+      } catch (e) {
+        console.error(`Failed to delete session ${id}:`, e);
+      }
+    }
+
+    res.json({ success: true, deletedCount });
+  } catch (error) {
+    console.error('Error bulk deleting sessions:', error);
+    res.status(500).json({ error: 'Failed to bulk delete sessions' });
   }
 });
 
@@ -933,6 +1114,7 @@ app.listen(PORT, () => {
 
 process.on('SIGTERM', () => {
   db?.close();
+  hermesDbWrite?.close();
   uiDb?.close();
   process.exit(0);
 });

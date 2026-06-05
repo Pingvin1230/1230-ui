@@ -19,8 +19,8 @@ The project solves the problem of the lack of a native web interface for Hermes 
 
 ### Core Features
 - **Dashboard** — main page with system overview, recent sessions, and quick chat access
-- **Session list** — virtualization (react-virtuoso), infinite scroll, date grouping, client-side search
-- **Chat** — real-time streaming responses, markdown rendering, syntax highlighting, avatars, copy/regenerate
+- **Session list** — virtualization (react-virtuoso), infinite scroll, date grouping, client-side search, pin/archive sessions, bulk selection with delete/archive
+- **Chat** — real-time streaming responses, markdown rendering, syntax highlighting, avatars, copy/regenerate, session deletion, inline title renaming
 - **Model management** — enable/disable models in Settings, select default model, sync with Hermes
 - **System commands** — execute `hermes update` and `hermes doctor --fix` from Settings with confirm modal
 - **Multi-line input** — textarea with automatic height adjustment (up to 200px)
@@ -69,8 +69,9 @@ The project solves the problem of the lack of a native web interface for Hermes 
 │  │  /api/sessions │ /api/chat │ /api/models │ /api  │  │
 │  └──────────────────────────────────────────────────┘  │
 │  ┌──────────────┐  ┌──────────────┐  ┌─────────────┐  │
-│  │ Hermes DB    │  │  UI DB       │  │ Python      │  │
-│  │ (read-only)  │  │ (read-write) │  │ scripts     │  │
+ │  │ Hermes DB    │  │  UI DB       │  │ Python      │  │
+ │  │ (sessions     │  │ (read-write) │  │ scripts     │  │
+ │  │ read + delete)│  │              │  │             │  │
 │  └──────────────┘  └──────────────┘  └─────────────┘  │
 └─────────────────────────────────────────────────────────┘
                           ↕
@@ -101,7 +102,7 @@ The project solves the problem of the lack of a native web interface for Hermes 
 - Hermes system commands via `child_process`
 
 **Databases (SQLite)**
-- **Hermes DB** (`~/.hermes/state.db`) — read-only access to Hermes sessions and messages
+- **Hermes DB** (`~/.hermes/state.db`) — read access to sessions/messages + write for session deletion
 - **UI DB** (`./data/1230-ui.db`) — custom DB for:
   - `providers` — list of model providers
   - `models` — list of models with enabled flag
@@ -151,7 +152,7 @@ Chat is implemented via Server-Sent Events for real-time response delivery:
 
 ### Two Databases
 The project uses separation into two DBs:
-- **Hermes DB** (read-only) — only reads sessions and messages
+- **Hermes DB** (read + delete) — reads sessions and messages, deletes sessions on user request
 - **UI DB** (read-write) — manages models, providers, cache
 
 This allows:
@@ -370,10 +371,15 @@ server {
 ## API Endpoints
 
 ### Sessions
-- `GET /api/sessions` — session list (with pagination: `?limit=20&offset=0`)
+- `GET /api/sessions` — session list (with pagination: `?limit=20&offset=0`, pinned first, archived excluded by default)
 - `GET /api/sessions/:id` — session details
 - `GET /api/sessions/:id/messages` — session message history
 - `POST /api/sessions` — create new session
+- `PATCH /api/sessions/:id/title` — rename session (updates title in Hermes DB)
+- `PATCH /api/sessions/:id/pin` — toggle pin status
+- `PATCH /api/sessions/:id/archive` — toggle archive status
+- `DELETE /api/sessions/:id` — delete session (removes session + messages from Hermes DB)
+- `DELETE /api/sessions/bulk` — delete multiple sessions (`{ "ids": [...] }`)
 
 ### Chat
 - `POST /api/chat` — send message (streaming/non-streaming)
@@ -514,13 +520,13 @@ npm run preview               # Preview production build
 - [x] Installation script
 
 ### Beta (Planned)
-- [ ] Session management (delete, rename, search)
-- [ ] Smart session titles (LLM generation)
+- [x] Session management (delete, rename, pin, archive, bulk actions)
 - [ ] Message editing and branching
 - [ ] Session export (Markdown, JSON)
 - [ ] Keyboard shortcuts
 
 ### v1.0 (Stable)
+- [ ] Smart session titles (LLM generation)
 - [ ] Comprehensive test coverage
 - [ ] Docker support
 - [ ] CI/CD pipeline
