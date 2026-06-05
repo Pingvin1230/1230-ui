@@ -141,6 +141,30 @@ The project solves the problem of the lack of a native web interface for Hermes 
 
 ## Implementation Details
 
+### Design Tokens
+
+All UI colors use a unified token system defined in `src/index.css` via Tailwind CSS v4 `@theme`:
+
+| Token | Light | Dark | Usage |
+|-------|-------|------|-------|
+| `bg-bg-primary` | `#ffffff` | `#1f2937` | Cards, panels, message bubbles |
+| `bg-bg-secondary` | `#f9fafb` | `#111827` | Inputs, hover states, page bg |
+| `bg-bg-muted` | `#f3f4f6` | `#374151` | Skeletons, badges, avatars |
+| `text-fg-primary` | `#111827` | `#f9fafb` | Headings, main content |
+| `text-fg-secondary` | `#4b5563` | `#d1d5db` | Labels, descriptions |
+| `text-fg-muted` | `#6b7280` | `#9ca3af` | Timestamps, hints |
+| `border-border-default` | `#e5e7eb` | `#374151` | Card borders, dividers |
+| `border-border-strong` | `#d1d5db` | `#4b5563` | Tables, blockquotes |
+
+Accent colors (blue, red, green, yellow) remain as Tailwind utility classes for status indicators and CTAs.
+
+### Security
+
+Backend security middleware:
+
+- **Helmet** — security headers (CSP, X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy). CSP disabled in dev mode for Vite HMR.
+- **CORS** — whitelist via `CORS_ORIGINS` env variable, credentials enabled for Authelia cookies.
+
 ### Streaming Chat (SSE)
 Chat is implemented via Server-Sent Events for real-time response delivery:
 1. Frontend sends POST `/api/chat` with messages

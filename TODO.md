@@ -401,18 +401,57 @@ These tasks make the product production-ready but don't block basic functionalit
 
 ---
 
-### 9. Design Tokens Unification
+### ✅ 9. Design Tokens Unification
 **Role:** Frontend  
 **Files:** All pages and components  
 **Description:** Migrate old components to new design tokens (T2.6)  
 **Tasks:**
-- [ ] Replace `bg-white dark:bg-gray-800` → `bg-bg-elevated`
-- [ ] Replace `text-gray-900 dark:text-gray-100` → `text-fg-primary`
-- [ ] Similarly for border, hover states
+- [x] Replace `bg-white dark:bg-gray-800` → `bg-bg-primary`
+- [x] Replace `text-gray-900 dark:text-gray-100` → `text-fg-primary`
+- [x] Replace `border-gray-200 dark:border-gray-700` → `border-border-default`
+- [x] Replace `hover:bg-gray-100 dark:hover:bg-gray-800` → `hover:bg-bg-secondary`
+- [x] Migrate all 10 files: MarkdownRenderer, ToolCall, Toast, ErrorBoundary, ChatPage, SessionsPage, NewSessionPage, SettingsPage, DashboardPage
+
+**Token system (10 tokens):**
+- Backgrounds: `bg-bg-primary`, `bg-bg-secondary`, `bg-bg-muted`
+- Text: `text-fg-primary`, `text-fg-secondary`, `text-fg-muted`
+- Borders: `border-border-default`, `border-border-strong`, `divide-border-default`
+- Placeholder: `placeholder-fg-muted`
 
 **Priority:** MEDIUM  
 **Complexity:** Medium (2-3 hours)  
-**Dependencies:** None
+**Dependencies:** None  
+**Status:** ✅ COMPLETED (2026-06-05) — 188 replacements across 10 files
+
+---
+
+### ✅ 7. CORS Configuration
+**Role:** Backend  
+**Files:** `server.js`, `config.js`, `.env.example`  
+**Tasks:**
+- [x] Add `cors` middleware
+- [x] Whitelist trusted domains via env (`CORS_ORIGINS`)
+- [x] Support credentials (cookies for Authelia)
+
+**Priority:** MEDIUM  
+**Complexity:** Low (30 minutes)  
+**Dependencies:** Task #1  
+**Status:** ✅ COMPLETED (2026-06-05)
+
+---
+
+### ✅ 8. Security Headers
+**Role:** Backend  
+**Files:** `server.js`  
+**Tasks:**
+- [x] `helmet` middleware (CSP, X-Frame-Options, X-Content-Type-Options)
+- [x] HSTS (if HTTPS)
+- [x] Referrer-Policy
+
+**Priority:** MEDIUM  
+**Complexity:** Low (30 minutes)  
+**Dependencies:** None  
+**Status:** ✅ COMPLETED (2026-06-05)
 
 ---
 
@@ -613,7 +652,6 @@ These tasks can be postponed to next versions.
 
 ### Frontend
 - **ChatPage lint errors:** 2 issues with `react-hooks/set-state-in-effect` and `react-hooks/exhaustive-deps` (false positive in React 19) — **Task #4**
-- **Design tokens:** applied only to new components (Modal, PageSkeleton, MobileNav), old ones use hardcoded colors — **Task #9**
 - **SettingsPage `formatTimestamp`:** not unified with `lib/time.ts` (low priority)
 
 ### Backend
