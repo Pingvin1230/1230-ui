@@ -19,8 +19,8 @@ export interface ChatError {
 }
 
 export const api = {
-  async getSessions(limit = 20, offset = 0, includeArchived = false): Promise<{ sessions: Session[]; total: number; limit: number; offset: number }> {
-    const res = await fetch(`${API_BASE}/api/sessions?limit=${limit}&offset=${offset}&includeArchived=${includeArchived ? 1 : 0}`);
+  async getSessions(limit = 20, offset = 0, includeArchived = false, sort: 'created' | 'lastMessage' = 'created'): Promise<{ sessions: Session[]; total: number; limit: number; offset: number }> {
+    const res = await fetch(`${API_BASE}/api/sessions?limit=${limit}&offset=${offset}&includeArchived=${includeArchived ? 1 : 0}&sort=${sort}`);
     if (!res.ok) throw new Error('Failed to fetch sessions');
     return res.json();
   },

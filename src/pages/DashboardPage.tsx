@@ -313,7 +313,7 @@ export function DashboardPage() {
                           )}
                           <span>{session.messageCount} msgs</span>
                           <span>•</span>
-                          <span>{formatTimeAgo(session.startedAt)}</span>
+                          <span>{formatTimeAgo(session.lastMessageAt ?? session.startedAt)}</span>
                         </div>
                       </div>
                     </div>

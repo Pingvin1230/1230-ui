@@ -204,9 +204,9 @@ export function NewSessionPage() {
                     </h3>
                     <span
                       className="text-xs text-fg-muted whitespace-nowrap flex-shrink-0"
-                      title={formatFullDateTime(session.startedAt)}
+                      title={formatFullDateTime(session.lastMessageAt ?? session.startedAt)}
                     >
-                      {formatTimeAgo(session.startedAt)}
+                      {formatTimeAgo(session.lastMessageAt ?? session.startedAt)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-fg-muted">

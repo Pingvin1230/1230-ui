@@ -6,10 +6,15 @@ import { RefreshCw, Plus, MessageSquare, Sparkles, Loader2, SearchX, Star, Archi
 import type { Session } from '../types/api';
 import { formatTimeAgo, formatFullDateTime } from '../lib/time';
 import { useSearchStore } from '../store/searchStore';
+import { useSessionsSortStore } from '../store/sessionsSortStore';
 import { NoSessionsIllustration } from '../assets/illustrations';
 import { Modal } from '../components/Modal';
 
 const PAGE_SIZE = 20;
+
+function getActivityAt(session: Session): number {
+  return session.lastMessageAt != null ? session.lastMessageAt : session.startedAt;
+}
 
 function groupSessionsByDate(sessions: Session[], showArchived: boolean): Record<string, Session[]> {
   const now = new Date();
@@ -40,14 +45,14 @@ function groupSessionsByDate(sessions: Session[], showArchived: boolean): Record
       return;
     }
 
-    const sessionDate = new Date(session.startedAt * 1000);
-    const sessionDay = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate());
+    const activityDate = new Date(getActivityAt(session) * 1000);
+    const activityDay = new Date(activityDate.getFullYear(), activityDate.getMonth(), activityDate.getDate());
 
-    if (sessionDay >= today) {
+    if (activityDay >= today) {
       groups.Today.push(session);
-    } else if (sessionDay >= yesterday) {
+    } else if (activityDay >= yesterday) {
       groups.Yesterday.push(session);
-    } else if (sessionDay >= weekStart) {
+    } else if (activityDay >= weekStart) {
       groups['This Week'].push(session);
     } else {
       groups.Older.push(session);
@@ -84,6 +89,7 @@ export function SessionsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showArchived, setShowArchived] = useState(false);
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+  const sortMode = useSessionsSortStore((s) => s.sortMode);
   const query = useSearchStore((s) => s.query);
   const setQuery = useSearchStore((s) => s.setQuery);
   const location = useLocation();
@@ -91,7 +97,7 @@ export function SessionsPage() {
   const loadSessions = useCallback(async (includeArchived = false) => {
     try {
       setLoading(true);
-      const data = await api.getSessions(PAGE_SIZE, 0, includeArchived);
+      const data = await api.getSessions(PAGE_SIZE, 0, includeArchived, sortMode);
       setSessions(data.sessions);
       setTotal(data.total);
       setHasMore(data.sessions.length < data.total);
@@ -102,14 +108,14 @@ export function SessionsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [sortMode]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setLoading(true);
-        const data = await api.getSessions(PAGE_SIZE, 0, showArchived);
+        const data = await api.getSessions(PAGE_SIZE, 0, showArchived, sortMode);
         if (cancelled) return;
         setSessions(data.sessions);
         setTotal(data.total);
@@ -126,13 +132,13 @@ export function SessionsPage() {
     return () => {
       cancelled = true;
     };
-  }, [location.key, showArchived]);
+  }, [location.key, showArchived, sortMode]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     try {
       setLoadingMore(true);
-      const data = await api.getSessions(PAGE_SIZE, sessions.length, showArchived);
+      const data = await api.getSessions(PAGE_SIZE, sessions.length, showArchived, sortMode);
       setSessions((prev) => [...prev, ...data.sessions]);
       setHasMore(sessions.length + data.sessions.length < data.total);
     } catch (err) {
@@ -140,7 +146,7 @@ export function SessionsPage() {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, sessions.length, showArchived]);
+  }, [loadingMore, hasMore, sessions.length, showArchived, sortMode]);
 
   async function handleTogglePin(session: Session) {
     try {
@@ -482,9 +488,9 @@ export function SessionsPage() {
                           )}
                           <span
                             className="text-xs text-fg-muted whitespace-nowrap"
-                            title={formatFullDateTime(session.startedAt)}
+                            title={formatFullDateTime(getActivityAt(session))}
                           >
-                            {formatTimeAgo(session.startedAt)}
+                            {formatTimeAgo(getActivityAt(session))}
                           </span>
                         </div>
                       </div>

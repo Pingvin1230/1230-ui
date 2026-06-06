@@ -13,11 +13,28 @@ Query parameters:
 - `limit` — max results (default: 20)
 - `offset` — pagination offset (default: 0)
 - `includeArchived` — include archived sessions (default: 0)
+- `sort` — sort order: `created` (default) | `lastMessage`; `lastMessage` orders by the time of the most recent message (falls back to `startedAt` for empty sessions)
 
 Response:
 ```json
 {
-  "sessions": [...],
+  "sessions": [
+    {
+      "id": "abc123",
+      "title": "My session",
+      "source": "webui",
+      "model": "qwen3.6-plus",
+      "startedAt": 1780486478.49,
+      "endedAt": null,
+      "messageCount": 64,
+      "inputTokens": 188537,
+      "outputTokens": 6834,
+      "preview": "First user message...",
+      "lastMessageAt": 1780686760.93,
+      "pinned": 0,
+      "archived": 0
+    }
+  ],
   "total": 42,
   "limit": 20,
   "offset": 0

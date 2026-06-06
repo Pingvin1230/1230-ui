@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { Download, Wrench, Loader2, CheckCircle, XCircle, AlertTriangle, Sun, Moon, Bell, BellOff } from 'lucide-react';
+import { Download, Wrench, Loader2, CheckCircle, XCircle, AlertTriangle, Sun, Moon, Bell, BellOff, Calendar, MessageCircle } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { useThemeStore } from '../store/themeStore';
 import { useNotificationsStore } from '../store/notificationsStore';
+import { useSessionsSortStore } from '../store/sessionsSortStore';
 
 interface Model {
   id: number;
@@ -28,6 +29,8 @@ interface Provider {
 export function SettingsPage() {
   const { isDarkMode, toggleDarkMode } = useThemeStore();
   const { enabled: notificationsEnabled, setEnabled: setNotificationsEnabled } = useNotificationsStore();
+  const sortMode = useSessionsSortStore((s) => s.sortMode);
+  const setSortMode = useSessionsSortStore((s) => s.setSortMode);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -220,6 +223,52 @@ export function SettingsPage() {
                 {notificationsEnabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
                 {notificationsEnabled ? 'On' : 'Off'}
               </button>
+            </div>
+
+            {/* Sessions Sort Mode */}
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-border-default">
+              <div>
+                <p className="text-sm text-fg-primary">Sessions sort order</p>
+                <p className="text-xs text-fg-muted mt-0.5">
+                  {sortMode === 'lastMessage'
+                    ? 'Last message — most recently active first'
+                    : 'Created — most recently started first'}
+                </p>
+              </div>
+              <div
+                role="group"
+                aria-label="Sort sessions by"
+                className="inline-flex rounded-lg border border-border-default overflow-hidden"
+              >
+                <button
+                  type="button"
+                  onClick={() => setSortMode('created')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors ${
+                    sortMode === 'created'
+                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                      : 'text-fg-secondary hover:bg-bg-muted'
+                  }`}
+                  aria-pressed={sortMode === 'created'}
+                  title="Sort by session creation date"
+                >
+                  <Calendar className="w-4 h-4" />
+                  Created
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSortMode('lastMessage')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors border-l border-border-default ${
+                    sortMode === 'lastMessage'
+                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                      : 'text-fg-secondary hover:bg-bg-muted'
+                  }`}
+                  aria-pressed={sortMode === 'lastMessage'}
+                  title="Sort by last message date"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Last message
+                </button>
+              </div>
             </div>
 
             <p className="text-xs text-fg-muted mb-3">

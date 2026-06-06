@@ -1,7 +1,7 @@
 # 1230-UI — Tasks and Progress
 
 **Last updated:** 2026-06-05  
-**Version:** 1.0 MVP (Alpha release)  
+**Version:** 0.3.0 (Alpha release)  
 **Goal:** Fully functional MVP that can be deployed on any server with Hermes Agent
 
 ---
@@ -61,6 +61,11 @@ Nice-to-have features that can be added in subsequent versions.
 - ✅ **Message duplication fixed** — initialMessage now stored in ref, sent only when session has no messages
 - ✅ **Session visibility fixed** — sessions created via API now appear in session list immediately
 - ✅ **React StrictMode compatibility** — removed duplicate useEffect that caused message duplication
+
+### Sessions UX (2026-06-05)
+- ✅ **Sessions sort order** — new `sort` query param on `GET /api/sessions` (`created` | `lastMessage`); control moved to Settings → General (per-segmented toggle), preference persisted via Zustand `hermes-sessions-sort`
+- ✅ **Last activity time** — session cards on Sessions/Dashboard/NewSession now show `lastMessageAt` with `startedAt` fallback; `groupSessionsByDate` uses the chosen sort field; backend returns `lastMessageAt: number | null` per session
+- ✅ **Sidebar persistence** — open/closed state stored in Zustand `hermes-sidebar` (persisted); removed `resize` listener that was clobbering user choice on every resize event
 
 ### Backend
 - ✅ Express.js server with SQLite (better-sqlite3)

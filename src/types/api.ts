@@ -9,6 +9,7 @@ export interface Session {
   inputTokens: number;
   outputTokens: number;
   preview?: string;
+  lastMessageAt?: number | null;
   pinned?: number;
   archived?: number;
 }

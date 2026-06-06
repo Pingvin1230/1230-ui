@@ -290,6 +290,12 @@ app.get('/api/sessions', (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const offset = parseInt(req.query.offset) || 0;
     const includeArchived = req.query.includeArchived === '1';
+    const sortRaw = req.query.sort;
+    const sort = sortRaw === 'lastMessage' ? 'lastMessage' : 'created';
+
+    const orderBy = sort === 'lastMessage'
+      ? 'COALESCE(lastMessageAt, s.started_at) DESC, s.started_at DESC'
+      : 's.started_at DESC';
 
     const sessions = db.prepare(`
       SELECT 
@@ -304,9 +310,11 @@ app.get('/api/sessions', (req, res) => {
         s.output_tokens as outputTokens,
         (SELECT content FROM messages 
          WHERE session_id = s.id AND role = 'user' 
-         ORDER BY timestamp ASC LIMIT 1) as preview
+         ORDER BY timestamp ASC LIMIT 1) as preview,
+        (SELECT MAX(timestamp) FROM messages 
+         WHERE session_id = s.id) as lastMessageAt
       FROM sessions s
-      ORDER BY s.started_at DESC
+      ORDER BY ${orderBy}
     `).all();
 
     const metaAll = uiDb.prepare('SELECT session_id, pinned, archived FROM session_meta').all();
@@ -317,6 +325,7 @@ app.get('/api/sessions', (req, res) => {
 
     let filtered = sessions.map(s => ({
       ...s,
+      lastMessageAt: s.lastMessageAt ?? null,
       pinned: metaMap[s.id]?.pinned ?? 0,
       archived: metaMap[s.id]?.archived ?? 0,
     }));
@@ -327,10 +336,13 @@ app.get('/api/sessions', (req, res) => {
 
     const total = filtered.length;
 
-    const pinned = filtered.filter(s => s.pinned === 1);
-    const notPinned = filtered.filter(s => s.pinned !== 1);
-    pinned.sort((a, b) => b.startedAt - a.startedAt);
-    notPinned.sort((a, b) => b.startedAt - a.startedAt);
+    const sortKey = sort === 'lastMessage'
+      ? (s) => (s.lastMessageAt != null ? s.lastMessageAt : s.startedAt)
+      : (s) => s.startedAt;
+    const sortFn = (a, b) => sortKey(b) - sortKey(a);
+
+    const pinned = filtered.filter(s => s.pinned === 1).sort(sortFn);
+    const notPinned = filtered.filter(s => s.pinned !== 1).sort(sortFn);
     const sorted = [...pinned, ...notPinned];
 
     const paged = sorted.slice(offset, offset + limit);

@@ -1,15 +1,17 @@
 import { Outlet, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Navbar } from './Navbar';
 import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
 import { useThemeStore } from '../store/themeStore';
+import { useSidebarStore } from '../store/sidebarStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
 export function Layout() {
   const { isDarkMode } = useThemeStore();
+  const isSidebarOpen = useSidebarStore((s) => s.isOpen);
+  const setIsSidebarOpen = useSidebarStore((s) => s.setOpen);
   const navigate = useNavigate();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -18,15 +20,6 @@ export function Layout() {
       document.documentElement.classList.remove('dark');
     }
   }, [isDarkMode]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      const isMd = window.innerWidth >= 768;
-      setIsSidebarOpen(isMd);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   useKeyboardShortcuts([
     {
