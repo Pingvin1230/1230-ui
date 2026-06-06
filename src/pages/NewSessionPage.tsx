@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
 import type { Session } from '../types/api';
 import { NoModelsIllustration } from '../assets/illustrations';
@@ -23,6 +24,7 @@ interface ModelsResponse {
 }
 
 export function NewSessionPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [input, setInput] = useState('');
@@ -102,7 +104,7 @@ export function NewSessionPage() {
     return (
       <div className="p-6 max-w-4xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-fg-primary">New Session</h1>
+          <h1 className="text-2xl font-semibold text-fg-primary">{t('newSession.title')}</h1>
         </div>
         <div className="bg-bg-primary border border-border-default rounded-lg p-6 animate-pulse space-y-4">
           <div className="h-4 bg-bg-muted rounded w-1/4" />
@@ -116,12 +118,12 @@ export function NewSessionPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-fg-primary">New Session</h1>
-        <p className="text-sm text-fg-muted mt-1">Create a new conversation with Hermes</p>
+        <h1 className="text-2xl font-semibold text-fg-primary">{t('newSession.title')}</h1>
+        <p className="text-sm text-fg-muted mt-1">{t('newSession.description')}</p>
       </div>
 
       <div className="bg-bg-primary border border-border-default rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-fg-primary mb-4">Start a New Conversation</h2>
+        <h2 className="text-lg font-semibold text-fg-primary mb-4">{t('newSession.startNewConversation')}</h2>
         <div className="space-y-3">
           {models ? (
             <select
@@ -134,7 +136,7 @@ export function NewSessionPage() {
                   {provider.models.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name}
-                      {models.default?.id === m.id ? ' (default)' : ''}
+                      {models.default?.id === m.id ? t('common.defaultSuffix') : ''}
                     </option>
                   ))}
                 </optgroup>
@@ -143,8 +145,8 @@ export function NewSessionPage() {
           ) : (
             <div className="flex flex-col items-center text-center py-6">
               <NoModelsIllustration className="w-20 h-20 mb-3 text-fg-muted" />
-              <p className="text-fg-muted text-sm">
-                No models available
+                <p className="text-fg-muted text-sm">
+                {t('common.noModelsAvailable')}
               </p>
             </div>
           )}
@@ -163,7 +165,7 @@ export function NewSessionPage() {
                   handleSend();
                 }
               }}
-              placeholder="Type a message..."
+              placeholder={t('chat.typeMessage')}
               disabled={sending}
               rows={3}
               className="flex-1 px-4 py-3 rounded-lg border border-border-default bg-bg-primary text-fg-primary placeholder-fg-muted focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 resize-none overflow-y-auto"
@@ -175,7 +177,7 @@ export function NewSessionPage() {
               className="self-stretch inline-flex items-center justify-center gap-2 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <Send className="w-5 h-5" />
-              <span>Send</span>
+              <span>{t('common.send')}</span>
             </button>
           </div>
         </div>
@@ -183,7 +185,7 @@ export function NewSessionPage() {
 
       {sessions.length > 0 && (
         <div className="mt-8">
-          <h2 className="text-lg font-semibold text-fg-primary mb-3">Recent Sessions</h2>
+          <h2 className="text-lg font-semibold text-fg-primary mb-3">{t('newSession.recentSessions')}</h2>
           <div className="space-y-2">
             {sessions.slice(0, 5).map((session) => {
               const titleText = session.title ||
@@ -191,7 +193,7 @@ export function NewSessionPage() {
                   ? session.preview.length > 60
                     ? session.preview.slice(0, 60) + '...'
                     : session.preview
-                  : 'Untitled session');
+                  : t('common.untitledSession'));
               return (
                 <Link
                   key={session.id}

@@ -1,5 +1,6 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import { useRef, useEffect, useState, type ChangeEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Settings, LogOut, Search, Sun, Moon, Bell, BellOff } from 'lucide-react';
 import { useThemeStore } from '../store/themeStore';
 import { useSearchStore } from '../store/searchStore';
@@ -11,6 +12,7 @@ interface NavbarProps {
 }
 
 export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
+  const { t } = useTranslation();
   const { isDarkMode, toggleDarkMode } = useThemeStore();
   const { enabled: notificationsEnabled, toggle: toggleNotifications } = useNotificationsStore();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -77,7 +79,7 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className={`flex items-center text-fg-muted ${isSidebarOpen ? 'sm:absolute sm:left-4' : 'sm:relative'}`}
-            aria-label={isSidebarOpen ? 'Collapse Sidebar' : 'Expand Sidebar'}
+              aria-label={isSidebarOpen ? t('nav.collapseSidebar') : t('nav.expandSidebar')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
@@ -85,8 +87,8 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
           </button>
 
           <Link to="/" className="flex items-center no-underline ml-2 sm:ml-0">
-            <span className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-              1230.UI
+              <span className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                {t('nav.brand')}
             </span>
           </Link>
         </div>
@@ -98,8 +100,8 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
               type="text"
               value={localInput}
               onChange={handleSearchChange}
-              placeholder="Search sessions..."
-              aria-label="Search sessions"
+              placeholder={t('nav.searchPlaceholder')}
+              aria-label={t('nav.searchLabel')}
               className="w-full pl-9 pr-4 py-2 rounded-lg border border-border-default bg-bg-secondary text-fg-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -114,8 +116,8 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
                 ? 'text-blue-600 dark:text-blue-400 hover:bg-bg-secondary'
                 : 'text-fg-muted hover:bg-bg-secondary'
             }`}
-            aria-label={notificationsEnabled ? 'Disable notifications' : 'Enable notifications'}
-            title={notificationsEnabled ? 'Notifications on' : 'Notifications off'}
+            aria-label={notificationsEnabled ? t('nav.disableNotifications') : t('nav.enableNotifications')}
+            title={notificationsEnabled ? t('nav.notificationsOn') : t('nav.notificationsOff')}
           >
             {notificationsEnabled ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
           </button>
@@ -124,8 +126,8 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
             type="button"
             onClick={toggleDarkMode}
             className="p-1.5 rounded text-fg-muted hover:bg-bg-secondary transition-colors"
-            aria-label="Toggle Dark Mode"
-            title="Toggle Dark Mode"
+            aria-label={t('nav.toggleDarkMode')}
+            title={t('nav.toggleDarkMode')}
           >
             {isDarkMode ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5" />}
           </button>
@@ -134,7 +136,7 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
               className="flex items-center"
-              aria-label="User Menu"
+              aria-label={t('nav.userMenu')}
             >
               <div className="h-8 w-8 rounded-full border-2 border-green-500 bg-bg-muted flex items-center justify-center">
                 <span className="text-sm font-medium text-fg-secondary">U</span>
@@ -149,7 +151,7 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
                   className="flex items-center px-4 py-2 text-sm text-fg-secondary hover:bg-bg-secondary"
                 >
                   <Settings className="h-4 w-4 mr-2" />
-                  Settings
+                  {t('nav.settings')}
                 </Link>
                 <hr className="my-1 border-border-default" />
                 <button
@@ -157,7 +159,7 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
                   className="w-full flex items-center text-left px-4 py-2 text-sm text-fg-secondary hover:bg-bg-secondary"
                 >
                   <LogOut className="h-4 w-4 mr-2" />
-                  Logout
+                  {t('nav.logout')}
                 </button>
               </div>
             )}

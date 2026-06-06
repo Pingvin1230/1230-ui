@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CheckCircle2, AlertCircle, Info, AlertTriangle, X } from 'lucide-react';
 import { ToastContext, type Toast, type ToastApi, type ToastType } from '../hooks/useToast';
 
@@ -85,6 +86,7 @@ function ToastViewport({
   toasts: Toast[];
   onDismiss: (id: string) => void;
 }) {
+  const { t: translate } = useTranslation();
   if (toasts.length === 0) return null;
   return (
     <div
@@ -102,7 +104,7 @@ function ToastViewport({
           <button
             type="button"
             onClick={() => onDismiss(t.id)}
-            aria-label="Dismiss notification"
+            aria-label={translate('toast.dismiss')}
             className="flex-shrink-0 -mr-1 -mt-1 p-1 rounded hover:bg-bg-secondary transition-colors"
           >
             <X className="w-4 h-4" />

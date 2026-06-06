@@ -5,7 +5,9 @@ import Database from 'better-sqlite3';
 import helmet from 'helmet';
 import cors from 'cors';
 import config from './config.js';
-import { apiLimiter, chatLimiter, execLimiter, sanitizeMiddleware } from './middleware/security.js';
+import { apiLimiter, chatLimiter, execLimiter, likeLimiter, sanitizeMiddleware } from './middleware/security.js';
+import geoip from 'geoip-lite';
+import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,6 +20,8 @@ const HERMES_API_URL = config.hermesApiUrl;
 const HERMES_API_KEY = config.hermesApiKey;
 const HERMES_PYTHON_PATH = config.hermesPythonPath;
 const HERMES_AGENT_PATH = config.hermesAgentPath;
+const LIKES_WEBHOOK_URL = config.likesWebhookUrl;
+const LIKES_COOLDOWN_SEC = config.likesCooldownSec;
 const SAVE_MESSAGES_SCRIPT = config.scripts.saveMessages;
 const SYNC_PROVIDERS_SCRIPT = config.scripts.syncProviders;
 
@@ -113,6 +117,15 @@ try {
       pinned INTEGER DEFAULT 0,
       archived INTEGER DEFAULT 0
     );
+
+    CREATE TABLE IF NOT EXISTS likes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_hash TEXT NOT NULL,
+      user_agent TEXT,
+      country TEXT,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_likes_user_hash ON likes(user_hash, created_at);
   `);
   console.log('UI DB tables initialized');
 } catch (error) {
@@ -1156,6 +1169,87 @@ app.patch('/api/models/models/:id/toggle', (req, res) => {
   } catch (error) {
     console.error('Error toggling model:', error);
     res.status(500).json({ error: 'Failed to toggle model' });
+  }
+});
+
+// Send a like to Mattermost
+app.post('/api/like', likeLimiter, async (req, res) => {
+  try {
+    if (!LIKES_WEBHOOK_URL) {
+      return res.status(503).json({ error: 'Likes webhook is not configured' });
+    }
+
+    const ip = (req.ip || '').replace('::ffff:', '');
+    const userAgent = req.headers['user-agent'] || '';
+    const userHash = crypto
+      .createHash('sha256')
+      .update(`${ip}|${userAgent}`)
+      .digest('hex');
+    const cooldownMs = LIKES_COOLDOWN_SEC * 1000;
+    const now = Date.now();
+
+    const last = uiDb
+      .prepare(
+        'SELECT created_at FROM likes WHERE user_hash = ? AND created_at > ? ORDER BY created_at DESC LIMIT 1'
+      )
+      .get(userHash, now - cooldownMs);
+
+    if (last) {
+      const retryAfter = Math.max(1, Math.ceil((last.created_at + cooldownMs - now) / 1000));
+      res.set('Retry-After', String(retryAfter));
+      return res.status(429).json({
+        error: 'cooldown',
+        message: `You can like again in ${retryAfter} seconds.`,
+        retry_after: retryAfter,
+      });
+    }
+
+    const country = (() => {
+      try {
+        const lookup = geoip.lookup(ip);
+        return lookup?.country || null;
+      } catch {
+        return null;
+      }
+    })();
+
+    const lines = [
+      '❤️ **New like from 1230-UI!**',
+      '',
+      `- **IP:** \`${ip || 'unknown'}\``,
+      `- **Country:** ${country ? `\`${country}\`` : '`unknown`'}`,
+      `- **User-Agent:** \`${userAgent.slice(0, 200) || 'unknown'}\``,
+      `- **Time:** \`${new Date(now).toISOString()}\``,
+    ];
+    const message = lines.join('\n');
+
+    const webhookResponse = await fetch(LIKES_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: message, username: '1230-UI Likes' }),
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!webhookResponse.ok) {
+      const body = await webhookResponse.text().catch(() => '');
+      console.error(`Likes webhook failed: ${webhookResponse.status} ${body}`);
+      return res.status(502).json({ error: 'Webhook delivery failed' });
+    }
+
+    uiDb
+      .prepare(
+        'INSERT INTO likes (user_hash, user_agent, country, created_at) VALUES (?, ?, ?, ?)'
+      )
+      .run(userHash, userAgent.slice(0, 500), country, now);
+
+    res.json({ success: true, sent_at: now });
+  } catch (error) {
+    if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+      console.error('Likes webhook timeout');
+      return res.status(504).json({ error: 'Webhook timed out' });
+    }
+    console.error('Error sending like:', error);
+    res.status(500).json({ error: 'Failed to send like' });
   }
 });
 

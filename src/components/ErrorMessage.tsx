@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { XCircle, RefreshCw, ChevronDown, ChevronUp, ShieldAlert, Zap, Wifi, Server, Key, AlertTriangle } from 'lucide-react';
 import type { ChatError } from '../lib/api';
 
@@ -11,22 +12,23 @@ const ERROR_ICONS: Record<string, React.ReactNode> = {
   auth_error: <Key className="w-5 h-5" />,
 };
 
-const ERROR_TITLES: Record<string, string> = {
-  content_moderation: 'Request blocked',
-  rate_limit: 'Rate limit exceeded',
-  network: 'Network error',
-  timeout: 'Request timeout',
-  server_error: 'Server error',
-  auth_error: 'Authentication error',
-  invalid_request: 'Invalid request',
-  provider_error: 'Provider error',
+const ERROR_TYPE_KEYS: Record<string, string> = {
+  content_moderation: 'errors.content_moderation',
+  rate_limit: 'errors.rate_limit',
+  network: 'errors.network',
+  timeout: 'errors.timeout',
+  server_error: 'errors.server_error',
+  auth_error: 'errors.auth_error',
+  invalid_request: 'errors.invalid_request',
+  provider_error: 'errors.provider_error',
 };
 
 export function ErrorMessage({ error, onRetry }: { error: ChatError; onRetry?: () => void }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
   const icon = ERROR_ICONS[error.type] || <XCircle className="w-5 h-5" />;
-  const title = ERROR_TITLES[error.type] || 'Error';
+  const title = t(ERROR_TYPE_KEYS[error.type] || 'errors.fallback');
 
   return (
     <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 my-2">
@@ -64,7 +66,7 @@ export function ErrorMessage({ error, onRetry }: { error: ChatError; onRetry?: (
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs rounded-lg transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                Retry
+                {t('common.retry')}
               </button>
             )}
 
@@ -74,7 +76,7 @@ export function ErrorMessage({ error, onRetry }: { error: ChatError; onRetry?: (
                 className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
               >
                 {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                Details
+                {t('errors.details')}
               </button>
             )}
           </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { api, type ChatMessage, type ChatError } from '../lib/api';
 import type { Message, Session } from '../types/api';
 import MarkdownRenderer from '../components/MarkdownRenderer';
@@ -14,6 +15,7 @@ import { useNotificationsStore } from '../store/notificationsStore';
 import 'highlight.js/styles/github-dark.css';
 
 export function ChatPage() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const initialMessageRef = useRef((location.state as { initialMessage?: string })?.initialMessage);
@@ -81,7 +83,7 @@ export function ChatPage() {
       console.error('Failed to delete session:', err);
       setError({
         type: 'server_error',
-        message: 'Failed to delete session',
+        message: t('chat.failedToDeleteSession'),
         retryable: false,
       });
       setIsDeleting(false);
@@ -130,7 +132,7 @@ export function ChatPage() {
       } catch (err) {
         console.error('Failed to load session:', err);
         if (cancelled) return;
-        setLoadError(err instanceof Error ? err.message : 'Session not found');
+        setLoadError(err instanceof Error ? err.message : t('chat.sessionNotFound'));
       }
       
       try {
@@ -295,7 +297,7 @@ export function ChatPage() {
         }
 
         const preview = fullContent.slice(0, 100) + (fullContent.length > 100 ? '...' : '');
-        notify('Response received', preview);
+        notify(t('chat.responseReceived'), preview);
 
         await saveMessage(id!, 'user', userContent);
         await saveMessage(id!, 'assistant', fullContent);
@@ -367,7 +369,7 @@ export function ChatPage() {
             <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
           </div>
           <h2 className="text-xl font-semibold text-fg-primary mb-2">
-            Session not found
+            {t('chat.sessionNotFound')}
           </h2>
           <p className="text-sm text-fg-muted mb-6">
             {loadError}
@@ -378,13 +380,13 @@ export function ChatPage() {
               onClick={() => setRetryTrigger(prev => prev + 1)}
               className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-fg-primary rounded-lg transition-colors text-sm font-medium"
             >
-              Try again
+              {t('common.tryAgain')}
             </button>
             <Link
               to="/sessions"
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
             >
-              Back to sessions
+              {t('common.backToSessions')}
             </Link>
           </div>
         </div>
@@ -426,7 +428,7 @@ export function ChatPage() {
               to="/sessions"
               className="text-sm text-fg-muted hover:text-blue-600 dark:hover:text-blue-400 flex-shrink-0"
             >
-              Sessions
+              {t('chat.breadcrumbsSessions')}
             </Link>
             <ChevronRight className="w-3.5 h-3.5 text-fg-muted flex-shrink-0" />
             
@@ -443,14 +445,14 @@ export function ChatPage() {
                   }}
                   disabled={isSavingTitle}
                   className="text-lg font-semibold text-fg-primary bg-transparent border-b-2 border-blue-500 outline-none min-w-0 flex-1 disabled:opacity-50"
-                  placeholder="Session title"
+                  placeholder={t('chat.sessionTitlePlaceholder')}
                 />
                 <button
                   type="button"
                   onClick={handleSaveTitle}
                   disabled={isSavingTitle || !editingTitle.trim()}
                   className="p-1 rounded text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 flex-shrink-0"
-                  aria-label="Save title"
+                  aria-label={t('chat.saveTitle')}
                 >
                   {isSavingTitle ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                 </button>
@@ -459,7 +461,7 @@ export function ChatPage() {
                   onClick={() => setIsEditingTitle(false)}
                   disabled={isSavingTitle}
                   className="p-1 rounded text-fg-muted hover:bg-bg-secondary disabled:opacity-50 flex-shrink-0"
-                  aria-label="Cancel editing"
+                  aria-label={t('chat.cancelEditing')}
                 >
                   <AlertCircle className="w-4 h-4" />
                 </button>
@@ -467,14 +469,14 @@ export function ChatPage() {
             ) : (
               <>
                 <h1 className="text-lg font-semibold text-fg-primary truncate min-w-0">
-                  {session?.title || 'Session'}
+                  {session?.title || t('common.session')}
                 </h1>
                 <button
                   type="button"
                   onClick={handleStartEditTitle}
                   className="p-1 rounded text-fg-muted hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex-shrink-0"
-                  aria-label="Edit title"
-                  title="Edit title"
+                  aria-label={t('chat.editTitle')}
+                  title={t('chat.editTitle')}
                 >
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
@@ -492,7 +494,7 @@ export function ChatPage() {
                   className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors disabled:opacity-50 flex items-center gap-1"
                 >
                   {isDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                  Delete
+                  {t('chat.deleteConfirm')}
                 </button>
                 <button
                   type="button"
@@ -500,7 +502,7 @@ export function ChatPage() {
                   disabled={isDeleting}
                   className="px-2 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-fg-primary text-xs rounded transition-colors disabled:opacity-50"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
               </>
             ) : (
@@ -509,8 +511,8 @@ export function ChatPage() {
                 onClick={() => setConfirmDelete(true)}
                 disabled={isDeleting}
                 className="p-1.5 rounded text-fg-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
-                aria-label="Delete session"
-                title="Delete session"
+                aria-label={t('chat.deleteSession')}
+                title={t('chat.deleteSession')}
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -528,10 +530,10 @@ export function ChatPage() {
             <div className="flex flex-col items-center justify-center py-24 text-center">
               <NoMessagesIllustration className="w-24 h-24 mb-4 text-fg-muted" />
               <h2 className="text-lg font-semibold text-fg-primary mb-1">
-                Start a conversation
+                {t('chat.startConversation')}
               </h2>
               <p className="text-sm text-fg-muted max-w-sm">
-                Send a message to get a response from Hermes.
+                {t('chat.startConversationDesc')}
               </p>
             </div>
           )}
@@ -566,7 +568,7 @@ export function ChatPage() {
                       <button
                         type="button"
                         onClick={() => handleCopyMessage(msg.id, msg.content || '')}
-                        aria-label={copiedMessageId === msg.id ? 'Message copied' : 'Copy message'}
+                        aria-label={copiedMessageId === msg.id ? t('chat.messageCopied') : t('chat.copyMessage')}
                         className="p-1 rounded text-fg-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity hover:bg-bg-secondary"
                       >
                         {copiedMessageId === msg.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -609,7 +611,7 @@ export function ChatPage() {
                         type="button"
                         onClick={handleRetry}
                         disabled={sending}
-                        aria-label="Regenerate response"
+                        aria-label={t('chat.regenerateResponse')}
                         className="p-1 rounded text-fg-muted hover:bg-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
@@ -656,7 +658,7 @@ export function ChatPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                   </svg>
                 </span>
-                {completedToolCalls.length} completed tool{completedToolCalls.length > 1 ? 's' : ''}
+                {t('chat.completedTools', { count: completedToolCalls.length })}
               </button>
 
               {showToolCallHistory && (
@@ -695,10 +697,10 @@ export function ChatPage() {
                   </div>
                   <span className="text-sm">
                     {processStatus === 'thinking' 
-                      ? 'Agent is thinking...' 
+                      ? t('chat.agentThinking') 
                       : processStatus === 'executing_tool' && executingTool
-                        ? `Executing ${executingTool}...`
-                        : 'Generating response...'}
+                        ? t('chat.executingTool', { toolName: executingTool })
+                        : t('chat.generatingResponse')}
                   </span>
                 </div>
               </div>
@@ -713,10 +715,10 @@ export function ChatPage() {
             <button
               type="button"
               onClick={() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })}
-              aria-label={`Scroll to ${unreadCount} new messages`}
+              aria-label={t('chat.scrollToNewMessages', { count: unreadCount })}
               className="pointer-events-auto px-3 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium shadow-lg transition-colors"
             >
-              ↓ {unreadCount} new
+              {t('chat.newMessagesBadge', { count: unreadCount })}
             </button>
           </div>
         )}
@@ -731,10 +733,10 @@ export function ChatPage() {
             />
             <button
               onClick={() => setError(null)}
-              aria-label="Close error message"
+              aria-label={t('chat.closeErrorMessage')}
               className="text-xs text-fg-muted hover:text-fg-secondary mt-2"
             >
-              Close
+              {t('common.close')}
             </button>
           </div>
         </div>
@@ -748,17 +750,17 @@ export function ChatPage() {
                 <ShieldAlert className="w-5 h-5 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                    Sending messages in this session is blocked
+                    {t('chat.sessionBlocked')}
                   </p>
                   <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                    This session context contains information blocked by the provider security filter.
+                    {t('chat.sessionBlockedDesc')}
                   </p>
                   <Link
                     to="/new"
                     className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs rounded-lg transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    Create new session
+                    {t('chat.createNewSession')}
                   </Link>
                 </div>
               </div>
@@ -779,7 +781,7 @@ export function ChatPage() {
                     handleSend();
                   }
                 }}
-                placeholder="Type a message..."
+                placeholder={t('chat.typeMessage')}
                 disabled={sending}
                 rows={1}
                 className="flex-1 px-4 py-2 rounded-lg border border-border-default bg-bg-secondary text-fg-primary focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 resize-none overflow-y-auto"
@@ -787,19 +789,19 @@ export function ChatPage() {
               {sending ? (
                 <button
                   onClick={handleStop}
-                  aria-label="Stop generating"
+                  aria-label={t('chat.stopGenerating')}
                   className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
                 >
-                  Stop
+                  {t('common.stop')}
                 </button>
               ) : (
                 <button
                   onClick={handleSend}
                   disabled={!input.trim()}
-                  aria-label="Send message"
+                  aria-label={t('chat.sendMessage')}
                   className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  Send
+                  {t('common.send')}
                 </button>
               )}
             </div>

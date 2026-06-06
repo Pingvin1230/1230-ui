@@ -435,33 +435,6 @@ These tasks make the product production-ready but don't block basic functionalit
 
 ---
 
-## 📋 P2 — Enhancements (After v1.0)
-
-These tasks can be postponed to next versions.
-
-### 0. Smart Session Titles — LLM Generation
-**Role:** Backend + Frontend  
-**Files:** `server.js`, `scripts/generate_title.py` (new), `src/pages/ChatPage.tsx`  
-**Description:** Auto-generate titles via LLM after first assistant response (Stage A only — Stage B manual editing is already done)
-
-**Stage A: LLM title generation (Backend)**
-- [ ] Create `scripts/generate_title.py` — script for generating title via Hermes API
-- [ ] Logic: after first assistant response completes, send context (user message + assistant response) to LLM with prompt "Generate short title (3-7 words) for this session"
-- [ ] Add endpoint `POST /api/sessions/:id/generate-title` — calls script, updates title in DB
-- [ ] Automatic call in ChatPage after first streaming response completes (if title is empty or auto-generated)
-- [ ] "Generating title..." indicator in UI
-
-**Stage C: UI improvements**
-- [ ] Show "Generating title..." skeleton while LLM works
-- [ ] Fallback to auto-generation (first 60 characters) if LLM unavailable
-- [ ] "Regenerate title" button in ChatPage (RefreshCw icon next to title)
-
-**Priority:** LOW (for v1.1)  
-**Complexity:** Medium (2-3 hours)  
-**Dependencies:** None (manual title editing already done)
-
----
-
 ### Testing
 
 #### 11. Backend Unit Tests
@@ -495,16 +468,7 @@ These tasks can be postponed to next versions.
 
 ---
 
-#### 14. Auto-refresh Session List
-**Role:** Frontend  
-- [ ] Polling every 30 seconds
-- [ ] "New sessions available" indicator
-
-**Priority:** LOW (for v1.2)
-
----
-
-#### ✅ 15. Keyboard Shortcuts
+#### ✅ 14. Keyboard Shortcuts
 **Role:** Frontend  
 - [x] `Ctrl/Cmd + K` — focus on search
 - [x] `Ctrl/Cmd + N` — new session
@@ -515,7 +479,7 @@ These tasks can be postponed to next versions.
 
 ---
 
-#### 16. Session Export
+#### 15. Session Export
 **Role:** Backend + Frontend  
 - [ ] Export to Markdown / JSON
 - [ ] "Export" button in ChatPage
@@ -523,21 +487,8 @@ These tasks can be postponed to next versions.
 
 **Priority:** LOW (for v1.2)
 
----
 
-#### 17. Title Generation via LLM
-**Role:** Backend  
-- [ ] Batch job for existing sessions
-- [ ] UI button "Generate title"
-- [ ] Integration with Hermes API for generation
-
-**Priority:** LOW (for v1.3)
-
----
-
-### Additional Features
-
-#### ✅ 18. New Message Notifications
+#### ✅ 16. New Message Notifications
 **Role:** Frontend  
 - [x] Browser notifications (Notification API)
 - [x] Badge on tab icon
@@ -549,7 +500,7 @@ These tasks can be postponed to next versions.
 
 ---
 
-#### 19. CI/CD Pipeline
+#### 17. CI/CD Pipeline
 **Role:** Backend  
 - [ ] GitHub Actions workflow
 - [ ] Lint + test on PR
@@ -560,7 +511,7 @@ These tasks can be postponed to next versions.
 
 ---
 
-#### 20. Docker Support (optional)
+#### 18. Docker Support (optional)
 **Role:** Backend  
 - [ ] Multi-stage Dockerfile (build frontend + serve via Node)
 - [ ] `docker-compose.yml` with volumes for data and .env
@@ -574,7 +525,7 @@ These tasks can be postponed to next versions.
 
 ### Mobile Adaptation and Accessibility
 
-#### 21. Mobile Adaptation (improvements)
+#### 19. Mobile Adaptation (improvements)
 **Role:** Frontend  
 - [ ] Touch-friendly buttons (increase sizes)
 - [ ] Responsive typography (fluid scaling)
@@ -582,30 +533,11 @@ These tasks can be postponed to next versions.
 
 **Priority:** LOW (for v1.2)
 
----
 
-#### 22. PWA (Progressive Web App)
-**Role:** Frontend  
-- [ ] Web App Manifest
-- [ ] Service Worker for offline mode
-- [ ] Install prompt
-
-**Priority:** LOW (for v1.3)
 
 ---
 
-#### 23. Accessibility (a11y) Improvements
-**Role:** Frontend  
-- [ ] Full keyboard navigation
-- [ ] Color contrast (WCAG AA compliance)
-- [ ] Screen reader testing
-- [ ] ARIA live regions for streaming
-
-**Priority:** LOW (for v1.2)
-
----
-
-#### 24. Internationalization (i18n)
+#### 20. Internationalization (i18n)
 **Role:** Frontend  
 **Files:** `src/i18n/` (new), all pages and components  
 **Library:** `react-i18next` + `i18next`  
@@ -671,7 +603,7 @@ function ChatPage() {
 
 ---
 
-### 25. Multi-Agent Federation (1230UI as OS)
+### 21. Multi-Agent Federation (1230UI as OS)
 
 **Role:** Fullstack  
 **Files:** `server.js`, `src/pages/`, new `src/pages/ClusterPage.tsx`, new `routes/federation.js`  

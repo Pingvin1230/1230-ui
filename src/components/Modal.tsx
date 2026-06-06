@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 
 const SIZE_CLASSES: Record<string, string> = {
@@ -38,6 +39,7 @@ export function Modal({
   showCloseButton = true,
   children,
 }: ModalProps) {
+  const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<Element | null>(null);
 
@@ -131,7 +133,7 @@ export function Modal({
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="Close dialog"
+                aria-label={t('modal.closeDialog')}
                 className="text-fg-muted hover:text-fg-secondary"
               >
                 <X className="w-5 h-5" />

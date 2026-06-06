@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
 import { api } from '../lib/api';
 import { RefreshCw, Plus, MessageSquare, Sparkles, Loader2, SearchX, Star, Archive, Trash2, CheckSquare, Square, Eye } from 'lucide-react';
@@ -79,6 +80,7 @@ function flattenGrouped(grouped: Record<string, Session[]>): ListItem[] {
 }
 
 export function SessionsPage() {
+  const { t } = useTranslation();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -103,7 +105,7 @@ export function SessionsPage() {
       setHasMore(data.sessions.length < data.total);
       setError(null);
     } catch (err) {
-      setError('Failed to load sessions');
+        setError(t('sessions.failedToLoadSessions'));
       console.error(err);
     } finally {
       setLoading(false);
@@ -123,7 +125,7 @@ export function SessionsPage() {
         setError(null);
       } catch (err) {
         if (cancelled) return;
-        setError('Failed to load sessions');
+      setError(t('sessions.failedToLoadSessions'));
         console.error(err);
       } finally {
         if (!cancelled) setLoading(false);
@@ -204,7 +206,7 @@ export function SessionsPage() {
               <MessageSquare className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Sessions</h1>
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{t('sessions.title')}</h1>
             </div>
           </div>
         </div>
@@ -236,7 +238,7 @@ export function SessionsPage() {
             onClick={() => loadSessions(showArchived)}
             className="mt-3 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
           >
-            Retry
+            {t('common.retry')}
           </button>
         </div>
       </div>
@@ -267,10 +269,10 @@ export function SessionsPage() {
             <MessageSquare className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-semibold text-fg-primary">Sessions</h1>
+            <h1 className="text-2xl font-semibold text-fg-primary">{t('sessions.title')}</h1>
             {hasSessions && (
               <p className="text-sm text-fg-muted">
-                {sessions.length} of {total} {total === 1 ? 'session' : 'sessions'}
+                {t('common.showingOfTotal', { showing: sessions.length, total })}
               </p>
             )}
           </div>
@@ -287,10 +289,10 @@ export function SessionsPage() {
                 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                 : 'text-fg-secondary hover:bg-bg-secondary'
             }`}
-            aria-label="Toggle archived sessions"
+            aria-label={t('sessions.toggleArchived')}
           >
             <Eye className="w-4 h-4" />
-            Archived
+            {t('sessions.archived')}
           </button>
           <button
             onClick={() => { setBulkMode(!bulkMode); setSelectedIds(new Set()); }}
@@ -299,15 +301,15 @@ export function SessionsPage() {
                 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                 : 'text-fg-secondary hover:bg-bg-secondary'
             }`}
-            aria-label="Select sessions"
+            aria-label={t('sessions.selectSessions')}
           >
             <CheckSquare className="w-4 h-4" />
-            Select
+            {t('common.select')}
           </button>
           <button
             onClick={() => loadSessions(showArchived)}
             className="p-2 hover:bg-bg-secondary rounded-lg transition-colors"
-            aria-label="Refresh sessions"
+            aria-label={t('sessions.refreshSessions')}
           >
             <RefreshCw className="w-5 h-5 text-fg-secondary" />
           </button>
@@ -316,7 +318,7 @@ export function SessionsPage() {
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
           >
             <Plus className="w-4 h-4" />
-            New Session
+            {t('common.newSession')}
           </Link>
         </div>
       </div>
@@ -324,14 +326,14 @@ export function SessionsPage() {
       {bulkMode && selectedIds.size > 0 && (
         <div className="flex items-center justify-between mb-4 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
           <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
-            {selectedIds.size} selected
+            {t('common.selected', { count: selectedIds.size })}
           </span>
           <div className="flex gap-2">
             <button
               onClick={() => { setSelectedIds(new Set()); setBulkMode(false); }}
               className="px-3 py-1.5 text-sm text-fg-secondary hover:bg-bg-secondary rounded-lg transition-colors"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               onClick={async () => {
@@ -350,14 +352,14 @@ export function SessionsPage() {
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 rounded-lg transition-colors"
             >
               <Archive className="w-3.5 h-3.5" />
-              Archive
+              {t('common.archive')}
             </button>
             <button
               onClick={() => setShowBulkConfirm(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              Delete
+              {t('common.delete')}
             </button>
           </div>
         </div>
@@ -367,17 +369,17 @@ export function SessionsPage() {
         <div className="text-center py-16">
           <NoSessionsIllustration className="w-24 h-24 mx-auto mb-4 text-fg-muted" />
           <h2 className="text-xl font-semibold text-fg-primary mb-2">
-            No sessions yet
+            {t('sessions.noSessionsYet')}
           </h2>
           <p className="text-fg-muted mb-6">
-            Create your first session to start a conversation
+            {t('sessions.noSessionsDesc')}
           </p>
           <Link
             to="/new"
             className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
           >
             <Sparkles className="w-5 h-5" />
-            Create Session
+            {t('common.createSession')}
           </Link>
         </div>
       ) : isSearching && !hasFiltered ? (
@@ -386,24 +388,24 @@ export function SessionsPage() {
             <SearchX className="w-8 h-8 text-fg-muted" />
           </div>
           <h2 className="text-xl font-semibold text-fg-primary mb-2">
-            No sessions match &quot;{query}&quot;
+            {t('sessions.noMatchTitle', { query })}
           </h2>
           <p className="text-fg-muted mb-6">
-            Searching loaded sessions only
+            {t('sessions.noMatchDesc')}
           </p>
           <button
             type="button"
             onClick={() => setQuery('')}
             className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-fg-primary rounded-lg transition-colors text-sm font-medium"
           >
-            Clear search
+            {t('common.clearSearch')}
           </button>
         </div>
       ) : (
         <>
           {isSearching && (
             <p className="text-xs text-fg-muted flex-shrink-0">
-              Searching loaded sessions — {filteredSessions.length} of {sessions.length} match
+              {t('sessions.searchInfo', { filtered: filteredSessions.length, total: sessions.length })}
             </p>
           )}
           <Virtuoso
@@ -415,11 +417,22 @@ export function SessionsPage() {
               if (item.type === 'header') {
                 const isPinned = item.name === 'Pinned';
                 const isArchived = item.name === 'Archived';
+                const groupName = isPinned
+                  ? t('sessions.pinned')
+                  : isArchived
+                    ? t('sessions.archived')
+                    : item.name === 'Today'
+                      ? t('sessions.today')
+                      : item.name === 'Yesterday'
+                        ? t('sessions.yesterday')
+                        : item.name === 'This Week'
+                          ? t('sessions.thisWeek')
+                          : t('sessions.older');
                 return (
                   <div className="flex items-center gap-2 py-3 sticky top-0 bg-bg-secondary">
                     {isPinned && <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />}
                     <h2 className="text-sm font-semibold text-fg-muted uppercase tracking-wide">
-                      {item.name}
+                      {groupName}
                     </h2>
                     {isArchived && <Archive className="w-4 h-4 text-gray-400" />}
                   </div>
@@ -432,7 +445,7 @@ export function SessionsPage() {
                   ? session.preview.length > 70
                     ? session.preview.slice(0, 70) + '...'
                     : session.preview
-                  : 'Untitled session');
+                  : t('common.untitledSession'));
               const isSelected = selectedIds.has(session.id);
 
               return (
@@ -472,7 +485,7 @@ export function SessionsPage() {
                                 <button
                                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleTogglePin(session); }}
                                   className="p-1 rounded text-fg-muted hover:text-yellow-500 dark:hover:text-yellow-400 hover:bg-bg-secondary transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                                  aria-label={session.pinned === 1 ? 'Unpin session' : 'Pin session'}
+                                  aria-label={session.pinned === 1 ? t('chat.unpinSession') : t('chat.pinSession')}
                                 >
                                   <Star className={`w-4 h-4 ${session.pinned === 1 ? 'fill-yellow-500 text-yellow-500' : ''}`} />
                                 </button>
@@ -480,7 +493,7 @@ export function SessionsPage() {
                               <button
                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleToggleArchive(session); }}
                                 className="p-1 rounded text-fg-muted hover:text-fg-secondary hover:bg-bg-secondary transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                                aria-label={session.archived === 1 ? 'Unarchive session' : 'Archive session'}
+                                aria-label={session.archived === 1 ? t('chat.unarchiveSession') : t('chat.archiveSession')}
                               >
                                 <Archive className="w-4 h-4" />
                               </button>
@@ -536,12 +549,12 @@ export function SessionsPage() {
       <Modal
         isOpen={showBulkConfirm}
         onClose={() => setShowBulkConfirm(false)}
-        title="Delete sessions"
+        title={t('sessions.deleteSessionsTitle')}
         size="sm"
       >
         <div className="p-4 space-y-4">
           <p className="text-sm text-fg-secondary">
-            Delete {selectedIds.size} session{selectedIds.size === 1 ? '' : 's'}? This action cannot be undone.
+            {t('sessions.deleteSessionsConfirm', { count: selectedIds.size })}
           </p>
           <div className="flex gap-2 justify-end">
             <button
@@ -549,14 +562,14 @@ export function SessionsPage() {
               onClick={() => setShowBulkConfirm(false)}
               className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-fg-primary rounded-lg transition-colors text-sm font-medium"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="button"
               onClick={handleBulkDelete}
               className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors text-sm font-medium"
             >
-              Delete
+              {t('common.delete')}
             </button>
           </div>
         </div>

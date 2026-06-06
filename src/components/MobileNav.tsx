@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Home, MessageSquare, Plus, Settings } from 'lucide-react';
 
 interface NavItem {
@@ -8,14 +9,16 @@ interface NavItem {
   end?: boolean;
 }
 
-const ITEMS: NavItem[] = [
-  { to: '/', label: 'Home', icon: Home, end: true },
-  { to: '/sessions', label: 'Sessions', icon: MessageSquare },
-  { to: '/new', label: 'New', icon: Plus },
-  { to: '/settings', label: 'Settings', icon: Settings },
-];
-
 export function MobileNav() {
+  const { t } = useTranslation();
+
+  const ITEMS: NavItem[] = [
+    { to: '/', label: t('nav.home'), icon: Home, end: true },
+    { to: '/sessions', label: t('nav.sessions'), icon: MessageSquare },
+    { to: '/new', label: t('nav.new'), icon: Plus },
+    { to: '/settings', label: t('nav.settings'), icon: Settings },
+  ];
+
   return (
     <nav
       aria-label="Primary"

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 ## [0.3.0] - 2026-06-05
 
 ### Features
+- **Like button in Settings → About** — sends a webhook to a configured Mattermost channel (default: `Likes`); per-user cooldown of 1 hour, persisted in UI DB and `localStorage`; webhook payload includes IP, country (via `geoip-lite`), User-Agent, and ISO timestamp
+- **New `POST /api/like` endpoint** — anti-spam via per-IP `likeLimiter` (5/h) + strict DB-backed cooldown (`LIKES_COOLDOWN_SEC`, default 3600s); returns `429` with `Retry-After` header on cooldown, `502` on webhook failure, `503` if webhook URL is not configured
+- **New `LIKES_WEBHOOK_URL` and `LIKES_COOLDOWN_SEC` env vars** — `LIKES_WEBHOOK_URL` is optional; leave unset to disable the feature
+- **New `likes` table** in UI DB with index on `user_hash, created_at` for fast cooldown lookups
+
+### Dependencies
+- **`geoip-lite`** — offline IP → country lookup for the like payload (no network calls)
+
+## [0.3.0] - 2026-06-05
+
+### Features
 - **Sessions sort order** — new setting in Settings → General to choose between "Created" and "Last message" ordering; preference persisted across sessions
 - **Last activity time** — session cards on Sessions, Dashboard, and NewSession pages now show the time of the last message (with `startedAt` fallback for empty sessions); grouping by Today/Yesterday follows the chosen sort order
 - **Sidebar state persistence** — sidebar open/closed state now persists across refreshes and is not clobbered by `resize` events

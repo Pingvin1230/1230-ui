@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
 import { Activity, MessageSquare, Send, Server, Cpu, CheckCircle, XCircle, ChevronRight } from 'lucide-react';
 import type { Session } from '../types/api';
@@ -30,6 +31,7 @@ interface ModelOption {
 }
 
 export function DashboardPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [status, setStatus] = useState<SystemStatus | null>(null);
@@ -75,7 +77,7 @@ export function DashboardPage() {
 
       setError(null);
     } catch (err) {
-      setError('Failed to load dashboard data');
+      setError(t('dashboard.failedToLoadDashboard'));
       console.error(err);
     } finally {
       setLoading(false);
@@ -106,7 +108,7 @@ export function DashboardPage() {
     return (
       <div className="p-6 max-w-6xl mx-auto">
         <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-fg-primary">Welcome</h1>
+        <h1 className="text-2xl font-semibold text-fg-primary">{t('dashboard.welcome')}</h1>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {[1, 2, 3].map((i) => (
@@ -132,7 +134,7 @@ export function DashboardPage() {
             onClick={loadData}
             className="mt-3 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
           >
-            Retry
+            {t('common.retry')}
           </button>
         </div>
       </div>
@@ -142,13 +144,13 @@ export function DashboardPage() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-fg-primary">Welcome</h1>
+        <h1 className="text-2xl font-semibold text-fg-primary">{t('dashboard.welcome')}</h1>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Quick Chat */}
         <div className="lg:col-span-2 bg-bg-primary border border-border-default rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-fg-primary mb-4">Start a New Conversation</h2>
+          <h2 className="text-lg font-semibold text-fg-primary mb-4">{t('dashboard.startNewConversation')}</h2>
           <div className="space-y-3">
             <select
               value={model}
@@ -176,7 +178,7 @@ export function DashboardPage() {
                     handleSend();
                   }
                 }}
-                placeholder="Type a message..."
+                placeholder={t('chat.typeMessage')}
                 disabled={sending}
                 rows={3}
                 className="flex-1 px-4 py-3 rounded-lg border border-border-default bg-bg-primary text-fg-primary placeholder-fg-muted focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 resize-none overflow-y-auto"
@@ -187,7 +189,7 @@ export function DashboardPage() {
                 className="self-stretch inline-flex items-center justify-center gap-2 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Send className="w-5 h-5" />
-                <span>Send</span>
+                <span>{t('common.send')}</span>
               </button>
             </div>
           </div>
@@ -197,7 +199,7 @@ export function DashboardPage() {
         <div className="bg-bg-primary border border-border-default rounded-lg p-6">
           <div className="flex items-center gap-2 mb-4">
             <Activity className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-fg-primary">System Status</h2>
+            <h2 className="text-lg font-semibold text-fg-primary">{t('dashboard.systemStatus')}</h2>
           </div>
 
           <div className="space-y-4">
@@ -210,26 +212,26 @@ export function DashboardPage() {
                   {status?.hermes.status === 'connected' ? (
                     <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
                       <CheckCircle className="w-4 h-4" />
-                      <span className="text-xs font-medium">Connected</span>
+                      <span className="text-xs font-medium">{t('dashboard.connected')}</span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-1 text-red-600 dark:text-red-400">
                       <XCircle className="w-4 h-4" />
-                      <span className="text-xs font-medium">Disconnected</span>
+                      <span className="text-xs font-medium">{t('dashboard.disconnected')}</span>
                     </div>
                   )}
                 </div>
                 <p className="text-xs text-fg-muted mt-1">
-                  Hermes version: {status?.hermes.version}
+                  {t('dashboard.hermesVersion')} {status?.hermes.version}
                 </p>
                 {status?.hermes.latestVersion && (
                   <p className="text-xs text-fg-muted mt-0.5">
-                    Latest: {status.hermes.latestVersion}
+                    {t('dashboard.latestVersion')} {status.hermes.latestVersion}
                   </p>
                 )}
                 {status?.hermes.updateAvailable !== null && status?.hermes.updateAvailable !== undefined && status?.hermes.updateAvailable > 0 && (
                   <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-                    Update available: {status?.hermes.updateAvailable} commits behind
+                    {t('dashboard.updateAvailable', { count: status?.hermes.updateAvailable })}
                   </p>
                 )}
               </div>
@@ -255,14 +257,14 @@ export function DashboardPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-fg-muted mt-1">No providers configured</p>
+                  <p className="text-xs text-fg-muted mt-1">{t('common.noProvidersConfigured')}</p>
                 )}
               </div>
             </div>
 
             <div className="pt-3 border-t border-border-default">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-fg-secondary">Total Sessions</span>
+                <span className="text-fg-secondary">{t('dashboard.totalSessions')}</span>
                 <span className="font-semibold text-fg-primary">{status?.stats.totalSessions}</span>
               </div>
             </div>
@@ -274,16 +276,16 @@ export function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-fg-primary">Recent Sessions</h2>
+              <h2 className="text-lg font-semibold text-fg-primary">{t('dashboard.recentSessions')}</h2>
             </div>
             <Link to="/sessions" className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1">
-              View all
+              {t('common.viewAll')}
               <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
 
           {sessions.length === 0 ? (
-            <p className="text-sm text-fg-muted">No sessions yet</p>
+            <p className="text-sm text-fg-muted">{t('sessions.noSessionsYet')}</p>
           ) : (
             <div className="space-y-3">
               {sessions.map((session) => {
@@ -292,7 +294,7 @@ export function DashboardPage() {
                     ? (session.preview.length > 60
                       ? session.preview.slice(0, 60) + '...'
                       : session.preview)
-                    : 'Untitled session');
+                    : t('common.untitledSession'));
 
                 return (
                   <Link
@@ -311,7 +313,7 @@ export function DashboardPage() {
                               {session.model}
                             </span>
                           )}
-                          <span>{session.messageCount} msgs</span>
+                          <span>{t('common.msgsSuffix', { count: session.messageCount })}</span>
                           <span>•</span>
                           <span>{formatTimeAgo(session.lastMessageAt ?? session.startedAt)}</span>
                         </div>

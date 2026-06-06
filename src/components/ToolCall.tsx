@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 interface ToolCallProps {
   toolName: string;
   content: string;
@@ -5,6 +7,7 @@ interface ToolCallProps {
 }
 
 export default function ToolCall({ toolName, content, timestamp }: ToolCallProps) {
+  const { t } = useTranslation();
   return (
     <div className="rounded-lg border border-border-default bg-bg-secondary overflow-hidden">
       <details className="group">
@@ -13,7 +16,7 @@ export default function ToolCall({ toolName, content, timestamp }: ToolCallProps
             <span className="text-xs font-mono px-2 py-0.5 bg-gray-200 dark:bg-gray-600 rounded text-fg-secondary">
               {toolName}
             </span>
-            <span className="text-xs text-fg-muted">Tool call</span>
+            <span className="text-xs text-fg-muted">{t('toolCall.label')}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-fg-muted">

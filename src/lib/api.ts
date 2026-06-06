@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import type { Session, Message } from '../types/api';
 
 const API_BASE = '';
@@ -21,19 +22,19 @@ export interface ChatError {
 export const api = {
   async getSessions(limit = 20, offset = 0, includeArchived = false, sort: 'created' | 'lastMessage' = 'created'): Promise<{ sessions: Session[]; total: number; limit: number; offset: number }> {
     const res = await fetch(`${API_BASE}/api/sessions?limit=${limit}&offset=${offset}&includeArchived=${includeArchived ? 1 : 0}&sort=${sort}`);
-    if (!res.ok) throw new Error('Failed to fetch sessions');
+    if (!res.ok) throw new Error(i18n.t('api.failedToFetchSessions'));
     return res.json();
   },
 
   async getSession(id: string): Promise<Session> {
     const res = await fetch(`${API_BASE}/api/sessions/${id}`);
-    if (!res.ok) throw new Error('Failed to fetch session');
+    if (!res.ok) throw new Error(i18n.t('api.failedToFetchSession'));
     return res.json();
   },
 
   async getMessages(sessionId: string): Promise<Message[]> {
     const res = await fetch(`${API_BASE}/api/sessions/${sessionId}/messages`);
-    if (!res.ok) throw new Error('Failed to fetch messages');
+    if (!res.ok) throw new Error(i18n.t('api.failedToFetchMessages'));
     return res.json();
   },
 
@@ -46,7 +47,7 @@ export const api = {
     }>;
   }> {
     const res = await fetch(`${API_BASE}/api/models`);
-    if (!res.ok) throw new Error('Failed to fetch models');
+    if (!res.ok) throw new Error(i18n.t('api.failedToFetchModels'));
     return res.json();
   },
 
@@ -56,7 +57,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model, title }),
     });
-    if (!res.ok) throw new Error('Failed to create session');
+    if (!res.ok) throw new Error(i18n.t('api.failedToCreateSession'));
     const data = await res.json();
     return data.sessionId;
   },
@@ -65,7 +66,7 @@ export const api = {
     const res = await fetch(`${API_BASE}/api/sessions/${sessionId}`, {
       method: 'DELETE',
     });
-    if (!res.ok) throw new Error('Failed to delete session');
+    if (!res.ok) throw new Error(i18n.t('api.failedToDeleteSession'));
   },
 
   async updateSessionTitle(sessionId: string, title: string): Promise<Session> {
@@ -74,7 +75,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title }),
     });
-    if (!res.ok) throw new Error('Failed to update session title');
+    if (!res.ok) throw new Error(i18n.t('api.failedToUpdateSessionTitle'));
     return res.json();
   },
 
@@ -121,14 +122,14 @@ export const api = {
             } else {
               chatError = {
                 type: 'server_error',
-                message: errorData.error || `HTTP ${res.status}`,
+                message: errorData.error || i18n.t('api.httpError', { status: res.status }),
                 retryable: res.status >= 500 || res.status === 429
               };
             }
           } catch {
             chatError = {
               type: 'server_error',
-              message: `HTTP ${res.status}`,
+              message: i18n.t('api.httpError', { status: res.status }),
               retryable: res.status >= 500 || res.status === 429
             };
           }
@@ -148,7 +149,7 @@ export const api = {
         if (!reader) {
           const err: ChatError = {
             type: 'server_error',
-            message: 'Empty response from server',
+            message: i18n.t('api.emptyResponse'),
             code: 'NO_STREAM',
             retryable: true
           };
@@ -189,13 +190,13 @@ export const api = {
                   }
                   options.onError?.({
                     type: 'content_moderation',
-                    message: 'Request blocked by security filter',
+                    message: i18n.t('api.requestBlocked'),
                     provider: 'opencode-go',
                     model: options.model || 'unknown',
-                    details: 'Provider rejected request due to session context content (code: EMPTY_RESPONSE)',
+                    details: i18n.t('api.providerRejected'),
                     code: 'EMPTY_RESPONSE',
                     retryable: false,
-                    suggestion: 'This session context contains information blocked by the provider filter. Create a new session or choose a different model in settings.'
+                    suggestion: i18n.t('api.blockedSuggestion')
                   });
                 } else {
                   options.onDone?.(fullContent);
@@ -255,11 +256,11 @@ export const api = {
           console.log(`[api] Stream ended without [DONE], content=${fullContent.length} chars, attempt=${attempt}/${maxRetries}`);
           const err: ChatError = {
             type: 'network',
-            message: fullContent ? 'Response incomplete' : 'Connection interrupted during response',
-            details: fullContent ? `Partial response (${fullContent.length} characters)` : 'No response received',
+            message: fullContent ? i18n.t('api.responseIncomplete') : i18n.t('api.connectionInterrupted'),
+            details: fullContent ? i18n.t('api.partialResponse', { count: fullContent.length }) : i18n.t('api.noResponseReceived'),
             code: 'STREAM_ABORTED',
             retryable: true,
-            suggestion: 'Hermes API Server may have restarted. Please try again.'
+            suggestion: i18n.t('api.serverRestartedSuggestion')
           };
           if (attempt < maxRetries) {
             options.onStatus?.('thinking');
@@ -276,7 +277,7 @@ export const api = {
         const e = error as { message?: string; code?: string; name?: string };
         const err: ChatError = {
           type: 'network',
-          message: e.message || 'Network error',
+          message: e.message || i18n.t('api.networkError'),
           code: e.code || e.name || 'FETCH_ERROR',
           details: e.message,
           retryable: true
@@ -299,7 +300,7 @@ export const api = {
 
   async healthCheck(): Promise<{ status: string; dbConnected: boolean; hermesApi: string }> {
     const res = await fetch(`${API_BASE}/api/health`);
-    if (!res.ok) throw new Error('Health check failed');
+    if (!res.ok) throw new Error(i18n.t('api.healthCheckFailed'));
     return res.json();
   },
 
@@ -321,7 +322,7 @@ export const api = {
     };
   }> {
     const res = await fetch(`${API_BASE}/api/system/status`);
-    if (!res.ok) throw new Error('Failed to fetch system status');
+    if (!res.ok) throw new Error(i18n.t('api.failedToFetchSystemStatus'));
     return res.json();
   },
 
@@ -337,7 +338,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ command })
     });
-    if (!res.ok) throw new Error('Failed to execute command');
+    if (!res.ok) throw new Error(i18n.t('api.failedToExecuteCommand'));
     return res.json();
   },
 
@@ -359,7 +360,7 @@ export const api = {
     totalCount: number;
   }>> {
     const res = await fetch(`${API_BASE}/api/models/providers`);
-    if (!res.ok) throw new Error('Failed to fetch model providers');
+    if (!res.ok) throw new Error(i18n.t('api.failedToFetchModelProviders'));
     return res.json();
   },
 
@@ -371,25 +372,25 @@ export const api = {
     error?: string;
   }> {
     const res = await fetch(`${API_BASE}/api/models/sync`, { method: 'POST' });
-    if (!res.ok) throw new Error('Failed to sync model providers');
+    if (!res.ok) throw new Error(i18n.t('api.failedToSyncModelProviders'));
     return res.json();
   },
 
   async toggleModel(modelId: number): Promise<{ success: boolean; id: number; enabled: number }> {
     const res = await fetch(`${API_BASE}/api/models/models/${modelId}/toggle`, { method: 'PATCH' });
-    if (!res.ok) throw new Error('Failed to toggle model');
+    if (!res.ok) throw new Error(i18n.t('api.failedToToggleModel'));
     return res.json();
   },
 
   async togglePin(id: string): Promise<{ success: boolean; pinned: number }> {
     const res = await fetch(`${API_BASE}/api/sessions/${id}/pin`, { method: 'PATCH' });
-    if (!res.ok) throw new Error('Failed to toggle pin');
+    if (!res.ok) throw new Error(i18n.t('api.failedToTogglePin'));
     return res.json();
   },
 
   async toggleArchive(id: string): Promise<{ success: boolean; archived: number }> {
     const res = await fetch(`${API_BASE}/api/sessions/${id}/archive`, { method: 'PATCH' });
-    if (!res.ok) throw new Error('Failed to toggle archive');
+    if (!res.ok) throw new Error(i18n.t('api.failedToToggleArchive'));
     return res.json();
   },
 
@@ -400,8 +401,28 @@ export const api = {
       body: JSON.stringify({ ids }),
     });
     if (!res.ok) {
-      const data = await res.json().catch(() => ({ error: 'Failed to bulk delete sessions' }));
-      throw new Error(data.error || 'Failed to bulk delete sessions');
+      const data = await res.json().catch(() => ({ error: i18n.t('api.failedToBulkDelete') }));
+      throw new Error(data.error || i18n.t('api.failedToBulkDelete'));
+    }
+    return res.json();
+  },
+
+  async sendLike(): Promise<{ success: boolean; sent_at: number; retry_after?: number }> {
+    const res = await fetch(`${API_BASE}/api/like`, { method: 'POST' });
+    if (res.status === 429) {
+      const data = await res.json().catch(() => ({}));
+      const retryAfter = Number(data.retry_after ?? res.headers.get('Retry-After') ?? 0);
+      const err = new Error(data.message || i18n.t('api.likeCooldown')) as Error & {
+        type?: string;
+        retry_after?: number;
+      };
+      err.type = 'cooldown';
+      err.retry_after = retryAfter;
+      throw err;
+    }
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || i18n.t('api.failedToSendLike'));
     }
     return res.json();
   }

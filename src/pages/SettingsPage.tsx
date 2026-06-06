@@ -1,10 +1,28 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import { api } from '../lib/api';
-import { Download, Wrench, Loader2, CheckCircle, XCircle, AlertTriangle, Sun, Moon, Bell, BellOff, Calendar, MessageCircle } from 'lucide-react';
+import { Download, Wrench, Loader2, CheckCircle, XCircle, AlertTriangle, Sun, Moon, Bell, BellOff, Calendar, MessageCircle, Heart } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { useThemeStore } from '../store/themeStore';
 import { useNotificationsStore } from '../store/notificationsStore';
 import { useSessionsSortStore } from '../store/sessionsSortStore';
+
+const LIKE_STORAGE_KEY = 'hermes-1230-last-like';
+const LIKE_DEFAULT_COOLDOWN_SEC = 3600;
+
+type LikeState = 'idle' | 'sending' | 'sent' | 'cooldown';
+
+function formatCooldown(sec: number): string {
+  if (sec <= 0) return '';
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    return `${h}h ${m % 60}m`;
+  }
+  return m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`;
+}
 
 interface Model {
   id: number;
@@ -27,6 +45,7 @@ interface Provider {
 }
 
 export function SettingsPage() {
+  const { t } = useTranslation();
   const { isDarkMode, toggleDarkMode } = useThemeStore();
   const { enabled: notificationsEnabled, setEnabled: setNotificationsEnabled } = useNotificationsStore();
   const sortMode = useSessionsSortStore((s) => s.sortMode);
@@ -50,6 +69,67 @@ export function SettingsPage() {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
     typeof Notification !== 'undefined' ? Notification.permission : 'denied'
   );
+  const initialLike = (() => {
+    try {
+      const raw = localStorage.getItem(LIKE_STORAGE_KEY);
+      const last = raw ? Number(raw) : 0;
+      if (!last) return { state: 'idle' as LikeState, remaining: 0 };
+      const remainingMs = last + LIKE_DEFAULT_COOLDOWN_SEC * 1000 - Date.now();
+      if (remainingMs <= 0) return { state: 'idle' as LikeState, remaining: 0 };
+      return { state: 'cooldown' as LikeState, remaining: Math.ceil(remainingMs / 1000) };
+    } catch {
+      return { state: 'idle' as LikeState, remaining: 0 };
+    }
+  })();
+  const [likeState, setLikeState] = useState<LikeState>(initialLike.state);
+  const [likeError, setLikeError] = useState<string | null>(null);
+  const [cooldownRemaining, setCooldownRemaining] = useState<number>(initialLike.remaining);
+
+  useEffect(() => {
+    if (likeState !== 'cooldown') return;
+    const timer = window.setInterval(() => {
+      setCooldownRemaining((prev) => {
+        if (prev <= 1) {
+          window.clearInterval(timer);
+          setLikeState('idle');
+          setLikeError(null);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [likeState]);
+
+  async function handleLike() {
+    if (likeState === 'sending' || likeState === 'cooldown') return;
+    setLikeState('sending');
+    setLikeError(null);
+    try {
+      const result = await api.sendLike();
+      try {
+        localStorage.setItem(LIKE_STORAGE_KEY, String(result.sent_at));
+      } catch {
+        // ignore
+      }
+      setLikeState('sent');
+    } catch (err) {
+      const e = err as { type?: string; retry_after?: number; message?: string };
+      if (e.type === 'cooldown' && typeof e.retry_after === 'number') {
+        const sentAt = Date.now() - (LIKE_DEFAULT_COOLDOWN_SEC - e.retry_after) * 1000;
+        try {
+          localStorage.setItem(LIKE_STORAGE_KEY, String(sentAt));
+        } catch {
+          // ignore
+        }
+        setCooldownRemaining(e.retry_after);
+        setLikeState('cooldown');
+        return;
+      }
+      setLikeState('idle');
+      setLikeError(e.message || t('settings.failedToSendLike'));
+    }
+  }
 
   const handleNotificationsToggle = async () => {
     if (typeof Notification === 'undefined') return;
@@ -91,7 +171,7 @@ export function SettingsPage() {
       setProviders(data);
       setError(null);
     } catch (err) {
-      setError('Failed to load model providers');
+      setError(t('settings.failedToLoadProviders'));
       console.error(err);
     } finally {
       setLoading(false);
@@ -107,10 +187,10 @@ export function SettingsPage() {
       if (result.success) {
         await loadProviders();
       } else {
-        setError(result.error || 'Sync failed');
+        setError(result.error || t('settings.syncFailed'));
       }
     } catch (err) {
-      setError('Failed to sync providers');
+      setError(t('settings.failedToSyncProviders'));
       console.error(err);
     } finally {
       setSyncing(false);
@@ -136,13 +216,13 @@ export function SettingsPage() {
       setExecResult({
         command,
         success: result.success,
-        output: result.output || result.error || 'No output'
+        output: result.output || result.error || t('settings.noOutput')
       });
     } catch (err) {
       setExecResult({
         command,
         success: false,
-        output: err instanceof Error ? err.message : 'Unknown error'
+        output: err instanceof Error ? err.message : t('settings.unknownError')
       });
     } finally {
       setExecuting(null);
@@ -150,25 +230,25 @@ export function SettingsPage() {
   }
 
   function formatTimestamp(ts: string | null): string {
-    if (!ts) return 'Never';
+    if (!ts) return t('settings.never');
     const date = new Date(ts);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
     
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffMins < 1) return t('settings.justNow');
+    if (diffMins < 60) return t('settings.minutesAgo', { count: diffMins });
     const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffHours < 24) return t('settings.hoursAgo', { count: diffHours });
     const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays}d ago`;
+    return t('settings.daysAgo', { count: diffDays });
   }
 
   return (
     <div className="h-full flex flex-col px-4 md:px-6 py-4">
       <div className="max-w-3xl w-full mx-auto mb-6">
-        <h1 className="text-xl font-semibold text-fg-primary">Settings</h1>
-        <p className="text-sm text-fg-muted mt-1">Web UI configuration</p>
+        <h1 className="text-xl font-semibold text-fg-primary">{t('settings.title')}</h1>
+        <p className="text-sm text-fg-muted mt-1">{t('settings.description')}</p>
       </div>
 
       <div className="flex-1 overflow-auto">
@@ -176,14 +256,14 @@ export function SettingsPage() {
 
           {/* General Section */}
           <div className="bg-bg-primary border border-border-default rounded-lg p-4">
-            <h3 className="font-medium text-sm text-fg-primary mb-3">General</h3>
+            <h3 className="font-medium text-sm text-fg-primary mb-3">{t('settings.general')}</h3>
 
             {/* Theme Toggle */}
             <div className="flex items-center justify-between mb-4 pb-4 border-b border-border-default">
               <div>
-                <p className="text-sm text-fg-primary">Appearance</p>
+                <p className="text-sm text-fg-primary">{t('settings.appearance')}</p>
                 <p className="text-xs text-fg-muted mt-0.5">
-                  {isDarkMode ? 'Dark mode' : 'Light mode'}
+                  {isDarkMode ? t('settings.darkMode') : t('settings.lightMode')}
                 </p>
               </div>
               <button
@@ -192,20 +272,20 @@ export function SettingsPage() {
                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border-default bg-bg-secondary hover:bg-bg-muted transition-colors text-sm text-fg-secondary"
               >
                 {isDarkMode ? <Sun className="w-4 h-4 text-yellow-500" /> : <Moon className="w-4 h-4" />}
-                {isDarkMode ? 'Dark' : 'Light'}
+                {isDarkMode ? t('settings.dark') : t('settings.light')}
               </button>
             </div>
 
             {/* Notifications Toggle */}
             <div className="flex items-center justify-between mb-4 pb-4 border-b border-border-default">
               <div>
-                <p className="text-sm text-fg-primary">Notifications</p>
+                <p className="text-sm text-fg-primary">{t('settings.notifications')}</p>
                 <p className="text-xs text-fg-muted mt-0.5">
                   {notificationPermission === 'denied'
-                    ? 'Blocked by browser'
+                    ? t('settings.notificationsBlocked')
                     : notificationsEnabled
-                      ? 'Enabled — alerts when tab is inactive'
-                      : 'Disabled'}
+                      ? t('settings.notificationsEnabled')
+                      : t('settings.notificationsDisabled')}
                 </p>
               </div>
               <button
@@ -221,23 +301,23 @@ export function SettingsPage() {
                 }`}
               >
                 {notificationsEnabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
-                {notificationsEnabled ? 'On' : 'Off'}
+                {notificationsEnabled ? t('settings.on') : t('settings.off')}
               </button>
             </div>
 
             {/* Sessions Sort Mode */}
             <div className="flex items-center justify-between mb-4 pb-4 border-b border-border-default">
               <div>
-                <p className="text-sm text-fg-primary">Sessions sort order</p>
+                <p className="text-sm text-fg-primary">{t('settings.sortOrder')}</p>
                 <p className="text-xs text-fg-muted mt-0.5">
                   {sortMode === 'lastMessage'
-                    ? 'Last message — most recently active first'
-                    : 'Created — most recently started first'}
+                    ? t('settings.sortLastMessage')
+                    : t('settings.sortCreated')}
                 </p>
               </div>
               <div
                 role="group"
-                aria-label="Sort sessions by"
+                aria-label={t('settings.sortLabel')}
                 className="inline-flex rounded-lg border border-border-default overflow-hidden"
               >
                 <button
@@ -252,7 +332,7 @@ export function SettingsPage() {
                   title="Sort by session creation date"
                 >
                   <Calendar className="w-4 h-4" />
-                  Created
+                  {t('settings.sortCreatedBtn')}
                 </button>
                 <button
                   type="button"
@@ -266,16 +346,36 @@ export function SettingsPage() {
                   title="Sort by last message date"
                 >
                   <MessageCircle className="w-4 h-4" />
-                  Last message
+                  {t('settings.sortLastMessageBtn')}
                 </button>
               </div>
             </div>
 
+            {/* Language Selector */}
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-border-default">
+              <div>
+                <p className="text-sm text-fg-primary">Language</p>
+                <p className="text-xs text-fg-muted mt-0.5">
+                  Interface language
+                </p>
+              </div>
+              <select
+                value={i18n.language}
+                onChange={(e) => i18n.changeLanguage(e.target.value)}
+                className="px-3 py-1.5 text-sm rounded-lg border border-border-default bg-bg-primary text-fg-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="en">English</option>
+                <option value="ru">Русский</option>
+                <option value="es">Español</option>
+                <option value="de">Deutsch</option>
+              </select>
+            </div>
+
             <p className="text-xs text-fg-muted mb-3">
-              Default model used when creating new sessions
+              {t('settings.defaultModelDesc')}
             </p>
             <label className="block text-xs font-medium text-fg-secondary mb-1.5">
-              Default model
+              {t('settings.defaultModel')}
             </label>
             {modelsData ? (
               <select
@@ -291,14 +391,14 @@ export function SettingsPage() {
                     {provider.models.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.name}
-                        {modelsData.default?.id === m.id ? ' (default)' : ''}
+                        {modelsData.default?.id === m.id ? t('common.defaultSuffix') : ''}
                       </option>
                     ))}
                   </optgroup>
                 ))}
               </select>
             ) : (
-              <div className="text-sm text-fg-muted">Loading models…</div>
+              <div className="text-sm text-fg-muted">{t('common.loadingModels')}</div>
             )}
           </div>
 
@@ -306,9 +406,9 @@ export function SettingsPage() {
           <div className="bg-bg-primary border border-border-default rounded-lg">
             <div className="px-4 py-3 border-b border-border-default flex items-center justify-between">
               <div>
-                <h3 className="font-medium text-fg-primary">Model Providers</h3>
+                <h3 className="font-medium text-fg-primary">{t('settings.modelProviders')}</h3>
                 <p className="text-xs text-fg-muted mt-0.5">
-                  Manage available models for chat sessions
+                  {t('settings.modelProvidersDesc')}
                 </p>
               </div>
               <button
@@ -316,7 +416,7 @@ export function SettingsPage() {
                 disabled={syncing || loading}
                 className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded transition-colors disabled:cursor-not-allowed"
               >
-                {syncing ? 'Syncing...' : 'Sync All'}
+                {syncing ? t('settings.syncing') : t('settings.syncAll')}
               </button>
             </div>
 
@@ -332,14 +432,14 @@ export function SettingsPage() {
                     onClick={loadProviders}
                     className="mt-2 px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600"
                   >
-                    Retry
+                    {t('common.retry')}
                   </button>
                 </div>
               </div>
             ) : providers.length === 0 ? (
               <div className="px-4 py-8 text-center text-fg-muted">
-                <p className="text-sm">No providers configured</p>
-                <p className="text-xs mt-1">Click "Sync All" to fetch providers from Hermes</p>
+                <p className="text-sm">{t('common.noProvidersConfigured')}</p>
+                <p className="text-xs mt-1">{t('settings.noProvidersHint')}</p>
               </div>
             ) : (
               <div className="divide-y divide-border-default">
@@ -356,7 +456,7 @@ export function SettingsPage() {
                           </span>
                           {provider.sync_status === 'ok' ? (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                              Synced
+                              {t('settings.synced')}
                             </span>
                           ) : (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
@@ -365,9 +465,9 @@ export function SettingsPage() {
                           )}
                         </div>
                         <div className="flex items-center gap-3 mt-1 text-xs text-fg-muted">
-                          <span>{provider.enabledCount}/{provider.totalCount} models enabled</span>
+                          <span>{t('settings.modelsEnabled', { enabled: provider.enabledCount, total: provider.totalCount })}</span>
                           <span>•</span>
-                          <span>Synced {formatTimestamp(provider.last_synced_at)}</span>
+                          <span>{t('settings.syncedAt', { timestamp: formatTimestamp(provider.last_synced_at) })}</span>
                         </div>
                       </div>
                         <svg
@@ -386,7 +486,7 @@ export function SettingsPage() {
                       <div className="px-4 pb-3 space-y-1">
                         {provider.models.length === 0 ? (
                           <p className="text-sm text-fg-muted py-2">
-                            No models available
+                            {t('settings.noModelsInProvider')}
                           </p>
                         ) : (
                           provider.models.map((model) => (
@@ -416,9 +516,9 @@ export function SettingsPage() {
 
           {/* Hermes Commands Section */}
           <div className="bg-bg-primary border border-border-default rounded-lg p-4">
-            <h3 className="font-medium text-sm text-fg-primary mb-3">Hermes Commands</h3>
+            <h3 className="font-medium text-sm text-fg-primary mb-3">{t('settings.hermesCommands')}</h3>
             <p className="text-xs text-fg-muted mb-3">
-              Execute Hermes system commands
+              {t('settings.hermesCommandsDesc')}
             </p>
             <div className="space-y-2">
               <button
@@ -431,7 +531,7 @@ export function SettingsPage() {
                 ) : (
                   <Download className="w-4 h-4" />
                 )}
-                <span>{executing === 'update' ? 'Updating...' : 'Hermes Update'}</span>
+                <span>{executing === 'update' ? t('settings.updating') : t('settings.hermesUpdate')}</span>
               </button>
               <button
                 onClick={() => setPendingCommand('doctor')}
@@ -443,25 +543,93 @@ export function SettingsPage() {
                 ) : (
                   <Wrench className="w-4 h-4" />
                 )}
-                <span>{executing === 'doctor' ? 'Running...' : 'Hermes Doctor Fix'}</span>
+                <span>{executing === 'doctor' ? t('settings.running') : t('settings.hermesDoctorFix')}</span>
               </button>
             </div>
           </div>
 
           {/* Connection Status Section */}
           <div className="bg-bg-primary border border-border-default rounded-lg p-4">
-            <h3 className="font-medium text-sm text-fg-primary mb-2">Connection status</h3>
+            <h3 className="font-medium text-sm text-fg-primary mb-2">{t('settings.connectionStatus')}</h3>
             <p className="text-sm text-fg-muted">
-              Hermes Agent: <span className="text-green-500">Connected</span>
+              {t('settings.hermesAgent')} <span className="text-green-500">{t('dashboard.connected')}</span>
             </p>
           </div>
 
           {/* About Section */}
           <div className="bg-bg-primary border border-border-default rounded-lg p-4">
-            <h3 className="font-medium text-sm text-fg-primary mb-2">About</h3>
+            <h3 className="font-medium text-sm text-fg-primary mb-2">{t('settings.about')}</h3>
             <p className="text-sm text-fg-muted">
-              1230.UI v0.1.0 (Phase 2)
+              {t('common.version')}
             </p>
+            <div className="mt-3 pt-3 border-t border-border-default">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <a
+                    href="https://github.com/Pingvin1230/1230-ui"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="View source on GitHub"
+                    className="text-fg-secondary hover:text-fg-primary transition-colors"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="w-5 h-5 fill-current"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.4 3-.405 1.02.005 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+                    </svg>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={handleLike}
+                    disabled={likeState === 'sending' || likeState === 'cooldown'}
+                    aria-label={
+                      likeState === 'sent'
+                        ? t('settings.liked')
+                        : likeState === 'cooldown'
+                          ? t('settings.likeAvailable', { time: formatCooldown(cooldownRemaining) })
+                          : t('settings.sendLike')
+                    }
+                    title={
+                      likeState === 'cooldown'
+                        ? t('settings.tryAgainIn', { time: formatCooldown(cooldownRemaining) })
+                        : undefined
+                    }
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${
+                      likeState === 'sent'
+                        ? 'border-pink-300 bg-pink-50 text-pink-600 dark:border-pink-800/50 dark:bg-pink-900/20 dark:text-pink-400'
+                        : likeState === 'cooldown'
+                          ? 'border-border-default bg-bg-secondary text-fg-muted cursor-not-allowed'
+                          : 'border-border-default bg-bg-primary text-fg-secondary hover:bg-bg-secondary hover:text-pink-500'
+                    }`}
+                  >
+                    {likeState === 'sending' ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : likeState === 'sent' ? (
+                      <CheckCircle className="w-3.5 h-3.5" />
+                    ) : likeState === 'cooldown' ? (
+                      <Heart className="w-3.5 h-3.5" />
+                    ) : (
+                      <Heart className="w-3.5 h-3.5" />
+                    )}
+                    {likeState === 'sent'
+                      ? t('settings.liked')
+                      : likeState === 'sending'
+                        ? t('settings.sending')
+                        : likeState === 'cooldown'
+                          ? formatCooldown(cooldownRemaining)
+                          : t('settings.like')}
+                  </button>
+                </div>
+                <p className="text-xs text-fg-muted">
+                  {t('common.copyright')}
+                </p>
+              </div>
+              {likeError && (
+                <p className="mt-2 text-xs text-red-500">{likeError}</p>
+              )}
+            </div>
           </div>
 
         </div>
@@ -480,10 +648,10 @@ export function SettingsPage() {
             </div>
             <div>
               <h3 className="text-lg font-semibold text-fg-primary">
-                {pendingCommand === 'update' ? 'Hermes Update' : 'Hermes Doctor Fix'}
+                {pendingCommand === 'update' ? t('settings.hermesUpdate') : t('settings.hermesDoctorFix')}
               </h3>
               <p className="text-sm text-fg-secondary mt-1">
-                This will restart the Hermes server. Active sessions will be interrupted.
+                {t('settings.confirmCommandDesc')}
               </p>
             </div>
           </div>
@@ -493,7 +661,7 @@ export function SettingsPage() {
               onClick={() => setPendingCommand(null)}
               className="px-4 py-2 text-sm text-fg-secondary hover:bg-bg-secondary rounded-lg transition-colors"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="button"
@@ -504,7 +672,7 @@ export function SettingsPage() {
               }}
               className="px-4 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors"
             >
-              Confirm
+              {t('common.confirm')}
             </button>
           </div>
         </div>
@@ -517,8 +685,8 @@ export function SettingsPage() {
         size="xl"
         title={
           execResult
-            ? `${execResult.command === 'update' ? 'Hermes Update' : 'Hermes Doctor Fix'}${
-                execResult.success ? '' : ' (failed)'
+            ? `${execResult.command === 'update' ? t('settings.hermesUpdate') : t('settings.hermesDoctorFix')}${
+                execResult.success ? '' : t('settings.failedSuffix')
               }`
             : ''
         }
@@ -533,7 +701,7 @@ export function SettingsPage() {
                   <XCircle className="w-5 h-5 text-red-600" />
                 )}
                 <span className="text-sm text-fg-secondary">
-                  {execResult.success ? 'Completed successfully' : 'Command failed'}
+                  {execResult.success ? t('settings.completedSuccessfully') : t('settings.commandFailed')}
                 </span>
               </div>
               <pre className="text-sm text-fg-primary whitespace-pre-wrap font-mono bg-bg-secondary p-3 rounded">
@@ -544,9 +712,9 @@ export function SettingsPage() {
               <button
                 type="button"
                 onClick={() => setExecResult(null)}
-                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-              >
-                Close
+              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            >
+              {t('common.close')}
               </button>
             </div>
           </>

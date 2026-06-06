@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { RefreshCw } from 'lucide-react';
+import i18n from '../i18n';
 
 interface Props {
   children: ReactNode;
@@ -43,18 +44,18 @@ export class ErrorBoundary extends Component<Props, State> {
                 </svg>
               </div>
               <h2 className="text-lg font-semibold text-fg-primary">
-                Произошла ошибка
+                {i18n.t('errorBoundary.title')}
               </h2>
             </div>
 
             <p className="text-sm text-fg-secondary mb-4">
-              {this.state.error?.message || 'Неизвестная ошибка приложения'}
+              {this.state.error?.message || i18n.t('errorBoundary.unknownError')}
             </p>
 
             {this.state.errorInfo && (
               <details className="mb-4">
                 <summary className="text-xs text-fg-muted cursor-pointer hover:text-fg-secondary">
-                  Показать детали
+                  {i18n.t('errorBoundary.showDetails')}
                 </summary>
                 <pre className="mt-2 text-xs font-mono bg-bg-secondary p-3 rounded overflow-x-auto text-fg-secondary max-h-40">
                   {this.state.errorInfo.componentStack}
@@ -67,7 +68,7 @@ export class ErrorBoundary extends Component<Props, State> {
               className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
             >
               <RefreshCw className="w-4 h-4" />
-              Перезагрузить страницу
+              {i18n.t('errorBoundary.reloadPage')}
             </button>
           </div>
         </div>

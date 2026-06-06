@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import xss from 'xss';
 
 // Rate limiting — general API
@@ -26,6 +26,16 @@ export const execLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: { type: 'rate_limit', message: 'Too many system commands, please wait before trying again.' } },
+});
+
+// Rate limiting — like endpoint (per-IP, soft network cap; DB enforces strict cooldown)
+export const likeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
+  message: { error: { type: 'rate_limit', message: 'Too many like attempts, please try again later.' } },
 });
 
 // XSS sanitization for string fields
