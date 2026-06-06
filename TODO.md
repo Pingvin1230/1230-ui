@@ -1,7 +1,7 @@
 # 1230-UI — Tasks and Progress
 
-**Last updated:** 2026-06-05  
-**Version:** 0.3.0 (Alpha release)  
+**Last updated:** 2026-06-06  
+**Version:** 0.5.0 (i18n release)  
 **Goal:** Fully functional MVP that can be deployed on any server with Hermes Agent
 
 ---
@@ -122,6 +122,18 @@ Nice-to-have features that can be added in subsequent versions.
 - ✅ Empty state for chat (T3.1)
 - ✅ Empty illustrations (SVG for no sessions/messages/models) (T3.2)
 - ✅ Print styles (T3.3)
+
+### Internationalization (i18n) — v0.5.0 (2026-06-06)
+- ✅ **i18next infrastructure**: react-i18next + i18next-browser-languagedetector
+- ✅ **~175 UI strings extracted** to translation JSON files with namespace organization
+- ✅ **4 languages**: English (default), Русский, Español, Deutsch
+- ✅ **Proper pluralization**: en/es/de (`_one`/`_other`), ru (`_one`/`_few`/`_many`)
+- ✅ **Interpolation**: dynamic strings with `{{count}}`, `{{toolName}}`, etc.
+- ✅ **Language selector**: dropdown in Settings → General, instant switch without reload
+- ✅ **Browser language detection**: auto-detect with localStorage fallback
+- ✅ **15 files refactored**: all pages, components, and api.ts use `t()` / `i18n.t()`
+- ✅ **ErrorBoundary translated**: Russian hardcoded → i18n keys
+- ✅ **Backend unchanged**: API errors remain in English
 
 **UI fixes:**
 - ✅ Dashboard: Quick Chat elevated, textarea improved
@@ -537,69 +549,24 @@ These tasks make the product production-ready but don't block basic functionalit
 
 ---
 
-#### 20. Internationalization (i18n)
+#### ✅ 20. Internationalization (i18n)
 **Role:** Frontend  
-**Files:** `src/i18n/` (new), all pages and components  
-**Library:** `react-i18next` + `i18next`  
-**Estimated time:** 4-5 hours  
-**Description:** Add multi-language support to make the interface accessible to non-English speakers.
+**Files:** `src/i18n/`, all pages and components  
+**Library:** `react-i18next` + `i18next` + `i18next-browser-languagedetector`  
+**Status:** ✅ COMPLETED (2026-06-06, v0.5.0)
 
-**Tasks:**
+**Completed:**
+- ✅ Install dependencies
+- ✅ Create `src/i18n/index.ts` with language detection (browser + localStorage)
+- ✅ Import i18n in `main.tsx`
+- ✅ Create 4 translation files: `en`, `ru`, `es`, `de` (~175 strings each)
+- ✅ Replace hardcoded strings in 15 files (all pages, components, api.ts)
+- ✅ Pluralization: en/es/de (`_one`/`_other`), ru (`_one`/`_few`/`_many`)
+- ✅ Interpolation: `{{count}}`, `{{toolName}}`, `{{query}}`, etc.
+- ✅ Language selector dropdown in Settings → General (4 languages)
+- ✅ Instant language switch without page reload
+- ✅ `npm run build` — 0 errors, `npm run lint` — 0 errors
 
-**Setup (30 min):**
-- [ ] Install dependencies: `npm install react-i18next i18next i18next-browser-languagedetector`
-- [ ] Create `src/i18n/index.ts` — initialize i18next with language detection
-- [ ] Import i18n in `main.tsx`
-- [ ] Configure language detection (browser language + localStorage fallback)
-
-**Extract strings (2-3 hours):**
-- [ ] Create `src/i18n/en.json` — English translations (base language)
-- [ ] Replace hardcoded strings in `ChatPage.tsx` (~25 strings)
-- [ ] Replace hardcoded strings in `SessionsPage.tsx` (~15 strings)
-- [ ] Replace hardcoded strings in `DashboardPage.tsx` (~10 strings)
-- [ ] Replace hardcoded strings in `SettingsPage.tsx` (~20 strings)
-- [ ] Replace hardcoded strings in `NewSessionPage.tsx` (~8 strings)
-- [ ] Replace hardcoded strings in components: `Layout.tsx`, `MobileNav.tsx`, `Modal.tsx`, `Toast.tsx`, `ErrorMessage.tsx`, `ToolCall.tsx` (~15 strings)
-- [ ] Handle dynamic strings with interpolation: `{{count}} sessions`, `{{toolName}}...`
-- [ ] Handle pluralization: "1 session" vs "2 sessions"
-
-**Add languages (1 hour):**
-- [ ] Create `src/i18n/ru.json` — Russian translations
-- [ ] Test all pages with Russian language
-- [ ] Verify pluralization works correctly
-
-**UI controls (30 min):**
-- [ ] Add language selector in Settings page (dropdown: English, Russian)
-- [ ] Save language preference to localStorage
-- [ ] Apply language change without page reload
-
-**Testing (30 min):**
-- [ ] Test language switching
-- [ ] Test browser language detection
-- [ ] Test pluralization edge cases (0, 1, 2, 5, 21)
-- [ ] Test dynamic strings (error messages, tool names)
-
-**Example structure:**
-```
-src/i18n/
-├── index.ts       ← i18next initialization
-├── en.json        ← English (base)
-└── ru.json        ← Russian
-```
-
-**Example usage:**
-```tsx
-import { useTranslation } from 'react-i18next';
-
-function ChatPage() {
-  const { t } = useTranslation();
-  return <button>{t('chat.send')}</button>;
-}
-```
-
-**Priority:** MEDIUM (for v1.1)  
-**Complexity:** Medium (4-5 hours)  
-**Dependencies:** None (can be done anytime)
 
 ---
 
@@ -717,7 +684,7 @@ function ChatPage() {
 **Enhancements (P2):**
 - #12 E2E tests
 - #13-18 UX improvements
-- #20-23 Mobile adaptation, PWA, a11y, i18n
+- #20-23 Mobile adaptation, PWA, a11y, ~~i18n~~ ✅
 
 ### Fullstack / Joint
 - #0 Smart titles (backend + frontend integration)
@@ -735,7 +702,7 @@ function ChatPage() {
 ### Critical for MVP (check)
 1. **✅ Session deletion** — task #0.5 (full CRUD: delete, rename, pin, archive, bulk)
 2. **✅ Agent work visualization** — task #0.7 (real-time tool calls)
-3. **✅ Internationalization** — task #0.8 (Russian → English)
+3. **✅ Internationalization** — task #20 (4 languages: en, ru, es, de)
 4. **⚠️ Smart session titles (LLM)** — task #0 (moved to P2, manual editing done)
 5. **⚠️ Provider health-check** — currently if provider unavailable, error only when sending message
    - Possibly add endpoint `GET /api/models/health` to check provider availability
