@@ -14,6 +14,7 @@ Modern web interface for managing sessions and interacting with [Hermes Agent](h
 - **Keyboard Shortcuts** — Ctrl+K (search), Ctrl+N (new session), Ctrl+Enter (send)
 - **Browser Notifications** — alerts for new messages
 - **Dark/Light Themes** — with saved preference
+- **Internationalization** — 4 languages (English, Русский, Español, Deutsch) with auto-detection
 - **Responsive Design** — mobile-friendly with bottom navigation
 - **Security** — rate limiting, XSS protection, CORS, security headers
 

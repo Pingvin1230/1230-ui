@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-06-06
+
+### Features
+- **Internationalization (i18n)** — full multi-language support with 4 languages: English (default), Русский, Español, Deutsch
+- **Language selector** — dropdown in Settings → General for instant language switching without page reload
+- **Browser language detection** — auto-detects user's browser language with localStorage fallback
+- **Pluralization support** — proper rules for each language: en/es/de (`_one`/`_other`), ru (`_one`/`_few`/`_many`)
+- **~175 UI strings extracted** — organized by namespace (common, nav, chat, sessions, dashboard, settings, errors, api)
+- **Dynamic string interpolation** — `{{count}}`, `{{toolName}}`, `{{query}}`, and other placeholders
+
+### Dependencies
+- **`i18next`** — core i18n framework
+- **`react-i18next`** — React bindings for i18next
+- **`i18next-browser-languagedetector`** — automatic language detection
+
+### Refactoring
+- **15 files updated** — all pages, components, and api.ts now use `t()` / `i18n.t()` instead of hardcoded strings
+- **ErrorBoundary translated** — previously hardcoded Russian text now uses i18n keys
+- **Backend unchanged** — API error messages remain in English
+
 ## [0.3.0] - 2026-06-05
 
 ### Features
