@@ -2,27 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
-import { Activity, MessageSquare, Send, Server, Cpu, CheckCircle, XCircle, ChevronRight } from 'lucide-react';
+import { MessageSquare, Send, ChevronRight } from 'lucide-react';
 import type { Session } from '../types/api';
 import { formatTimeAgo } from '../lib/time';
-
-interface SystemStatus {
-  hermes: {
-    status: string;
-    version: string;
-    updateAvailable: number | null;
-    latestVersion: string | null;
-  };
-  providers: Array<{
-    name: string;
-    displayName: string;
-    syncStatus: string;
-    lastSyncedAt: string;
-  }>;
-  stats: {
-    totalSessions: number;
-  };
-}
 
 interface ModelOption {
   id: string;
@@ -34,7 +16,6 @@ export function DashboardPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [status, setStatus] = useState<SystemStatus | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,12 +31,10 @@ export function DashboardPage() {
   async function loadData() {
     try {
       setLoading(true);
-      const [statusData, sessionsData, modelsData] = await Promise.all([
-        api.getSystemStatus(),
+      const [sessionsData, modelsData] = await Promise.all([
         api.getSessions(3, 0),
         api.getModels()
       ]);
-      setStatus(statusData);
       setSessions(sessionsData.sessions);
 
       const allModels: ModelOption[] = [];
@@ -111,7 +90,7 @@ export function DashboardPage() {
         <h1 className="text-2xl font-semibold text-fg-primary">{t('dashboard.welcome')}</h1>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {[1, 2, 3].map((i) => (
+          {[1, 2].map((i) => (
             <div key={i} className="bg-bg-primary border border-border-default rounded-lg p-6 animate-pulse">
               <div className="h-6 bg-bg-muted rounded w-1/3 mb-4" />
               <div className="space-y-3">
@@ -195,84 +174,8 @@ export function DashboardPage() {
           </div>
         </div>
 
-        {/* System Status */}
-        <div className="bg-bg-primary border border-border-default rounded-lg p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Activity className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-fg-primary">{t('dashboard.systemStatus')}</h2>
-          </div>
-
-          <div className="space-y-4">
-            {/* Hermes Connection */}
-            <div className="flex items-start gap-3">
-              <Server className="w-5 h-5 text-gray-400 mt-0.5" />
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-fg-primary">Hermes API</span>
-                  {status?.hermes.status === 'connected' ? (
-                    <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                      <CheckCircle className="w-4 h-4" />
-                      <span className="text-xs font-medium">{t('dashboard.connected')}</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1 text-red-600 dark:text-red-400">
-                      <XCircle className="w-4 h-4" />
-                      <span className="text-xs font-medium">{t('dashboard.disconnected')}</span>
-                    </div>
-                  )}
-                </div>
-                <p className="text-xs text-fg-muted mt-1">
-                  {t('dashboard.hermesVersion')} {status?.hermes.version}
-                </p>
-                {status?.hermes.latestVersion && (
-                  <p className="text-xs text-fg-muted mt-0.5">
-                    {t('dashboard.latestVersion')} {status.hermes.latestVersion}
-                  </p>
-                )}
-                {status?.hermes.updateAvailable !== null && status?.hermes.updateAvailable !== undefined && status?.hermes.updateAvailable > 0 && (
-                  <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-                    {t('dashboard.updateAvailable', { count: status?.hermes.updateAvailable })}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <Cpu className="w-5 h-5 text-gray-400 mt-0.5" />
-              <div className="flex-1">
-                <span className="text-sm font-medium text-fg-primary">Providers</span>
-                {status?.providers && status.providers.length > 0 ? (
-                  <div className="mt-2 space-y-2">
-                    {status.providers.map((provider) => (
-                      <div key={provider.name} className="flex items-center justify-between text-xs">
-                        <span className="text-fg-secondary">{provider.displayName || provider.name}</span>
-                        <span className={`px-2 py-0.5 rounded-full ${
-                          provider.syncStatus === 'ok'
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                            : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                        }`}>
-                          {provider.syncStatus}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-fg-muted mt-1">{t('common.noProvidersConfigured')}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-border-default">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-fg-secondary">{t('dashboard.totalSessions')}</span>
-                <span className="font-semibold text-fg-primary">{status?.stats.totalSessions}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Recent Sessions */}
-        <div className="bg-bg-primary border border-border-default rounded-lg p-6">
+        <div className="lg:col-span-2 bg-bg-primary border border-border-default rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-5 h-5 text-blue-600" />

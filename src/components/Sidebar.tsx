@@ -1,6 +1,8 @@
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Home, MessageSquare, Plus, Settings } from 'lucide-react';
+import { Home, MessageSquare, Plus, Settings, Sun, Moon, Bell, BellOff } from 'lucide-react';
+import { useThemeStore } from '../store/themeStore';
+import { useNotificationsStore } from '../store/notificationsStore';
 
 interface SidebarProps {
   isSidebarOpen: boolean;
@@ -8,6 +10,19 @@ interface SidebarProps {
 
 export function Sidebar({ isSidebarOpen }: SidebarProps) {
   const { t } = useTranslation();
+  const { isDarkMode, toggleDarkMode } = useThemeStore();
+  const { enabled: notificationsEnabled, toggle: toggleNotifications } = useNotificationsStore();
+
+  const handleNotificationsToggle = async () => {
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission === 'default') {
+      const result = await Notification.requestPermission();
+      if (result === 'granted') toggleNotifications();
+    } else if (Notification.permission === 'granted') {
+      toggleNotifications();
+    }
+  };
+
   if (!isSidebarOpen) return null;
 
   return (
@@ -72,6 +87,31 @@ export function Sidebar({ isSidebarOpen }: SidebarProps) {
       </nav>
 
       <div className="flex-shrink-0 px-3 py-3 border-t border-border-default flex flex-col items-center">
+        <div className="flex items-center justify-center gap-1 w-full pb-2 mb-2 border-b border-border-default">
+          <button
+            type="button"
+            onClick={handleNotificationsToggle}
+            className={`p-1.5 rounded transition-colors ${
+              notificationsEnabled
+                ? 'text-blue-600 dark:text-blue-400 hover:bg-bg-secondary'
+                : 'text-fg-muted hover:bg-bg-secondary'
+            }`}
+            aria-label={notificationsEnabled ? t('nav.disableNotifications') : t('nav.enableNotifications')}
+            title={notificationsEnabled ? t('nav.notificationsOn') : t('nav.notificationsOff')}
+          >
+            {notificationsEnabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleDarkMode}
+            className="p-1.5 rounded text-fg-muted hover:bg-bg-secondary transition-colors"
+            aria-label={t('nav.toggleDarkMode')}
+            title={t('nav.toggleDarkMode')}
+          >
+            {isDarkMode ? <Sun className="w-4 h-4 text-yellow-500" /> : <Moon className="w-4 h-4" />}
+          </button>
+        </div>
         <a
           href="https://github.com/Pingvin1230/1230-ui"
           target="_blank"

@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import i18n from '../i18n';
 import { api } from '../lib/api';
-import { Download, Wrench, Loader2, CheckCircle, XCircle, AlertTriangle, Sun, Moon, Bell, BellOff, Calendar, MessageCircle, Heart } from 'lucide-react';
+import { Download, Wrench, Loader2, CheckCircle, XCircle, AlertTriangle, Sun, Moon, Bell, BellOff, Calendar, MessageCircle, Heart, ArrowRight } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { useThemeStore } from '../store/themeStore';
 import { useNotificationsStore } from '../store/notificationsStore';
 import { useSessionsSortStore } from '../store/sessionsSortStore';
+import { useHermesStatusStore } from '../store/hermesStatusStore';
 
 const LIKE_STORAGE_KEY = 'hermes-1230-last-like';
 const LIKE_DEFAULT_COOLDOWN_SEC = 3600;
@@ -50,6 +52,10 @@ export function SettingsPage() {
   const { enabled: notificationsEnabled, setEnabled: setNotificationsEnabled } = useNotificationsStore();
   const sortMode = useSessionsSortStore((s) => s.sortMode);
   const setSortMode = useSessionsSortStore((s) => s.setSortMode);
+  const hermesStatus = useHermesStatusStore((s) => s.status);
+  const hermesVersion = useHermesStatusStore((s) => s.version);
+  const hermesLatestVersion = useHermesStatusStore((s) => s.latestVersion);
+  const hermesUpdateAvailable = useHermesStatusStore((s) => s.updateAvailable);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -411,13 +417,22 @@ export function SettingsPage() {
                   {t('settings.modelProvidersDesc')}
                 </p>
               </div>
-              <button
-                onClick={handleSync}
-                disabled={syncing || loading}
-                className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded transition-colors disabled:cursor-not-allowed"
-              >
-                {syncing ? t('settings.syncing') : t('settings.syncAll')}
-              </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Link
+                  to="/settings/providers"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-border-default bg-bg-primary hover:bg-bg-secondary text-fg-secondary rounded-lg transition-colors"
+                >
+                  {t('providers.manageKeys')}
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+                <button
+                  onClick={handleSync}
+                  disabled={syncing || loading}
+                  className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded transition-colors disabled:cursor-not-allowed"
+                >
+                  {syncing ? t('settings.syncing') : t('settings.syncAll')}
+                </button>
+              </div>
             </div>
 
             {loading ? (
@@ -548,12 +563,38 @@ export function SettingsPage() {
             </div>
           </div>
 
-          {/* Connection Status Section */}
+          {/* Hermes Agent Status Section */}
           <div className="bg-bg-primary border border-border-default rounded-lg p-4">
-            <h3 className="font-medium text-sm text-fg-primary mb-2">{t('settings.connectionStatus')}</h3>
-            <p className="text-sm text-fg-muted">
-              {t('settings.hermesAgent')} <span className="text-green-500">{t('dashboard.connected')}</span>
-            </p>
+            <h3 className="font-medium text-sm text-fg-primary mb-3">{t('settings.connectionStatus')}</h3>
+            {hermesStatus === 'unknown' ? (
+              <p className="text-sm text-fg-muted">{t('settings.loadingStatus')}</p>
+            ) : (
+              <div className="space-y-2 text-sm">
+                <p className="text-fg-muted">
+                  {t('settings.hermesAgent')}{' '}
+                  {hermesStatus === 'connected' ? (
+                    <span className="text-green-500">{t('dashboard.connected')}</span>
+                  ) : (
+                    <span className="text-red-500">{t('dashboard.disconnected')}</span>
+                  )}
+                </p>
+                {hermesVersion && (
+                  <p className="text-fg-muted">
+                    {t('settings.hermesAgentVersion', { version: hermesVersion })}
+                  </p>
+                )}
+                {hermesLatestVersion && (
+                  <p className="text-fg-muted">
+                    {t('settings.latestVersion', { version: hermesLatestVersion })}
+                  </p>
+                )}
+                {typeof hermesUpdateAvailable === 'number' && hermesUpdateAvailable > 0 && (
+                  <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                    {t('settings.updateAvailable', { count: hermesUpdateAvailable })}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* About Section */}

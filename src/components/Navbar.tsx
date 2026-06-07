@@ -1,10 +1,10 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import { useRef, useEffect, useState, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, LogOut, Search, Sun, Moon, Bell, BellOff } from 'lucide-react';
+import { Settings, LogOut, Search } from 'lucide-react';
 import { useThemeStore } from '../store/themeStore';
 import { useSearchStore } from '../store/searchStore';
-import { useNotificationsStore } from '../store/notificationsStore';
+import { HermesStatusIndicator } from './HermesStatusIndicator';
 
 interface NavbarProps {
   isSidebarOpen: boolean;
@@ -13,8 +13,7 @@ interface NavbarProps {
 
 export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
   const { t } = useTranslation();
-  const { isDarkMode, toggleDarkMode } = useThemeStore();
-  const { enabled: notificationsEnabled, toggle: toggleNotifications } = useNotificationsStore();
+  const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [, setSearchParams] = useSearchParams();
@@ -60,16 +59,6 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
     }, 250);
   };
 
-  const handleNotificationsToggle = async () => {
-    if (typeof Notification === 'undefined') return;
-    if (Notification.permission === 'default') {
-      const result = await Notification.requestPermission();
-      if (result === 'granted') toggleNotifications();
-    } else if (Notification.permission === 'granted') {
-      toggleNotifications();
-    }
-  };
-
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-bg-primary text-fg-primary shadow-md">
       <div className="h-16 flex items-center justify-between">
@@ -108,29 +97,7 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
         </div>
 
         <div className="flex items-center justify-end gap-2 px-4 sm:px-6 lg:px-8 flex-shrink-0">
-          <button
-            type="button"
-            onClick={handleNotificationsToggle}
-            className={`p-1.5 rounded transition-colors ${
-              notificationsEnabled
-                ? 'text-blue-600 dark:text-blue-400 hover:bg-bg-secondary'
-                : 'text-fg-muted hover:bg-bg-secondary'
-            }`}
-            aria-label={notificationsEnabled ? t('nav.disableNotifications') : t('nav.enableNotifications')}
-            title={notificationsEnabled ? t('nav.notificationsOn') : t('nav.notificationsOff')}
-          >
-            {notificationsEnabled ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
-          </button>
-
-          <button
-            type="button"
-            onClick={toggleDarkMode}
-            className="p-1.5 rounded text-fg-muted hover:bg-bg-secondary transition-colors"
-            aria-label={t('nav.toggleDarkMode')}
-            title={t('nav.toggleDarkMode')}
-          >
-            {isDarkMode ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5" />}
-          </button>
+          <HermesStatusIndicator />
 
           <div className="relative" ref={dropdownRef}>
             <button

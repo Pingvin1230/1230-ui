@@ -6,12 +6,14 @@ import { MobileNav } from './MobileNav';
 import { useThemeStore } from '../store/themeStore';
 import { useSidebarStore } from '../store/sidebarStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useHermesStatusPoll } from '../hooks/useHermesStatusPoll';
 
 export function Layout() {
   const { isDarkMode } = useThemeStore();
   const isSidebarOpen = useSidebarStore((s) => s.isOpen);
   const setIsSidebarOpen = useSidebarStore((s) => s.setOpen);
   const navigate = useNavigate();
+  useHermesStatusPoll();
 
   useEffect(() => {
     if (isDarkMode) {
