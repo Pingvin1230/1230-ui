@@ -10,6 +10,7 @@ const SessionsPage = lazy(() => import('./pages/SessionsPage').then((m) => ({ de
 const ChatPage = lazy(() => import('./pages/ChatPage').then((m) => ({ default: m.ChatPage })));
 const NewSessionPage = lazy(() => import('./pages/NewSessionPage').then((m) => ({ default: m.NewSessionPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const ProvidersPage = lazy(() => import('./pages/ProvidersPage').then((m) => ({ default: m.ProvidersPage })));
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
                 <Route path="chat/:id" element={<ChatPage />} />
                 <Route path="new" element={<NewSessionPage />} />
                 <Route path="settings" element={<SettingsPage />} />
+                <Route path="settings/providers" element={<ProvidersPage />} />
               </Route>
             </Routes>
           </Suspense>

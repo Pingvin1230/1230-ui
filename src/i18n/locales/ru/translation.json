@@ -50,7 +50,11 @@
     "userMenu": "Меню пользователя",
     "logout": "Выйти",
     "collapseSidebar": "Свернуть боковую панель",
-    "expandSidebar": "Развернуть боковую панель"
+    "expandSidebar": "Развернуть боковую панель",
+    "hermesApiStatus": "Статус Hermes API",
+    "hermesApiConnected": "Hermes API: подключено",
+    "hermesApiDisconnected": "Hermes API: отключено",
+    "hermesApiChecking": "Hermes API: проверка…"
   },
 
   "chat": {
@@ -120,14 +124,8 @@
   "dashboard": {
     "welcome": "Добро пожаловать",
     "startNewConversation": "Начать новый разговор",
-    "systemStatus": "Системный статус",
     "connected": "Подключено",
     "disconnected": "Отключено",
-    "hermesVersion": "Версия Hermes:",
-    "latestVersion": "Последняя:",
-    "updateAvailable_one": "Доступно обновление: {{count}} коммит позади",
-    "updateAvailable_few": "Доступно обновление: {{count}} коммита позади",
-    "updateAvailable_many": "Доступно обновление: {{count}} коммитов позади",
     "totalSessions": "Всего сессий",
     "recentSessions": "Последние сессии",
     "failedToLoadDashboard": "Не удалось загрузить данные панели"
@@ -178,8 +176,14 @@
     "hermesUpdate": "Обновить Hermes",
     "running": "Выполняется...",
     "hermesDoctorFix": "Диагностика Hermes",
-    "connectionStatus": "Статус подключения",
+    "connectionStatus": "Статус Hermes Agent",
     "hermesAgent": "Hermes Agent:",
+    "hermesAgentVersion": "Версия Hermes Agent: {{version}}",
+    "latestVersion": "Последняя: {{version}}",
+    "updateAvailable_one": "Доступно обновление: {{count}} коммит позади",
+    "updateAvailable_few": "Доступно обновление: {{count}} коммита позади",
+    "updateAvailable_many": "Доступно обновление: {{count}} коммитов позади",
+    "loadingStatus": "Загрузка…",
     "about": "О приложении",
     "sendLike": "Отправить лайк",
     "liked": "Лайк отправлен",
@@ -257,7 +261,10 @@
     "failedToToggleArchive": "Не удалось переключить архивирование",
     "failedToBulkDelete": "Не удалось массово удалить сессии",
     "likeCooldown": "Лайк можно отправить только раз в час",
-    "failedToSendLike": "Не удалось отправить лайк"
+    "failedToSendLike": "Не удалось отправить лайк",
+    "failedToFetchAvailableProviders": "Не удалось загрузить провайдеров",
+    "failedToSetProviderKey": "Не удалось сохранить API-ключ",
+    "failedToRemoveProviderKey": "Не удалось удалить API-ключ"
   },
 
   "errorBoundary": {
@@ -277,5 +284,30 @@
 
   "toast": {
     "dismiss": "Закрыть уведомление"
+  },
+
+  "providers": {
+    "title": "Ключи провайдеров",
+    "description": "Добавление и удаление API-ключей. Ключи хранятся в ~/.hermes/.env (права 600) и не сохраняются в 1230-UI.",
+    "backToSettings": "Назад к настройкам",
+    "noProviders": "Нет доступных провайдеров",
+    "addKey": "Добавить ключ",
+    "keyConfigured": "Ключ настроен",
+    "envVarLabel": "Переменная окружения",
+    "apiKeyLabel": "API-ключ",
+    "apiKeyPlaceholder": "Вставьте API-ключ",
+    "storedInEnv": "Сохраняется в ~/.hermes/.env. В 1230-UI не хранится.",
+    "saving": "Сохранение...",
+    "saveKey": "Сохранить ключ",
+    "removeKey": "Удалить ключ",
+    "confirmRemoveTitle": "Удалить API-ключ?",
+    "confirmRemoveDesc": "Строка {{envVar}} будет удалена из ~/.hermes/.env. Модели {{name}} перестанут работать, пока вы не добавите новый ключ и не перезапустите Hermes.",
+    "showKey": "Показать ключ",
+    "hideKey": "Скрыть ключ",
+    "errorKeyEmpty": "Введите API-ключ",
+    "errorAddFailed": "Не удалось сохранить ключ",
+    "errorRemoveFailed": "Не удалось удалить ключ",
+    "errorLoadFailed": "Не удалось загрузить провайдеров",
+    "manageKeys": "Управление ключами провайдеров"
   }
 }

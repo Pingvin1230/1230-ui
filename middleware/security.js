@@ -28,6 +28,15 @@ export const execLimiter = rateLimit({
   message: { error: { type: 'rate_limit', message: 'Too many system commands, please wait before trying again.' } },
 });
 
+// Rate limiting — provider key writes (writes to ~/.hermes/.env on disk)
+export const providerLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: { type: 'rate_limit', message: 'Too many provider operations, please slow down.' } },
+});
+
 // Rate limiting — like endpoint (per-IP, soft network cap; DB enforces strict cooldown)
 export const likeLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,

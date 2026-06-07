@@ -48,7 +48,11 @@
     "userMenu": "Menú de usuario",
     "logout": "Cerrar sesión",
     "collapseSidebar": "Colapsar barra lateral",
-    "expandSidebar": "Expandir barra lateral"
+    "expandSidebar": "Expandir barra lateral",
+    "hermesApiStatus": "Estado de Hermes API",
+    "hermesApiConnected": "Hermes API: Conectado",
+    "hermesApiDisconnected": "Hermes API: Desconectado",
+    "hermesApiChecking": "Hermes API: Comprobando…"
   },
   "chat": {
     "sessionNotFound": "Sesión no encontrada",
@@ -115,14 +119,8 @@
   "dashboard": {
     "welcome": "Bienvenido",
     "startNewConversation": "Iniciar una nueva conversación",
-    "systemStatus": "Estado del sistema",
     "connected": "Conectado",
     "disconnected": "Desconectado",
-    "hermesVersion": "Versión de Hermes:",
-    "latestVersion": "Última:",
-    "updateAvailable": "Actualización disponible: {{count}} commits atrasados",
-    "updateAvailable_one": "Actualización disponible: {{count}} commit atrasado",
-    "updateAvailable_other": "Actualización disponible: {{count}} commits atrasados",
     "totalSessions": "Total de sesiones",
     "recentSessions": "Sesiones recientes",
     "failedToLoadDashboard": "Error al cargar los datos del panel"
@@ -171,8 +169,14 @@
     "hermesUpdate": "Hermes Update",
     "running": "Ejecutando...",
     "hermesDoctorFix": "Hermes Doctor Fix",
-    "connectionStatus": "Estado de la conexión",
+    "connectionStatus": "Estado de Hermes Agent",
     "hermesAgent": "Hermes Agent:",
+    "hermesAgentVersion": "Versión de Hermes Agent: {{version}}",
+    "latestVersion": "Última: {{version}}",
+    "updateAvailable": "Actualización disponible: {{count}} commits atrasados",
+    "updateAvailable_one": "Actualización disponible: {{count}} commit atrasado",
+    "updateAvailable_other": "Actualización disponible: {{count}} commits atrasados",
+    "loadingStatus": "Cargando…",
     "about": "Acerca de",
     "sendLike": "Enviar un like",
     "liked": "Te gustó",
@@ -248,7 +252,10 @@
     "failedToToggleArchive": "Error al cambiar el estado de archivo",
     "failedToBulkDelete": "Error al eliminar sesiones en lote",
     "likeCooldown": "Solo puedes dar un like una vez por hora",
-    "failedToSendLike": "Error al enviar el like"
+    "failedToSendLike": "Error al enviar el like",
+    "failedToFetchAvailableProviders": "Error al obtener los proveedores",
+    "failedToSetProviderKey": "Error al guardar la clave de API",
+    "failedToRemoveProviderKey": "Error al eliminar la clave de API"
   },
   "errorBoundary": {
     "title": "Ocurrió un error",
@@ -264,5 +271,29 @@
   },
   "toast": {
     "dismiss": "Descartar notificación"
+  },
+  "providers": {
+    "title": "Claves de proveedores",
+    "description": "Añade o elimina claves de API. Se guardan en ~/.hermes/.env (modo 600) y nunca en 1230-UI.",
+    "backToSettings": "Volver a Ajustes",
+    "noProviders": "No hay proveedores disponibles",
+    "addKey": "Añadir clave",
+    "keyConfigured": "Clave configurada",
+    "envVarLabel": "Variable de entorno",
+    "apiKeyLabel": "Clave de API",
+    "apiKeyPlaceholder": "Pega tu clave de API",
+    "storedInEnv": "Se guarda en ~/.hermes/.env. No se guarda en 1230-UI.",
+    "saving": "Guardando...",
+    "saveKey": "Guardar clave",
+    "removeKey": "Eliminar clave",
+    "confirmRemoveTitle": "¿Eliminar la clave de API?",
+    "confirmRemoveDesc": "Esto eliminará la línea {{envVar}} de ~/.hermes/.env. Los modelos de {{name}} dejarán de funcionar hasta que añadas una nueva clave y reinicies Hermes.",
+    "showKey": "Mostrar clave",
+    "hideKey": "Ocultar clave",
+    "errorKeyEmpty": "Introduce una clave de API",
+    "errorAddFailed": "Error al guardar la clave",
+    "errorRemoveFailed": "Error al eliminar la clave",
+    "errorLoadFailed": "Error al cargar los proveedores",
+    "manageKeys": "Gestionar claves de proveedores"
   }
 }

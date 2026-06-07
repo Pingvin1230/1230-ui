@@ -48,7 +48,11 @@
     "userMenu": "Benutzermenü",
     "logout": "Abmelden",
     "collapseSidebar": "Seitenleiste einklappen",
-    "expandSidebar": "Seitenleiste ausklappen"
+    "expandSidebar": "Seitenleiste ausklappen",
+    "hermesApiStatus": "Hermes API-Status",
+    "hermesApiConnected": "Hermes API: Verbunden",
+    "hermesApiDisconnected": "Hermes API: Getrennt",
+    "hermesApiChecking": "Hermes API: Prüfe…"
   },
   "chat": {
     "sessionNotFound": "Sitzung nicht gefunden",
@@ -115,14 +119,8 @@
   "dashboard": {
     "welcome": "Willkommen",
     "startNewConversation": "Eine neue Unterhaltung beginnen",
-    "systemStatus": "Systemstatus",
     "connected": "Verbunden",
     "disconnected": "Getrennt",
-    "hermesVersion": "Hermes-Version:",
-    "latestVersion": "Neueste:",
-    "updateAvailable": "Update verfügbar: {{count}} Commit zurück",
-    "updateAvailable_one": "Update verfügbar: {{count}} Commit zurück",
-    "updateAvailable_other": "Update verfügbar: {{count}} Commits zurück",
     "totalSessions": "Gesamte Sitzungen",
     "recentSessions": "Letzte Sitzungen",
     "failedToLoadDashboard": "Dashboard-Daten konnten nicht geladen werden"
@@ -171,8 +169,14 @@
     "hermesUpdate": "Hermes Update",
     "running": "Läuft…",
     "hermesDoctorFix": "Hermes Doctor Fix",
-    "connectionStatus": "Verbindungsstatus",
+    "connectionStatus": "Hermes Agent-Status",
     "hermesAgent": "Hermes Agent:",
+    "hermesAgentVersion": "Hermes Agent-Version: {{version}}",
+    "latestVersion": "Neueste: {{version}}",
+    "updateAvailable": "Update verfügbar: {{count}} Commit zurück",
+    "updateAvailable_one": "Update verfügbar: {{count}} Commit zurück",
+    "updateAvailable_other": "Update verfügbar: {{count}} Commits zurück",
+    "loadingStatus": "Wird geladen…",
     "about": "Über",
     "sendLike": "Ein Like senden",
     "liked": "Bereits geliked",
@@ -248,7 +252,10 @@
     "failedToToggleArchive": "Archivierung konnte nicht umgeschaltet werden",
     "failedToBulkDelete": "Massenlöschung von Sitzungen fehlgeschlagen",
     "likeCooldown": "Sie können nur einmal pro Stunde liken",
-    "failedToSendLike": "Like konnte nicht gesendet werden"
+    "failedToSendLike": "Like konnte nicht gesendet werden",
+    "failedToFetchAvailableProviders": "Anbieter konnten nicht abgerufen werden",
+    "failedToSetProviderKey": "API-Schlüssel konnte nicht gespeichert werden",
+    "failedToRemoveProviderKey": "API-Schlüssel konnte nicht entfernt werden"
   },
   "errorBoundary": {
     "title": "Ein Fehler ist aufgetreten",
@@ -264,5 +271,29 @@
   },
   "toast": {
     "dismiss": "Benachrichtigung schließen"
+  },
+  "providers": {
+    "title": "Anbieter-Schlüssel",
+    "description": "API-Schlüssel hinzufügen oder entfernen. Gespeichert in ~/.hermes/.env (Modus 600), niemals in 1230-UI.",
+    "backToSettings": "Zurück zu Einstellungen",
+    "noProviders": "Keine Anbieter verfügbar",
+    "addKey": "Schlüssel hinzufügen",
+    "keyConfigured": "Schlüssel konfiguriert",
+    "envVarLabel": "Umgebungsvariable",
+    "apiKeyLabel": "API-Schlüssel",
+    "apiKeyPlaceholder": "API-Schlüssel einfügen",
+    "storedInEnv": "Gespeichert in ~/.hermes/.env. Nicht in 1230-UI.",
+    "saving": "Speichern...",
+    "saveKey": "Schlüssel speichern",
+    "removeKey": "Schlüssel entfernen",
+    "confirmRemoveTitle": "API-Schlüssel entfernen?",
+    "confirmRemoveDesc": "Die Zeile {{envVar}} wird aus ~/.hermes/.env gelöscht. Modelle von {{name}} funktionieren erst wieder, wenn Sie einen neuen Schlüssel hinzufügen und Hermes neu starten.",
+    "showKey": "Schlüssel anzeigen",
+    "hideKey": "Schlüssel verbergen",
+    "errorKeyEmpty": "Bitte API-Schlüssel eingeben",
+    "errorAddFailed": "Schlüssel konnte nicht gespeichert werden",
+    "errorRemoveFailed": "Schlüssel konnte nicht entfernt werden",
+    "errorLoadFailed": "Anbieter konnten nicht geladen werden",
+    "manageKeys": "Anbieter-Schlüssel verwalten"
   }
 }

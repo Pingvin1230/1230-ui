@@ -425,5 +425,52 @@ export const api = {
       throw new Error(data.error || i18n.t('api.failedToSendLike'));
     }
     return res.json();
-  }
+  },
+
+  // --- Provider key management ---
+
+  async getAvailableProviders(configured?: boolean): Promise<{
+    providers: Array<{
+      name: string;
+      display_name: string;
+      description: string;
+      signup_url: string;
+      auth_type: string;
+      env_vars: string[];
+      configured_env_var: string | null;
+      is_configured: boolean;
+      base_url: string;
+    }>;
+  }> {
+    const qs = configured === undefined ? '' : `?configured=${configured ? 1 : 0}`;
+    const res = await fetch(`${API_BASE}/api/providers/available${qs}`);
+    if (!res.ok) throw new Error(i18n.t('api.failedToFetchAvailableProviders'));
+    return res.json();
+  },
+
+  async setProviderKey(name: string, envVar: string, value: string): Promise<{
+    success: boolean;
+    provider: string;
+    env_var: string;
+    masked: string;
+  }> {
+    const res = await fetch(`${API_BASE}/api/providers/${encodeURIComponent(name)}/key`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ env_var: envVar, value }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || i18n.t('api.failedToSetProviderKey'));
+    return data;
+  },
+
+  async removeProviderKey(name: string, envVar: string): Promise<{ success: boolean; provider: string; env_var: string }> {
+    const res = await fetch(
+      `${API_BASE}/api/providers/${encodeURIComponent(name)}/key?env_var=${encodeURIComponent(envVar)}`,
+      { method: 'DELETE' }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || i18n.t('api.failedToRemoveProviderKey'));
+    return data;
+  },
 };

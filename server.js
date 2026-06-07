@@ -5,7 +5,7 @@ import Database from 'better-sqlite3';
 import helmet from 'helmet';
 import cors from 'cors';
 import config from './config.js';
-import { apiLimiter, chatLimiter, execLimiter, likeLimiter, sanitizeMiddleware } from './middleware/security.js';
+import { apiLimiter, chatLimiter, execLimiter, likeLimiter, providerLimiter, sanitizeMiddleware } from './middleware/security.js';
 import geoip from 'geoip-lite';
 import crypto from 'crypto';
 
@@ -24,6 +24,8 @@ const LIKES_WEBHOOK_URL = config.likesWebhookUrl;
 const LIKES_COOLDOWN_SEC = config.likesCooldownSec;
 const SAVE_MESSAGES_SCRIPT = config.scripts.saveMessages;
 const SYNC_PROVIDERS_SCRIPT = config.scripts.syncProviders;
+const MANAGE_PROVIDER_KEY_SCRIPT = path.join(__dirname, 'scripts', 'manage_provider_key.py');
+const LIST_BUNDLED_PROVIDERS_SCRIPT = path.join(__dirname, 'scripts', 'list_bundled_providers.py');
 
 app.use(helmet({
   contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
@@ -127,6 +129,28 @@ try {
     );
     CREATE INDEX IF NOT EXISTS idx_likes_user_hash ON likes(user_hash, created_at);
   `);
+
+  // Idempotent column migrations for the `providers` table.
+  // SQLite has no "ADD COLUMN IF NOT EXISTS" so we check pragma table_info first.
+  const existingColumns = new Set(
+    uiDb.prepare('PRAGMA table_info(providers)').all().map((c) => c.name)
+  );
+  const providerColumnAdds = [
+    { name: 'description', sql: 'ALTER TABLE providers ADD COLUMN description TEXT' },
+    { name: 'signup_url', sql: 'ALTER TABLE providers ADD COLUMN signup_url TEXT' },
+    { name: 'auth_type', sql: "ALTER TABLE providers ADD COLUMN auth_type TEXT DEFAULT 'api_key'" },
+  ];
+  for (const col of providerColumnAdds) {
+    if (!existingColumns.has(col.name)) {
+      try {
+        uiDb.exec(col.sql);
+        console.log(`Added column providers.${col.name}`);
+      } catch (err) {
+        console.warn(`Failed to add column providers.${col.name}: ${err.message}`);
+      }
+    }
+  }
+
   console.log('UI DB tables initialized');
 } catch (error) {
   console.error(`Failed to connect to UI DB: ${error}`);
@@ -1169,6 +1193,183 @@ app.patch('/api/models/models/:id/toggle', (req, res) => {
   } catch (error) {
     console.error('Error toggling model:', error);
     res.status(500).json({ error: 'Failed to toggle model' });
+  }
+});
+
+// =====================================================================
+// Provider management endpoints (key lifecycle in ~/.hermes/.env)
+// All write paths go through scripts/manage_provider_key.py which uses
+// Hermes' own save_env_value() (atomic write, chmod 600, cache invalidate).
+// API responses NEVER include the secret value — only a ••••last4 mask.
+// =====================================================================
+
+async function runPythonScript(scriptPath, args, env = {}) {
+  const { spawn } = await import('child_process');
+  return new Promise((resolve, reject) => {
+    const child = spawn(HERMES_PYTHON_PATH, [scriptPath, ...args], {
+      cwd: __dirname,
+      env: { ...process.env, UI_DB_PATH, ...env },
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    child.stderr.on('data', (d) => { stderr += d.toString(); });
+    child.on('close', (code) => {
+      if (code !== 0) {
+        return reject(new Error(stderr.trim() || `script exited with code ${code}`));
+      }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch (err) {
+        reject(new Error(`invalid JSON from script: ${stdout.slice(0, 200)}`));
+      }
+    });
+    child.on('error', reject);
+  });
+}
+
+const ENV_VAR_RE = /^[A-Z][A-Z0-9_]*$/;
+const NON_ASCII_RE = /[^\x20-\x7e]/;
+
+function validateEnvVar(name) {
+  if (typeof name !== 'string' || !ENV_VAR_RE.test(name)) {
+    throw new Error('invalid env_var name');
+  }
+}
+
+function validateKeyValue(value) {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error('value is required');
+  }
+  if (value.length > 512) {
+    throw new Error('value too long');
+  }
+  if (NON_ASCII_RE.test(value)) {
+    throw new Error('value contains non-ASCII characters');
+  }
+}
+
+async function fetchBundledProviders() {
+  const result = await runPythonScript(LIST_BUNDLED_PROVIDERS_SCRIPT, []);
+  if (!result.success) {
+    throw new Error(result.error || 'list_bundled_providers failed');
+  }
+  return result.providers;
+}
+
+// GET /api/providers/available
+// Returns bundled Hermes providers (api_key only) with metadata.
+// Optionally filtered by `?configured=1` (true) or `?configured=0` (false).
+app.get('/api/providers/available', apiLimiter, async (req, res) => {
+  try {
+    const providers = await fetchBundledProviders();
+    let filtered = providers;
+    if (req.query.configured === '1') filtered = providers.filter((p) => p.is_configured);
+    if (req.query.configured === '0') filtered = providers.filter((p) => !p.is_configured);
+    res.json({ providers: filtered });
+  } catch (error) {
+    console.error('Error listing available providers:', error.message);
+    res.status(500).json({ error: 'Failed to list providers' });
+  }
+});
+
+// GET /api/providers/configured
+// Returns configured providers joined with the local DB metadata.
+// POST /api/providers/:name/key
+// Body: { env_var, value } — writes a new key to ~/.hermes/.env
+app.post('/api/providers/:name/key', providerLimiter, async (req, res) => {
+  const { name } = req.params;
+  const { env_var, value } = req.body || {};
+
+  try {
+    if (!/^[a-z0-9_-]{1,64}$/i.test(name)) {
+      return res.status(400).json({ error: 'invalid provider name' });
+    }
+    try {
+      validateEnvVar(env_var);
+      validateKeyValue(value);
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+
+    // Whitelist env_var against the provider's profile
+    const bundled = await fetchBundledProviders();
+    const profile = bundled.find((p) => p.name === name);
+    if (!profile) {
+      return res.status(404).json({ error: 'unknown provider' });
+    }
+    if (!profile.env_vars.includes(env_var)) {
+      return res.status(400).json({ error: 'env_var not allowed for this provider' });
+    }
+
+    const result = await runPythonScript(
+      MANAGE_PROVIDER_KEY_SCRIPT,
+      ['set', name, env_var, value]
+    );
+    if (!result.success) {
+      return res.status(500).json({ error: result.error || 'failed to write key' });
+    }
+
+    // The masked value comes from the script — never log the raw value here.
+    res.json({
+      success: true,
+      provider: name,
+      env_var: result.env_var,
+      masked: result.masked,
+    });
+  } catch (error) {
+    console.error('Error writing provider key:', error.message);
+    res.status(500).json({ error: 'Failed to write key' });
+  }
+});
+
+// DELETE /api/providers/:name/key?env_var=XYZ
+// Removes a single env_var line from ~/.hermes/.env
+app.delete('/api/providers/:name/key', providerLimiter, async (req, res) => {
+  const { name } = req.params;
+  const { env_var } = req.query;
+
+  try {
+    if (!/^[a-z0-9_-]{1,64}$/i.test(name)) {
+      return res.status(400).json({ error: 'invalid provider name' });
+    }
+    if (!env_var || typeof env_var !== 'string') {
+      return res.status(400).json({ error: 'env_var query param is required' });
+    }
+    try {
+      validateEnvVar(env_var);
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+
+    const bundled = await fetchBundledProviders();
+    const profile = bundled.find((p) => p.name === name);
+    if (!profile) {
+      return res.status(404).json({ error: 'unknown provider' });
+    }
+    if (!profile.env_vars.includes(env_var)) {
+      return res.status(400).json({ error: 'env_var not allowed for this provider' });
+    }
+
+    const result = await runPythonScript(
+      MANAGE_PROVIDER_KEY_SCRIPT,
+      ['remove', name, env_var]
+    );
+    if (!result.success) {
+      return res.status(500).json({ error: result.error || 'failed to remove key' });
+    }
+
+    // Drop the local DB rows for this provider so a re-sync doesn't show stale data
+    const row = uiDb.prepare('SELECT id FROM providers WHERE name = ?').get(name);
+    if (row) {
+      uiDb.prepare('DELETE FROM models WHERE provider_id = ?').run(row.id);
+      uiDb.prepare('DELETE FROM providers WHERE id = ?').run(row.id);
+    }
+
+    res.json({ success: true, provider: name, env_var });
+  } catch (error) {
+    console.error('Error removing provider key:', error.message);
+    res.status(500).json({ error: 'Failed to remove key' });
   }
 });
 

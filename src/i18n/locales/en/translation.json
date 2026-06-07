@@ -49,7 +49,11 @@
     "userMenu": "User Menu",
     "logout": "Logout",
     "collapseSidebar": "Collapse Sidebar",
-    "expandSidebar": "Expand Sidebar"
+    "expandSidebar": "Expand Sidebar",
+    "hermesApiStatus": "Hermes API status",
+    "hermesApiConnected": "Hermes API: Connected",
+    "hermesApiDisconnected": "Hermes API: Disconnected",
+    "hermesApiChecking": "Hermes API: Checking…"
   },
 
   "chat": {
@@ -119,14 +123,8 @@
   "dashboard": {
     "welcome": "Welcome",
     "startNewConversation": "Start a New Conversation",
-    "systemStatus": "System Status",
     "connected": "Connected",
     "disconnected": "Disconnected",
-    "hermesVersion": "Hermes version:",
-    "latestVersion": "Latest:",
-    "updateAvailable": "Update available: {{count}} commits behind",
-    "updateAvailable_one": "Update available: {{count}} commit behind",
-    "updateAvailable_other": "Update available: {{count}} commits behind",
     "totalSessions": "Total Sessions",
     "recentSessions": "Recent Sessions",
     "failedToLoadDashboard": "Failed to load dashboard data"
@@ -177,8 +175,14 @@
     "hermesUpdate": "Hermes Update",
     "running": "Running...",
     "hermesDoctorFix": "Hermes Doctor Fix",
-    "connectionStatus": "Connection status",
+    "connectionStatus": "Hermes Agent status",
     "hermesAgent": "Hermes Agent:",
+    "hermesAgentVersion": "Hermes Agent version: {{version}}",
+    "latestVersion": "Latest: {{version}}",
+    "updateAvailable": "Update available: {{count}} commits behind",
+    "updateAvailable_one": "Update available: {{count}} commit behind",
+    "updateAvailable_other": "Update available: {{count}} commits behind",
+    "loadingStatus": "Loading…",
     "about": "About",
     "sendLike": "Send a like",
     "liked": "Liked",
@@ -256,7 +260,10 @@
     "failedToToggleArchive": "Failed to toggle archive",
     "failedToBulkDelete": "Failed to bulk delete sessions",
     "likeCooldown": "You can only like once per hour",
-    "failedToSendLike": "Failed to send like"
+    "failedToSendLike": "Failed to send like",
+    "failedToFetchAvailableProviders": "Failed to fetch providers",
+    "failedToSetProviderKey": "Failed to save the API key",
+    "failedToRemoveProviderKey": "Failed to remove the API key"
   },
 
   "errorBoundary": {
@@ -276,5 +283,30 @@
 
   "toast": {
     "dismiss": "Dismiss notification"
+  },
+
+  "providers": {
+    "title": "Provider Keys",
+    "description": "Add or remove API keys. Keys are stored in ~/.hermes/.env (mode 600) and never in 1230-UI.",
+    "backToSettings": "Back to Settings",
+    "noProviders": "No providers available",
+    "addKey": "Add key",
+    "keyConfigured": "Key configured",
+    "envVarLabel": "Environment variable",
+    "apiKeyLabel": "API key",
+    "apiKeyPlaceholder": "Paste your API key",
+    "storedInEnv": "Stored in ~/.hermes/.env. Not saved in 1230-UI.",
+    "saving": "Saving...",
+    "saveKey": "Save key",
+    "removeKey": "Remove key",
+    "confirmRemoveTitle": "Remove API key?",
+    "confirmRemoveDesc": "This will delete the {{envVar}} line from ~/.hermes/.env. {{name}} models will stop working until you add a new key and restart Hermes.",
+    "showKey": "Show key",
+    "hideKey": "Hide key",
+    "errorKeyEmpty": "Please enter an API key",
+    "errorAddFailed": "Failed to save the key",
+    "errorRemoveFailed": "Failed to remove the key",
+    "errorLoadFailed": "Failed to load providers",
+    "manageKeys": "Manage provider keys"
   }
 }
