@@ -61,34 +61,54 @@
 ## Components
 
 ### Frontend (React + TypeScript + Vite)
-- `DashboardPage` — main page with System Status, Recent Sessions, Quick Chat
+- `DashboardPage` — main page with Quick Chat and Recent Sessions
 - `SessionsPage` — session list with virtualization, search, and date grouping
 - `ChatPage` — chat interface with streaming, markdown, tool calls, avatars, copy/regenerate
 - `NewSessionPage` — create new session with model selection
-- `SettingsPage` — model management (default model), system commands with confirm modal
+- `SettingsPage` — model management (default model), system commands with confirm modal, Hermes Agent status block
+- `ProvidersPage` — flat list of all bundled `api_key` providers; per-card "Add key" (inline form) or "Remove key"
+- `HermesStatusIndicator` — header icon (green/red/gray) with localized tooltip showing running version; consumes the persisted `hermes-status` store
 - `Toast` — notification system with queue and auto-dismiss
 - `Modal` — reusable modal component with focus-trap
 - `MobileNav` — bottom navigation for mobile devices
 - `PageSkeleton` — skeleton loading for lazy-loaded pages
 
+### Frontend state (Zustand stores)
+- `themeStore` — dark/light mode (`hermes-theme`, persisted)
+- `notificationsStore` — browser notification toggle (`hermes-notifications`, persisted)
+- `sidebarStore` — sidebar open/closed (`hermes-sidebar`, persisted)
+- `sessionsSortStore` — created | lastMessage (`hermes-sessions-sort`, persisted)
+- `searchStore` — global session search query (with URL sync)
+- `hermesStatusStore` — Hermes API connection state + version + latestVersion + updateAvailable + lastChecked (`hermes-status`, persisted, shared by the header indicator and Settings)
+
+### Hooks
+- `useKeyboardShortcuts` — Ctrl+K (search), Ctrl+N (new session)
+- `useNotifications` — Notification API helpers
+- `useToast` — toast queue
+- `useHermesStatusPoll` — polls `GET /api/system/status` every 60 s in `Layout`; respects 5-min staleness
+
 ### Backend (Node.js + Express)
 - REST API server on port 3001
 - Integration with two SQLite databases
-- Request proxying to Hermes API
+- Request proxying to Hermes API (including SSE streaming)
 - Python script execution for Hermes DB operations
 - Hermes system commands via `child_process`
+- Webhook delivery for the Like button (Mattermost-compatible)
 
 ### Databases (SQLite)
 - **Hermes DB** (`~/.hermes/state.db`) — read access to sessions/messages + write for session deletion
 - **UI DB** (`./data/1230-ui.db`) — custom DB for:
-  - `providers` — list of model providers
+  - `providers` — list of model providers (with `description`, `signup_url`, `auth_type` metadata since v0.5.1)
   - `models` — list of models with enabled flag
   - `cache` — cache for API responses (GitHub, Hermes)
+  - `likes` — like-button cooldowns, indexed on `(user_hash, created_at)`
 
 ### Python Scripts
 - `save_messages.py` — save messages to Hermes DB
 - `create_session.py` — create new session
-- `sync_providers.py` — sync providers and models from Hermes
+- `sync_providers.py` — sync providers and models from Hermes into the local UI DB (used by Settings → Sync All); reads `~/.hermes/.env` and respects per-provider base URL
+- `list_bundled_providers.py` — enumerate Hermes-bundled `api_key` providers with metadata; returns which env vars are present in `~/.hermes/.env` (no secret values); used by ProvidersPage
+- `manage_provider_key.py` — atomic set/remove of a single key in `~/.hermes/.env` via Hermes' own `save_env_value()` (chmod 600, cache invalidate); used by ProvidersPage
 
 ## Implementation Details
 
@@ -149,11 +169,12 @@ To reduce load on external APIs, cache is used:
 ### Code Splitting
 
 All pages are lazy-loaded via `React.lazy()`:
-- Dashboard: ~10KB
-- Sessions: ~68KB (with react-virtuoso)
-- Settings: ~14KB
-- Chat: ~344KB (with highlight.js)
-- NewSession: ~4KB
+- Dashboard: ~6 KB
+- Sessions: ~75 KB (with react-virtuoso)
+- Settings: ~21 KB
+- Providers: ~9 KB
+- Chat: ~350 KB (with highlight.js)
+- NewSession: ~5 KB
 
 This reduces initial bundle size and speeds up app loading.
 

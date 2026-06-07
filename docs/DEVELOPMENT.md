@@ -24,79 +24,81 @@ Dev server runs on `http://localhost:5173` with proxy to backend on port 3001.
 
 ```
 1230-ui/
-├── src/                          # Frontend (React)
+├── src/                          # Frontend (React + TypeScript + Vite)
 │   ├── components/               # UI components
-│   │   ├── ErrorBoundary.tsx     # Error Boundary for React errors
+│   │   ├── ApiKeyInput.tsx       # Password input with show/hide toggle
+│   │   ├── ErrorBoundary.tsx     # Catches React component errors
 │   │   ├── ErrorMessage.tsx      # API error display component
+│   │   ├── HermesStatusIndicator.tsx # Header Hermes API status icon
 │   │   ├── Layout.tsx            # Main layout (Navbar + Sidebar + Content)
-│   │   ├── MarkdownRenderer.tsx  # Markdown rendering with highlighting
-│   │   ├── Modal.tsx             # Reusable modal with focus-trap
+│   │   ├── MarkdownRenderer.tsx  # Markdown + syntax highlighting
 │   │   ├── MobileNav.tsx         # Bottom navigation for mobile
+│   │   ├── Modal.tsx             # Reusable modal with focus-trap
+│   │   ├── Navbar.tsx            # Top bar (search + status + user menu)
 │   │   ├── PageSkeleton.tsx      # Skeleton for lazy-loaded pages
+│   │   ├── ProviderCard.tsx      # Single provider row in Providers page
+│   │   ├── Sidebar.tsx           # Left rail nav (Home / Sessions / etc.)
 │   │   ├── Toast.tsx             # Toast notifications
 │   │   └── ToolCall.tsx          # Tool calls visualization
-│   ├── pages/                    # Application pages
-│   │   ├── DashboardPage.tsx     # Main page
-│   │   ├── SessionsPage.tsx      # Session list (virtualization)
-│   │   ├── ChatPage.tsx          # Chat interface (streaming)
+│   ├── pages/                    # Application pages (lazy-loaded)
+│   │   ├── ChatPage.tsx          # Chat interface (streaming, markdown)
+│   │   ├── DashboardPage.tsx     # Main page (Quick Chat + Recent)
 │   │   ├── NewSessionPage.tsx    # Create new session
-│   │   └── SettingsPage.tsx      # Settings (models, commands)
+│   │   ├── ProvidersPage.tsx     # /settings/providers — API key management
+│   │   ├── SessionsPage.tsx      # Session list (virtualization)
+│   │   └── SettingsPage.tsx      # Settings (models, commands, status)
 │   ├── hooks/                    # React hooks
-│   │   ├── useToast.ts           # Toast API
-│   │   ├── useKeyboardShortcuts.ts # Keyboard shortcuts
-│   │   └── useNotifications.ts   # Browser notifications
+│   │   ├── useHermesStatusPoll.ts # Polls Hermes status every 60s
+│   │   ├── useKeyboardShortcuts.ts # Ctrl+K, Ctrl+N, Ctrl+Enter
+│   │   ├── useNotifications.ts   # Browser notifications
+│   │   └── useToast.ts           # Toast API
 │   ├── lib/                      # Utilities
 │   │   ├── api.ts                # API client (fetch, retry, SSE)
 │   │   └── time.ts               # Relative timestamps
-│   ├── store/                    # Zustand stores
+│   ├── store/                    # Zustand stores (persisted)
+│   │   ├── hermesStatusStore.ts  # Hermes status cache
+│   │   ├── notificationsStore.ts # Browser notification toggle
+│   │   ├── searchStore.ts        # Global search state
 │   │   ├── sessionStore.ts       # Session state
-│   │   ├── searchStore.ts        # Search state
-│   │   ├── themeStore.ts         # Theme state
-│   │   └── notificationsStore.ts # Notifications state
-│   ├── assets/                   # Static resources
-│   │   └── illustrations.tsx     # SVG illustrations
+│   │   ├── sessionsSortStore.ts  # Sessions sort order
+│   │   ├── sidebarStore.ts       # Sidebar open/closed
+│   │   └── themeStore.ts         # Dark/light mode
+│   ├── i18n/                     # 4-language translations (en, ru, es, de)
 │   ├── types/                    # TypeScript types
-│   │   └── api.ts                # API response types
+│   ├── assets/                   # SVG illustrations
 │   ├── App.tsx                   # Root component
 │   └── main.tsx                  # Entry point
 ├── server.js                     # Backend server (Express)
-├── config.js                     # Configuration loader
+├── config.js                     # Configuration loader (zod-validated)
 ├── middleware/
-│   └── security.js               # Security middleware
-├── scripts/                      # Python scripts
+│   └── security.js               # Rate limiters + xss sanitization
+├── scripts/                      # Python helpers (talk to Hermes)
+│   ├── create_session.py         # Create new session in Hermes DB
 │   ├── save_messages.py          # Save messages to Hermes DB
-│   ├── create_session.py         # Create new session
-│   └── sync_providers.py         # Sync providers
-├── data/                         # Application data
-│   └── 1230-ui.db                # UI database (SQLite)
+│   ├── sync_providers.py         # Sync providers/models from Hermes
+│   ├── list_bundled_providers.py # Enumerate Hermes-bundled providers
+│   └── manage_provider_key.py    # Atomic set/remove of ~/.hermes/.env key
+├── data/                         # Runtime data
+│   └── 1230-ui.db                # UI database (SQLite, auto-created)
 ├── dist/                         # Production build (generated)
 ├── public/                       # Static files
-├── docs/                         # Documentation
-├── install.sh                    # Installation script
-├── package.json                  # Dependencies and scripts
+├── docs/                         # User/developer documentation
+├── install.sh                    # One-shot install script
+├── package.json                  # Dependencies and npm scripts
 ├── ecosystem.config.json         # PM2 configuration
-├── vite.config.ts                # Vite configuration
+├── vite.config.ts                # Vite + Tailwind v4 config
 ├── tsconfig.json                 # TypeScript configuration
-├── tailwind.config.js            # Tailwind CSS configuration
 ├── .env.example                  # Configuration template
 └── .gitignore                    # Git ignore rules
 ```
 
 ## Available Scripts
 
-### Development
 ```bash
-npm run dev          # Start dev server with hot reload
-npm run build        # Production build
-npm run preview      # Preview production build
+npm run dev          # Start dev server (Vite, port 5173) with hot reload
+npm run build        # Production build (tsc -b && vite build)
+npm run preview      # Preview production build locally
 npm run lint         # Run ESLint
-npm run typecheck    # Run TypeScript type checking
-```
-
-### Production
-```bash
-npm run build        # Build for production
-node server.js       # Start production server
 ```
 
 ## Code Style

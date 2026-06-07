@@ -1,768 +1,583 @@
 # 1230-UI — Tasks and Progress
 
-**Last updated:** 2026-06-06  
-**Version:** 0.5.0 (i18n release)  
-**Goal:** Fully functional MVP that can be deployed on any server with Hermes Agent
+**Last updated:** 2026-06-07
+**Current version:** 0.5.0
+**Release target:** v1.0.0 — friendly web interface for non-technical Hermes Agent users
 
 ---
 
-## 🎯 Roadmap to v1.0
+## 🎯 Release v1.0.0 — Goal
 
-### P0 — Release Blockers (Critical for Publishing)
-Tasks that are mandatory for GitHub publication and deployment on any server.
+A polished, self-contained web interface around [Hermes Agent](https://github.com/anthropics/hermes-agent) that a **non-technical user** can install, log into, and use productively without touching a terminal:
 
-### P1 — Production-Ready (Important for 1.0)
-Tasks that make the product production-ready but don't block basic functionality.
+- One-command install (`./install.sh` already done in v0.5.0)
+- Zero-config defaults that "just work" after the install script
+- Friendly UX for the common workflow: **create a session → chat with a model → attach files → read the answer with previews → come back tomorrow**
+- No jargon in the UI: no "API key", no "model id", no "tool call" — describe what the user is doing, not the plumbing
+- Mobile-friendly: works the same on a phone as on a desktop
 
-### P2 — Enhancements (After 1.0)
-Nice-to-have features that can be added in subsequent versions.
+Everything in **🚨 Необходимые для релиза v1.0.0** must be done before tagging v1.0.0. Everything in **🔮 Для дальнейшего развития** is explicitly deferred to a later release.
 
 ---
 
-## ✅ Completed
+## 🚨 Необходимые для релиза v1.0.0
 
-### Error Handling (Priority 1, 2, 3 — completed)
-- ✅ **Fixed endpoint structure** in server.js — moved `/api/system/exec` out of `/api/system/status`
-- ✅ **Structured errors from Backend**:
-  - Types: `network`, `timeout`, `content_moderation`, `rate_limit`, `server_error`, `auth_error`, `invalid_request`
-  - Fields: `type`, `message`, `provider`, `model`, `details`, `code`, `retryable`, `suggestion`
-  - All errors contain codes (HTTP status + provider code)
-- ✅ **Improved error display in UI**:
-  - `ErrorMessage.tsx` component with icons by error type
-  - Shows: title, details, provider/model, recommendations
-  - "Retry" button for retryable errors
-  - Expandable block with technical details
-- ✅ **SSE processing status**: `thinking` → `generating` → response
-- ✅ **Process display in UI**: "Agent is thinking..." / "Generating response..."
-- ✅ **Automatic retry** (up to 3 attempts) for network and server errors with exponential backoff
-- ✅ **Toxic session blocking**:
-  - On `content_moderation` error, input field replaced with banner
-  - State saved in sessionStorage
-  - "Create new session" button
-- ✅ **Error Boundary** — catches React component errors, shows UI with reload button
-- ✅ **Server logging** — JSON logs for each request (method, path, status, duration)
+Tasks that must ship with v1.0.0. Ordered roughly by user-impact priority within each group.
 
-### Core Features
-- ✅ Dashboard with System Status, Recent Sessions, Quick Chat
-- ✅ Session list with infinite scroll (20 at a time) and date grouping
-- ✅ Chat with real-time streaming responses
-- ✅ Multi-line input field (textarea with auto-resize up to 200px)
-- ✅ Create new sessions with model selection
-- ✅ Model management (enable/disable) in Settings
-- ✅ Sync providers and models from Hermes
-- ✅ Hermes system commands (update, doctor) in Settings
-- ✅ Markdown message rendering with syntax highlighting
+### User-facing features (UX-critical for non-tech users)
+
+#### 📋 19. Mobile Adaptation (improvements)
+**Role:** Frontend
+**Files:** `src/components/MobileNav.tsx`, `src/pages/ChatPage.tsx`, `src/pages/SessionsPage.tsx`, `src/components/Sidebar.tsx`, `src/index.css`
+**Description:** Polish the mobile experience so that a non-technical user on a phone has the same workflow as on a desktop.
+
+**Tasks:**
+- [ ] Touch-friendly button sizes (min 44×44 px hit targets)
+- [ ] Responsive typography (fluid scaling, no horizontal scroll)
+- [ ] Swipe gesture to delete a session in Sessions list
+- [ ] Verify all pages at 360 px, 768 px, 1024 px breakpoints
+- [ ] No overlapping elements in mobile bottom-nav / sidebar combo
+
+**Priority:** HIGH (promoted from P2 — non-tech users are on mobile)
+**Complexity:** Medium
+**Dependencies:** None
+
+---
+
+#### 📋 23. File Upload to Session
+**Role:** Fullstack
+**Status:** 📋 Backlog (P2) — promoted to v1.0.0
+
+**Problem:**
+- Users have no way to give the agent a file as context — they can only paste text
+- Real workflows (log analysis, code review, document Q&A, data exploration) all require file input
+- Hermes Agent accepts file paths in its CLI, but the Web UI has no path to feed them
+
+**Functions needed:**
+
+**Upload UX:**
+- Attach files alongside the chat message (drag-and-drop, file picker, paste from clipboard)
+- Show "attached files" chips above the input with name, size, type icon, and a remove button
+- Per-file upload progress (or batch progress for many small files)
+- Reorder / re-attach / detach before sending
+
+**Storage & lifecycle:**
+- Decide where files physically live: temp dir per session, persistent per-user, or in UI DB (BLOB)
+- Define a retention policy: until session is deleted / N days after last activity / explicit "purge" button / never
+- Decide how uploaded files are passed to Hermes: written to a known path, sent via multipart, base64 inlined, or returned as a URL Hermes fetches
+- Handle duplicate uploads (same hash) — dedup, re-use reference, or always store a new copy
+- When a session is deleted, automatically clean up its files (orphan files are a leak)
+- Decide whether files persist across sessions for the same model/task, or are strictly per-session
+
+**Validation & limits:**
+- Extension whitelist (`.txt .md .py .json .csv .pdf .png .jpg …`) and blacklist (`.exe .so …`)
+- Per-file size cap and per-message aggregate cap
+- Server-side MIME sniffing (don't trust the browser)
+- Optional virus / malware scan before the file is exposed to the agent
+- Quota per user / per server (disk fills up fast)
+
+**Re-use during a session:**
+- Once uploaded, the user should be able to refer to a file by name in later messages
+- Should the user see a "files in this session" list anywhere? (Sidebar, tab, modal?)
+
+**UX questions (open):**
+- Where does the upload UI live: inside the chat input area, a separate "Files" panel in the session, or both?
+- Can the user attach files *before* typing a message, or only at send time?
+- Image attachments: show an inline thumbnail preview, or just a type-icon chip?
+- Pasted images (clipboard) — auto-attach with a "Send" button, or show preview first?
+- Where are size limits and allowed types surfaced? (Settings? Inline warning? Help tooltip?)
+- What happens when a file fails to upload halfway through a batch — retry the failed ones, or restart the whole batch?
+- Should the user be able to rename a file in the UI before it goes to the agent?
+- How does the user know which file the agent is currently reading? (Real-time indicator? File reference in the message?)
+- After upload, are file chips dismissable, or do they "belong" to the message until sent?
+- For multi-file uploads, ordering matters — drag-to-reorder or fixed order?
+- Should the user be able to set a file-level annotation / note ("use this as the spec", "ignore the boilerplate")?
+
+**Priority:** HIGH (blocks main use cases for non-tech users)
+**Complexity:** High (storage, lifecycle, security, UX)
+**Dependencies:** Hermes Agent CLI file-acceptance contract; filesystem layout decision
+
+---
+
+#### 📋 24. File Extraction & Preview from Agent Response
+**Role:** Fullstack
+**Status:** 📋 Backlog (P2) — promoted to v1.0.0
+
+**Problem:**
+- The agent can produce files (writes code, generates reports, saves data, exports artifacts) but the Web UI only shows them as plain text mentions like "I saved it to /tmp/report.md"
+- The user has to leave the UI, open a terminal, find the file, and view it — friction kills the workflow
+- No way to preview, download, or re-use generated files from inside the conversation
+
+**Functions needed:**
+
+**Detection:**
+- Backend needs to capture files the agent wrote/created during the turn
+- Two detection strategies (must pick one or combine): (a) parse agent output for explicit file references / paths, (b) watch a designated output directory and diff before/after
+- Files must be linked back to the specific assistant message that produced them
+
+**Inline preview in chat:**
+- Render a file "card" inside the assistant message (similar to existing ToolCall blocks): file name, type icon, size, "Open" / "Download" / "Copy path"
+- For text-like files (`.md .txt .py .json .csv .yml .log .html .css .js .ts …`): show an inline preview with syntax highlighting (we already have highlight.js)
+- For Markdown: render as Markdown, not as raw text
+- For JSON: pretty-print with collapsible nodes
+- For images (`.png .jpg .gif .webp .svg`): show a thumbnail, click to expand in a lightbox
+- For PDFs: render in an `<iframe>` or download-only?
+- For binary / unknown: no preview, just a "Download" button
+- Configurable preview line limit (e.g., first 200 lines, then "Show all")
+- Files should be **collapsible** by default (don't blow up the message length) with a clean expand animation
+
+**Download & export:**
+- Always-available "Download" button on every file card
+- Bulk download (multiple files → zip)
+- "Open in new tab" for files the browser can render natively
+
+**Cross-session & re-use:**
+- A "Files" tab in the session sidebar listing all files generated in this session
+- A global "Files" view (under a top-level menu? or a tab in Sessions?) listing all files across all sessions
+- Search across files (by name, by content, by session)
+- "Send this file back to the agent" — re-attach a generated file to a new message (combines with Task #23)
+
+**Visual treatment:**
+- Distinguish "Generated by agent" files from "User-uploaded" files (different badge, color, or icon)
+- Group multiple files from one message into a single collapsible container
+
+**UX questions (open):**
+- Should previews be auto-expanded or collapsed by default? (Probably collapsed — long files break scroll)
+- For very large files — preview first N lines + "Download full" or force download?
+- For Markdown: render it as Markdown, or show source + toggle "Rendered / Raw"?
+- For images: lazy-load thumbnails or eager? (Many images → perf)
+- Where does "Open" open — modal lightbox, fullscreen, or new browser tab?
+- For ambiguous file types (no extension, custom MIME) — what default? (treat as text? download-only?)
+- Files produced in a session — do they get their own lifecycle, or follow the session's lifecycle (deleted with the session)?
+- How do we handle the agent *modifying* the same file multiple times? (One card per version? Always show latest? History?)
+- Should the user be able to edit a file from the UI? (Or strict read-only / download only)
+- "Send back to agent" UX: button on file card, or a drag handle into the input?
+- Should generated files count toward some user quota?
+
+**Priority:** HIGH (without it, file upload is half-useful)
+**Complexity:** High (detection, preview rendering, file storage, search)
+**Dependencies:** Task #23 (file storage layer), Hermes Agent output conventions
+
+---
+
+#### 📋 25. Session Presets — "Model + Parameters" Templates
+**Role:** Fullstack
+**Status:** 📋 Backlog (P2) — promoted to v1.0.0
+
+**Problem:**
+- Today, every new session is created with just a model. All other parameters (system prompt, temperature, top_p, max_tokens, response format, stop sequences, etc.) are either hidden or set globally
+- Users with established workflows (e.g., "code reviewer", "translator", "data analyst") re-type the same system prompt and tweak the same sliders every time
+- No way to share a "this is how I work" configuration across teammates or across machines
+- A "preset" is a named bundle of: model + parameter values + (optional) system prompt template
+
+**Functions needed:**
+
+**Preset CRUD:**
+- Create / edit / duplicate / delete / archive presets
+- Each preset has: name (required, unique), description, model, model parameters, system prompt (optional)
+- "Use as default" flag — the default preset is preselected on the New Session page
+- "Starter" presets shipped out-of-the-box (e.g., "Balanced", "Creative writer", "Precise coder", "JSON-only") that the user can clone and customize
+- Categories or tags (`coding`, `writing`, `analysis`, `vision`) for filtering
+- Color or icon per preset for visual recognition
+- Versioning of preset changes (history of edits, ability to roll back)
+- Import / export preset as JSON (sharing between instances, between users)
+
+**Discovery & selection:**
+- New Session page surfaces presets as cards / chips / segmented control
+- Filter by provider, category, "recently used", "starred"
+- Show the key parameters inline (e.g., "GPT-4o · temp 0.7 · 4k tokens")
+- Keyboard shortcuts: `Ctrl+1`, `Ctrl+2` to pick a preset without leaving the keyboard
+- "Recently used" list at the top
+
+**Model parameters (v1 scope, what to expose):**
+- `temperature` (slider, 0.0–2.0)
+- `top_p` (slider, 0.0–1.0)
+- `max_tokens` (number input or slider)
+- `system_prompt` (textarea, with variable interpolation like `{{date}}`, `{{user_name}}`)
+- `response_format` (`text` | `json` | `json_schema` with schema)
+- `stop_sequences` (list of strings)
+
+(v2 scope, can be added later: `frequency_penalty`, `presence_penalty`, `seed`, tool restrictions)
+
+**Per-session override:**
+- When creating a new session from a preset, the user can tweak any parameter before sending the first message
+- The session stores which preset (if any) it was created from — visible in the session header / breadcrumb
+- Switching preset mid-session is *not* supported (a new session should be created)
+
+**Storage & sync:**
+- Presets stored in UI DB (per-instance, per-user)
+- Optional: sync presets across multiple 1230UI instances (federation? — overlaps with Task #21)
+- Precedence: instance-level preset > server default > built-in starter preset
+
+**UX questions (open):**
+- Where does the user manage presets? (Settings → "Presets" section? A dedicated `/presets` page? Both — list in Settings, edit inline in New Session?)
+- Should a preset be **tied to a specific model**, or **model-agnostic** (e.g., "Creative writer — works with any chat model")? (Probably: model-pinned by default, with a "use any compatible model" toggle)
+- What happens if a preset's pinned model is removed or disabled? (Auto-archive? Prompt to re-pin? Show a warning badge on the preset card?)
+- How many parameters to expose in the *card* view vs the *edit* view? (Don't overwhelm — card shows only the 2-3 most important ones)
+- Temperature slider: continuous or stepped (0.0, 0.3, 0.7, 1.0, 1.5)? Provider presets per parameter?
+- System prompt template variables — which are exposed? (`{{date}}`, `{{user_name}}`, `{{language}}`, …) — keep it small to start
+- How to handle presets with conflicting values (e.g., preset says `max_tokens=4000` but chosen model only supports 2000)? (Block, warn, or auto-clamp?)
+- Should "Use as default" be one preset or multiple (e.g., default for coding, default for writing)?
+- "Starter" presets — bundled with the app, or downloaded on first run? Who can edit them?
+- Should presets have a visual icon (emoji picker) or just a color tag? (Color is faster; emoji is more recognizable)
+- How to handle bulk actions: multi-select to export, archive, delete?
+- For a federated setup (Task #21), are presets global or per-node?
+- Per-session preset badge in chat header — always shown, or only when the session is started from a non-default preset?
+
+**Priority:** HIGH (productivity multiplier for repeat workflows)
+**Complexity:** Medium-High (parameter coverage, UX, schema migration)
+**Dependencies:** Model metadata (we already have it), per-session model_params storage (new column on session)
+
+---
+
+### Release infrastructure
+
+#### 📋 10. Complete Manual Verification
+**Role:** Frontend + Backend
+**Description:** End-to-end manual pass to confirm v1.0.0 is shippable.
+
+**Tasks:**
+- [ ] All pages and core functions in a clean dev environment
+- [ ] Mobile breakpoint (360 px, 768 px)
+- [ ] Dark/light themes visually consistent
+- [ ] Accessibility: screen reader walkthrough, full keyboard navigation
+- [ ] Performance: 1000+ sessions in the list (react-virtuoso)
+- [ ] FCP < 1.5 s after code splitting
+- [ ] Each of the 4 i18n languages spot-checked on every page
+- [ ] Fresh install on a clean VM via `./install.sh`
+
+**Priority:** HIGH
+**Complexity:** Medium (3-4 hours)
+**Dependencies:** None (can run as features land)
+
+---
+
+#### 📋 17. CI/CD Pipeline
+**Role:** Backend (DevOps)
+**Files:** `.github/workflows/*.yml` (new)
+**Description:** Automated checks on every PR + automated release artefacts.
+
+**Tasks:**
+- [ ] GitHub Actions workflow: lint + typecheck + build on every PR
+- [ ] Auto-publish release artefact (zip with `dist/` + `.env.example`) on tag
+- [ ] (Optional) auto-deploy to a staging server on merge to `main`
+- [ ] Status badge in README
+
+**Priority:** HIGH for v1.0.0 (we want to *release* v1.0.0, not just have it)
+**Complexity:** Medium
+**Dependencies:** None
+
+---
+
+### Code cleanup (carried from old "Known Issues")
+
+#### 📋 26. Lint warnings in ChatPage
+**Role:** Frontend
+**File:** `src/pages/ChatPage.tsx:152`
+**Description:** The `useEffect` on line 152 still emits a `react-hooks/exhaustive-deps` warning (missing `location.state` and `t` in deps). Marked ✅ in task #4, but the warning is still produced on every CI run.
+
+**Tasks:**
+- [ ] Add explicit deps or eslint-disable with justification comment
+- [ ] Verify no behavioural regression in initial-message-send flow
+
+**Priority:** MEDIUM (CI hygiene)
+**Complexity:** Low
+**Dependencies:** None
+
+---
+
+#### 📋 27. SettingsPage `formatTimestamp` unification
+**Role:** Frontend
+**Files:** `src/pages/SettingsPage.tsx:238`, `src/lib/time.ts`
+**Description:** SettingsPage has its own `formatTimestamp(ts: string | null): string` helper (lines 233-246) that duplicates the relative-time logic from `lib/time.ts`. Should be replaced with a shared helper.
+
+**Tasks:**
+- [ ] Extend `lib/time.ts` with a `formatRelativeTimestamp(ts, now)` API that handles `null` → "Never"
+- [ ] Remove the local `formatTimestamp` in SettingsPage and import from `lib/time.ts`
+- [ ] Verify visual output is identical in dark/light themes
+
+**Priority:** LOW (refactor, not user-facing)
+**Complexity:** Low (30 min)
+**Dependencies:** None
+
+---
+
+## 🔮 Для дальнейшего развития (post-1.0)
+
+Tasks explicitly deferred past v1.0.0. Re-prioritized per release after v1.0.0 ships.
+
+### Quality & testing
+
+#### 📋 0. Smart session titles (LLM)
+**Role:** Backend + Frontend
+- [ ] Endpoint `POST /api/sessions/:id/title/generate` — LLM-suggested title from first user message
+- [ ] UI: "Suggest a title" button next to the manual edit pencil
+- [ ] Auto-apply if session title is still default after first reply
+
+**Priority:** MEDIUM
+**Complexity:** Medium (1-2 hours)
+
+---
+
+#### 📋 11. Backend Unit Tests
+**Role:** Backend
+- [ ] Set up Vitest or Jest
+- [ ] Tests for `/api/sessions`, `/api/chat`, `/api/models`
+- [ ] Coverage > 70%
+
+**Priority:** MEDIUM
+**Complexity:** Medium
+
+---
+
+#### 📋 12. E2E Tests
+**Role:** Frontend
+- [ ] Playwright or Cypress
+- [ ] Tests: session creation, message sending, model switching, settings flow
+
+**Priority:** LOW
+**Complexity:** Medium
+
+---
+
+### UX & features
+
+#### 📋 13. Server-side session search
+**Role:** Backend + Frontend
+- [ ] FTS5 index in SQLite
+- [ ] API endpoint `/api/sessions/search`
+- [ ] Integrate with the existing client-side search (debounce, URL sync)
+
+**Priority:** MEDIUM
+**Complexity:** Medium
+
+---
+
+#### 📋 15. Session Export
+**Role:** Backend + Frontend
+- [ ] Export to Markdown / JSON
+- [ ] "Export" button in ChatPage
+- [ ] Backend endpoint for export generation
+
+**Priority:** LOW
+**Complexity:** Low
+
+---
+
+#### 📋 18. Docker Support
+**Role:** Backend (DevOps)
+- [ ] Multi-stage Dockerfile (build frontend + serve via Node)
+- [ ] `docker-compose.yml` with volumes for `data/` and `.env`
+- [ ] `.dockerignore` (`node_modules`, `.git`, etc.)
+- [ ] Documentation in README for Docker launch
+
+**Priority:** LOW
+**Note:** Not critical for MVP — `install.sh` already covers 90% of cases
+
+---
+
+#### 📋 21. Multi-Agent Federation
+**Role:** Fullstack
+**Description:** Multiple 1230UI instances (one per Hermes node) discover and orchestrate each other. See `FEDERATION_DESIGN.md` for full design.
+
+**Phases:**
+- **Phase 1:** Federation identity + health (`/api/federation/*`, `/api/cluster/*`, ClusterPage UI)
+- **Phase 2:** Federation sessions (cross-node session browsing)
+- **Phase 3:** Federation chat (SSE proxy to remote nodes)
+- **Phase 4:** Cluster aggregation (cross-node search, unified dashboard)
+
+**Priority:** LOW (far future, after v1.0.0 stable)
+**Complexity:** High (20-40 hours total)
+**Dependencies:** Stable v1.0.0, multiple servers with 1230UI deployed
+
+---
+
+### Other ideas (no task number, will get one when picked up)
+
+- **Tags / folders for sessions** — organize by topic
+- **Message edit / branch** — edit a sent user message, regenerate the response
+- **Reactions to messages** — 👍 / 👎 feedback to the agent's answer
+- **Multi-user** — session ownership, user separation
+- **Webhooks / Telegram integration** — talk to the agent from outside the browser
+- **Backup / restore** — export the whole 1230-UI DB
+- **Provider health-check endpoint** — `GET /api/models/health`; green/yellow/red badge in Settings
+- **Long-message warning** — UI hint when user is about to send something over the model limit
+- **Per-message actions** — copy, regenerate, "explain this", "translate this"
+
+---
+
+## ✅ Завершённые (history)
+
+Done features, kept for reference. Organized by release / category. Last release at the top.
+
+### v0.5.0+ — UI polish & reorganization (2026-06-07)
+- ✅ **Sidebar quick controls** — Dark Mode + Notifications toggles moved from header to sidebar. Settings → General keeps them as fallback.
+- ✅ **Hermes API status indicator** — `Server` icon in the header, color-coded (green/red/gray) with localized tooltip showing version. Read-only.
+- ✅ **Status polling** — `useHermesStatusPoll` hook in `Layout`; `GET /api/system/status` polled every 60 s; persisted Zustand store `hermes-status` with 5-min staleness guard.
+- ✅ **Dashboard cleanup** — "System Status" block removed; "Recent Sessions" stretched to `col-span-2`. `getSystemStatus` no longer called on Dashboard.
+- ✅ **Settings → "Hermes Agent status"** — connection state + Hermes version + latest + update warning.
+- ✅ **i18n** — new keys in `nav.*` and `settings.*` for status strings (en/ru/es/de). Removed obsolete `dashboard.systemStatus` / `hermesVersion` / `latestVersion` / `updateAvailable` keys.
+
+**New files:** `src/store/hermesStatusStore.ts`, `src/hooks/useHermesStatusPoll.ts`, `src/components/HermesStatusIndicator.tsx`.
+
+### v0.5.0 — Internationalization (2026-06-06)
+- ✅ i18next infrastructure (`react-i18next` + `i18next-browser-languagedetector`)
+- ✅ ~175 UI strings extracted across 4 languages (en, ru, es, de)
+- ✅ Proper pluralization (en/es/de: `_one`/`_other`; ru: `_one`/`_few`/`_many`)
+- ✅ Interpolation (`{{count}}`, `{{toolName}}`, `{{query}}`, etc.)
+- ✅ Language selector dropdown in Settings → General
+- ✅ Browser language detection with localStorage fallback
+- ✅ 15 files refactored (all pages, components, `api.ts`)
+- ✅ Backend API errors stay in English
+
+### v0.5.0 — Provider Key Management (2026-06-06)
+- ✅ Dedicated page `/settings/providers` — flat list of 24 Hermes-bundled `api_key` providers
+- ✅ Configured providers show "Remove key" with confirm modal; unconfigured show inline "Add key" form
+- ✅ Backend: `list_bundled_providers.py`, `manage_provider_key.py`, `sync_providers.py` (fixed env_var bug)
+- ✅ Endpoints (rate-limited 10/min): `GET /api/providers/available`, `POST /api/providers/:name/key`, `DELETE /api/providers/:name/key?env_var=…`
+- ✅ Schema migration: `description`, `signup_url`, `auth_type` columns
+- ✅ Security: API never returns secret values (only `••••last4` mask); `env_var` whitelisted; ASCII printable ≤ 512 chars; uses Hermes' own `save_env_value()` (chmod 600)
+
+**New files:** `src/pages/ProvidersPage.tsx`, `src/components/ProviderCard.tsx`, `src/components/ApiKeyInput.tsx`, `scripts/list_bundled_providers.py`, `scripts/manage_provider_key.py`.
+
+### Core features
+- ✅ Dashboard, Sessions (with infinite scroll + date grouping), Chat (streaming, markdown, tool calls)
+- ✅ Quick Chat on Dashboard, multi-line textarea with auto-resize
+- ✅ New session with model selection; saved model in `localStorage`
+- ✅ Settings: enable/disable models, sync providers, system commands (`hermes update`, `hermes doctor --fix`)
+- ✅ Markdown rendering + syntax highlighting (highlight.js)
 - ✅ Tool calls visualization (collapsible blocks)
-- ✅ Save selected model in localStorage
-- ✅ Response waiting indicator ("Agent is thinking..." / "Generating response...")
+- ✅ "Agent is thinking…" / "Generating response…" indicators
 
-### Critical Bug Fixes (2026-06-05)
-- ✅ **Session creation fixed** — HERMES_DB_PATH corrected to match Hermes API database location
-- ✅ **Message duplication fixed** — initialMessage now stored in ref, sent only when session has no messages
-- ✅ **Session visibility fixed** — sessions created via API now appear in session list immediately
-- ✅ **React StrictMode compatibility** — removed duplicate useEffect that caused message duplication
+### Error handling
+- ✅ Structured errors from backend (types: `network`, `timeout`, `content_moderation`, `rate_limit`, `server_error`, `auth_error`, `invalid_request`)
+- ✅ ErrorMessage component with icons, suggestions, retry, expandable details
+- ✅ SSE status events: `thinking` → `executing_tool` → `generating`
+- ✅ Automatic retry (3 attempts, exponential backoff) for network and server errors
+- ✅ Toxic-session blocking (`content_moderation` → banner + "create new session")
+- ✅ ErrorBoundary catches React crashes
+- ✅ Structured JSON server logs (method, path, status, duration)
+
+### Critical bug fixes (2026-06-05)
+- ✅ Session creation: `HERMES_DB_PATH` corrected
+- ✅ Message duplication: `initialMessage` stored in ref, sent only when session is empty
+- ✅ Session visibility: sessions created via API now appear in list immediately
+- ✅ React 19 StrictMode compatibility: removed duplicate `useEffect`
 
 ### Sessions UX (2026-06-05)
-- ✅ **Sessions sort order** — new `sort` query param on `GET /api/sessions` (`created` | `lastMessage`); control moved to Settings → General (per-segmented toggle), preference persisted via Zustand `hermes-sessions-sort`
-- ✅ **Last activity time** — session cards on Sessions/Dashboard/NewSession now show `lastMessageAt` with `startedAt` fallback; `groupSessionsByDate` uses the chosen sort field; backend returns `lastMessageAt: number | null` per session
-- ✅ **Sidebar persistence** — open/closed state stored in Zustand `hermes-sidebar` (persisted); removed `resize` listener that was clobbering user choice on every resize event
+- ✅ Sort order: `sort=created|lastMessage` query param; control in Settings → General; persisted in `hermes-sessions-sort`
+- ✅ Last-activity time: `lastMessageAt` with `startedAt` fallback; `groupSessionsByDate` respects sort field
+- ✅ Sidebar state persisted in `hermes-sidebar`; removed `resize` clobbering
+
+### P0 — Release blockers
+- ✅ **#0.5** Session Management (CRUD) — delete, rename, pin, archive, bulk delete
+- ✅ **#0.7** Real-time agent work visualization — SSE tool call parsing on backend, real-time ToolCall rendering on frontend (start/progress/end events), running spinner, counter, auto-collapse
+- ✅ **#0.8** UI Internationalization (RU → EN)
+- ✅ **#1** Centralized Configuration — `config.js`, `.env.example`, hardcoded paths removed
+- ✅ **#2** `.gitignore` for publishing
+- ✅ **#3** Setup Script — `install.sh` with Node/Python/Hermes checks, npm install/build, PM2 setup
+- ✅ **#4** Fix Lint Errors in ChatPage — most cases (one residual warning → #26 above)
+
+### P1 — Production-ready
+- ✅ **#5** Configuration Validation (zod schema, path/URL checks, friendly error messages)
+- ✅ **#6** Input Validation & Rate Limiting (xss sanitization, 100 req/min general, 30 req/min chat, 5/5min system commands)
+- ✅ **#7** CORS Configuration (whitelist via `CORS_ORIGINS`, credentials for Authelia)
+- ✅ **#8** Security Headers (helmet, CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy)
+- ✅ **#14** Keyboard Shortcuts (`Ctrl/Cmd+K` search, `Ctrl/Cmd+N` new session, `Ctrl/Cmd+Enter` send)
+- ✅ **#16** New Message Notifications (Browser Notification API, tab badge, toggle in Sidebar + Settings)
+- ✅ **#20** i18n (see v0.5.0 above)
 
 ### Backend
-- ✅ Express.js server with SQLite (better-sqlite3)
-- ✅ Two DBs: Hermes DB (read-only) + UI DB (read-write)
-- ✅ Hermes API integration (proxy, streaming SSE)
-- ✅ GitHub API request caching (1 hour)
-- ✅ Automatic table creation in DB
-- ✅ 12 API endpoints for all functions
+- ✅ Express.js + SQLite (better-sqlite3), two DBs (Hermes read-only + UI read-write)
+- ✅ Hermes API integration: proxy + streaming SSE
+- ✅ GitHub API response caching (1 hour)
+- ✅ Automatic table creation
+- ✅ ~15 API endpoints
 
 ### UI/UX
-- ✅ Responsive design (mobile-friendly)
-- ✅ Dark/Light theme switcher
-- ✅ Skeleton loading states
-- ✅ Empty states
-- ✅ Icons from lucide-react
+- ✅ Responsive layout, dark/light theme switcher, skeleton loading, empty states, lucide-react icons
+- ✅ Mobile bottom-nav, design tokens (CSS variables), reduced motion support
+- ✅ Toast component with queue and auto-dismiss
+- ✅ Confirm modal for destructive actions
+- ✅ Copy buttons on code blocks and messages
+- ✅ Regenerate for assistant messages
+- ✅ Auto-scroll respecting user position
+- ✅ Avatars for user/assistant
+- ✅ 404 state for non-existent sessions
+- ✅ Breadcrumbs in ChatPage
+- ✅ Session search (client-side, debounced, URL-synced)
+- ✅ Default model in Settings (with optgroup per provider)
+- ✅ JetBrains Mono for code, custom scrollbar, ARIA labels + focus-visible
+- ✅ Session list virtualization (react-virtuoso)
+- ✅ Code splitting (lazy-loaded pages: Dashboard, Sessions, Settings, Chat, NewSession)
+- ✅ Token count + latency in messages
+- ✅ Empty illustrations (SVG), print styles
+
+### Frontend refactor (2026-06-04, 27/27 tasks)
+27 atomic tasks across 3 tiers: copy/regenerate/scroll UX (T1), virtualization/modals/split (T2), empty states (T3). See git history for the per-task breakdown.
 
 ### Infrastructure
-- ✅ PM2 configuration (ecosystem.config.json)
+- ✅ PM2 (`ecosystem.config.json`)
 - ✅ Nginx reverse proxy
 - ✅ HTTPS (Let's Encrypt)
 - ✅ Authelia authentication
 - ✅ Systemd service for Hermes API
 
-### Frontend Refactor (2026-06-04, 27/27 tasks)
-**Tier 1 (17 tasks):**
-- ✅ Removed gradients (T1.1)
-- ✅ Toast component with queue and auto-dismiss (T1.2)
-- ✅ Confirm modal for destructive actions (T1.3)
-- ✅ Copy button on code blocks (T1.4)
-- ✅ Copy button on messages (T1.5)
-- ✅ Regenerate for assistant messages (T1.6)
-- ✅ Auto-scroll respecting user position (T1.7)
-- ✅ Relative timestamps (unified `lib/time.ts` library) (T1.8)
-- ✅ Avatars for user/assistant (T1.9)
-- ✅ Skeleton loading in ChatPage (T1.10)
-- ✅ 404 state for non-existent sessions (T1.11)
-- ✅ Breadcrumbs in ChatPage (T1.12)
-- ✅ Session search (client-side, with debounce and URL sync) (T1.13)
-- ✅ Default model in Settings (with optgroup by providers) (T1.14)
-- ✅ JetBrains Mono for code (T1.15)
-- ✅ Custom scrollbar (dark/light) (T1.16)
-- ✅ ARIA labels + focus-visible (T1.17)
-
-**Tier 2 (7 tasks):**
-- ✅ Session list virtualization (react-virtuoso) (T2.1)
-- ✅ Reusable Modal with focus-trap and ESC close (T2.2)
-- ✅ Code splitting (lazy loading for all pages) (T2.3)
-- ✅ Token count + latency in messages (T2.4)
-- ✅ Bottom-nav for mobile (T2.5)
-- ✅ Design tokens (CSS variables for colors, radii, shadows) (T2.6)
-- ✅ Reduced motion support (T2.7)
-
-**Tier 3 (3 tasks):**
-- ✅ Empty state for chat (T3.1)
-- ✅ Empty illustrations (SVG for no sessions/messages/models) (T3.2)
-- ✅ Print styles (T3.3)
-
-### Internationalization (i18n) — v0.5.0 (2026-06-06)
-- ✅ **i18next infrastructure**: react-i18next + i18next-browser-languagedetector
-- ✅ **~175 UI strings extracted** to translation JSON files with namespace organization
-- ✅ **4 languages**: English (default), Русский, Español, Deutsch
-- ✅ **Proper pluralization**: en/es/de (`_one`/`_other`), ru (`_one`/`_few`/`_many`)
-- ✅ **Interpolation**: dynamic strings with `{{count}}`, `{{toolName}}`, etc.
-- ✅ **Language selector**: dropdown in Settings → General, instant switch without reload
-- ✅ **Browser language detection**: auto-detect with localStorage fallback
-- ✅ **15 files refactored**: all pages, components, and api.ts use `t()` / `i18n.t()`
-- ✅ **ErrorBoundary translated**: Russian hardcoded → i18n keys
-- ✅ **Backend unchanged**: API errors remain in English
-
-**UI fixes:**
-- ✅ Dashboard: Quick Chat elevated, textarea improved
-- ✅ NewSessionPage: full refactor (textarea + send in Dashboard style)
-- ✅ Settings: content centering
-
----
-
-## 🚨 P0 — Release Blockers (Critical for v1.0)
-
-These tasks are **mandatory** for GitHub publication and deployment on any server.
-
-### ✅ 0.5. Session Management (CRUD)
-**Role:** Backend + Frontend  
-**Files:** `server.js`, `src/pages/ChatPage.tsx`, `src/lib/api.ts`  
-**Description:** Currently user cannot delete session — list gets cluttered with test/failed sessions  
-**Problem:**
-- No "Delete session" button
-- Cannot rename session (related to task #0)
-- No archiving or pinning for important sessions
-
-**Tasks:**
-
-**Session deletion:**
-- ✅ Endpoint `DELETE /api/sessions/:id` — deletes session + messages from Hermes state.db
-- ✅ "Delete" button in ChatPage (Trash2 icon in header, with confirm modal)
-- ✅ Redirect to `/sessions` after deletion
-
-**Renaming:**
-- ✅ Endpoint `PATCH /api/sessions/:id/title` — updates title in Hermes DB
-- ✅ Inline title editing in ChatPage breadcrumbs (click → input → Enter to save, Esc to cancel, blur to save)
-
-**Optional (can be in P1):**
-- ✅ Pin important sessions (displayed first in "Pinned" group)
-- ✅ Archiving (hide from main list, toggle to show)
-- ✅ Bulk actions (select multiple → delete with confirm modal)
-
-**Priority:** HIGH (important for data management)  
-**Complexity:** Medium (2-3 hours for basic deletion)  
-**Dependencies:** Task #0 (renaming overlaps)  
-**Status:** ✅ Full CRUD completed — delete, rename, pin, archive, bulk delete (2026-06-05)
-
----
-
-### ✅ 0.7. Real-time Agent Work Visualization
-**Role:** Backend + Frontend  
-**Files:** `server.js`, `src/lib/api.ts`, `src/pages/ChatPage.tsx`, `src/components/ToolCall.tsx`  
-**Description:** User doesn't see what agent is doing after sending message — only "Agent is thinking..." → "Generating response..."  
-**Problem:**
-- Hermes API sends tool calls in SSE stream, but backend just proxies raw chunks
-- Frontend parses only text, ignores tool calls during streaming
-- ToolCall component only used for already saved messages from history
-- User doesn't understand: is agent reading file? executing command? searching? frozen?
-
-**Solution (3 stages):**
-
-**Stage A: Tool calls parsing on Backend**
-- ✅ Study SSE events format from Hermes API (what tool calls look like)
-- ✅ Parse chunks in `server.js` endpoint `/api/chat` (line 514)
-- ✅ Extract tool call events: `{ type: 'tool_call', toolName: 'bash', content: 'ls -la', status: 'running' }`
-- ✅ Send separate SSE events for frontend:
-  - `{ type: 'tool_call_start', toolName: 'bash', id: 'tc_123' }`
-  - `{ type: 'tool_call_progress', id: 'tc_123', content: 'Executing...' }`
-  - `{ type: 'tool_call_end', id: 'tc_123', result: 'file1.txt\nfile2.txt' }`
-- ✅ Send process statuses: `{ type: 'status', status: 'executing_tool', toolName: 'bash' }`
-
-**Stage B: Real-time rendering on Frontend**
-- ✅ Update `api.ts` — add callbacks for tool calls:
-  ```typescript
-  onToolCallStart?: (toolName: string, id: string) => void;
-  onToolCallProgress?: (id: string, content: string) => void;
-  onToolCallEnd?: (id: string, result: string) => void;
-  ```
-- ✅ Add state in ChatPage: `activeToolCalls: Map<string, { toolName: string, status: string, content: string }>`
-- ✅ Render ToolCall components in real-time (above streaming content)
-- ✅ Update ToolCall component — add `running` state (with spinner animation)
-- ✅ Show indicators: "Executing bash command...", "Reading file X...", "Searching in files..."
-
-**Stage C: UI polish**
-- ✅ Tool calls counter: "3 of 5 tools completed"
-- ✅ Automatic collapsing of completed tool calls (collapsed by default)
-- ✅ "Show details" button for each tool call
-- ✅ Log all tool calls to console (for debugging)
-- ✅ Transition animation between tool calls (smooth appearance)
-
-**Priority:** CRITICAL (blocks understanding of agent work)  
-**Complexity:** High (6-8 hours, requires studying Hermes API format)  
-**Dependencies:** None (can run in parallel with #0, #0.5)
-
-**Alternatives:**
-- Backend parsing only (no UI) — faster, but user still doesn't see progress
-- Polling `/api/sessions/:id/messages` every 2 seconds — simple solution, but DB load
-- **Real-time streaming tool calls (recommended)** — best UX, but harder to implement
-
-**Technical details:**
-- Backend currently just proxies: `res.write(chunk)` (server.js:522)
-- Need to add intermediate parser between `reader.read()` and `res.write()`
-- Frontend already knows how to parse SSE (api.ts:158-193), need to add handling for new event types
-
----
-
-### ✅ 0.8. UI Internationalization (Russian → English)
-**Role:** Frontend + Backend  
-**Files:** `server.js`, `src/lib/api.ts`, `src/pages/ChatPage.tsx`, `src/components/ErrorMessage.tsx`  
-**Description:** Error messages and UI text are in Russian, but English needed for open-source project on GitHub  
-**Problem:**
-- Error messages in `api.ts` in Russian: "Request blocked by security filter", "Network error"
-- Backend returns Russian errors: "Hermes API unavailable", "Unknown provider error"
-- UI statuses: "Agent is thinking...", "Generating response..."
-- Error titles: "Server error", "Authentication error"
-
-**Tasks:**
-
-**Backend (`server.js`):**
-- ✅ Translate all error messages in `/api/chat` (lines 449, 465, 533, 567-568)
-- ✅ Translate other API endpoints if Russian strings exist
-
-**Frontend (`api.ts`):**
-- ✅ Translate content moderation error (lines 173, 179)
-- ✅ Translate network error (line 249)
-- ✅ Check other fetch calls
-
-**Frontend UI:**
-- ✅ `ChatPage.tsx` (line 443): "Agent is thinking..." → "Agent is thinking...", "Generating response..." → "Generating response..."
-- ✅ `ErrorMessage.tsx` (lines 19-29): translate ERROR_TITLES dict
-- ✅ Check other components for Russian placeholder/labels
-
-**Optional (P1+):**
-- [ ] Move all UI strings to `src/i18n/en.json` for future i18n support
-- [ ] Add language switcher in Settings
-
-**Priority:** HIGH (important for open-source project)  
-**Complexity:** Low-Medium (1-2 hours)  
-**Dependencies:** None
-
----
-
-### ✅ 1. Centralized Configuration
-**Role:** Backend  
-**Files:** `config.js` (new), `server.js`, `.env.example`, `.env`  
-**Description:** Move all hardcoded values to .env file  
-**Tasks:**
-- ✅ Create `config.js` for loading configuration from env
-- ✅ Create `.env.example` with template of all variables
-- ✅ Create `.env` with current values for BIG server
-- ✅ Update `server.js` to use `config.js`
-- ✅ Add `dotenv` to dependencies
-- ✅ Remove hardcoded paths (`/home/pingvin1230/.hermes/...`, paths to Python scripts)
-- ✅ Update systemd service file to use `EnvironmentFile=/opt/1230-ui/.env`
-
-**Implementation:**
-- `config.js` — centralized configuration loader with fallback values
-- `.env.example` — template for users with detailed comments
-- `.env` — real configuration for BIG server
-- `server.js` — imports `config` and uses `config.port`, `config.hermesDbPath`, etc.
-- Systemd service — reads variables from `.env` via `EnvironmentFile`
-
-**Testing:**
-- ✅ `npm run lint` — 0 errors
-- ✅ `npm run build` — successful
-- ✅ `systemctl restart 1230-ui` — service running
-- ✅ `curl /api/health` — OK
-- ✅ `POST /api/sessions` — session creation works
-- ✅ `POST /api/system/exec` — hermes doctor executes
-
-**Priority:** CRITICAL  
-**Complexity:** Medium (2-3 hours)  
-**Dependencies:** None  
-**Status:** ✅ COMPLETED (2026-06-04)
-
----
-
-### ✅ 2. .gitignore for Publishing
-**Role:** Backend  
-**Files:** `.gitignore`  
-**Tasks:**
-- ✅ `node_modules/`, `dist/`, `data/*.db`
-- ✅ `.env`, `.env.local`, `.env.*.local`
-- ✅ Logs (`*.log`, `logs/`)
-- ✅ IDE files (`.vscode/`, `.idea/`)
-- ✅ OS files (`.DS_Store`, `Thumbs.db`)
-- ✅ Python cache (`__pycache__/`, `*.pyc`)
-
-**Priority:** CRITICAL  
-**Complexity:** Low (30 minutes)  
-**Dependencies:** None
-
----
-
-### ✅ 3. Setup Script for Installation
-**Role:** Backend  
-**Files:** `install.sh`, `README.md`  
-**Description:** Simplify deployment without Docker  
-**Tasks:**
-- ✅ Check Node.js 18+, Python 3.x
-- ✅ Check installed Hermes Agent
-- ✅ `npm install` + `npm run build`
-- ✅ PM2 setup (optional)
-- ✅ Create `.env` from `.env.example` with interactive input
-- ✅ Documentation in README (5 steps)
-
-**Priority:** HIGH  
-**Complexity:** Low (1-2 hours)  
-**Dependencies:** Task #1
-
----
-
-### ✅ 4. Fix Lint Errors in ChatPage
-**Role:** Frontend  
-**Files:** `src/pages/ChatPage.tsx`  
-**Description:** 2 known issues with `react-hooks/set-state-in-effect` and `react-hooks/exhaustive-deps`  
-**Problem:** False positive in React 19 / eslint-plugin-react-hooks v7 for data loading
-
-**Solution:**
-- ✅ Removed `useCallback` wrappers for `loadSession` and `loadMessages`
-- ✅ Data loading logic inlined directly into `useEffect` with inline async IIFE
-- ✅ Added `cancelled` flag for cleanup (prevents setState after unmount)
-- ✅ Added `retryTrigger` state for "Try again" button (instead of direct function calls)
-- ✅ Removed `sendInitialMessage` useCallback, replaced with direct `doSend` call
-- ✅ Added `eslint-disable-next-line` for useEffect with `doSend` with justification
-- ✅ Removed `useCallback` from import (no longer used)
-
-**Priority:** HIGH (blocks CI/CD)  
-**Complexity:** Medium (1-2 hours)  
-**Dependencies:** None  
-**Status:** ✅ COMPLETED (2026-06-04)
-
----
-
-## 📋 P1 — Production-Ready (Important for v1.0)
-
-These tasks make the product production-ready but don't block basic functionality.
-
-### ✅ 5. Configuration Validation
-**Role:** Backend  
-**File:** `config.js`  
-**Tasks:**
-- [x] Check required variables at startup (zod schema)
-- [x] Validate paths (check existence on disk)
-- [x] Validate URLs (Hermes API endpoint)
-- [x] Nice error message with instructions when parameter missing
-
-**Priority:** HIGH  
-**Complexity:** Low (1 hour)  
-**Dependencies:** Task #1  
-**Status:** ✅ COMPLETED (2026-06-05)
-
----
-
-### ✅ 6. Input Validation and Rate Limiting
-**Role:** Backend  
-**Files:** `server.js`, `middleware/security.js`  
-**Tasks:**
-- [x] Request body sanitization via `xss` (XSS protection)
-- [x] Rate limiting for API endpoints (`express-rate-limit`):
-  - General: 100 req/min
-  - Chat: 30 req/min
-  - System commands: 5 req/5min
-
-**Priority:** HIGH  
-**Complexity:** Medium (2-3 hours)  
-**Dependencies:** None  
-**Status:** ✅ COMPLETED (2026-06-05)
-
----
-
-### ✅ 7. CORS Configuration
-**Role:** Backend  
-**Files:** `server.js`, `config.js`, `.env.example`  
-**Tasks:**
-- [x] Add `cors` middleware
-- [x] Whitelist trusted domains via env (`CORS_ORIGINS`)
-- [x] Support credentials (cookies for Authelia)
-
-**Priority:** MEDIUM  
-**Complexity:** Low (30 minutes)  
-**Dependencies:** Task #1  
-**Status:** ✅ COMPLETED (2026-06-05)
-
----
-
-### ✅ 8. Security Headers
-**Role:** Backend  
-**Files:** `server.js`  
-**Tasks:**
-- [x] `helmet` middleware (CSP, X-Frame-Options, X-Content-Type-Options)
-- [x] HSTS (if HTTPS)
-- [x] Referrer-Policy
-
-**Priority:** MEDIUM  
-**Complexity:** Low (30 minutes)  
-**Dependencies:** None  
-**Status:** ✅ COMPLETED (2026-06-05)
-
----
-
-### 10. Complete Manual Verification
-**Role:** Frontend + Backend  
-**Description:** Frontend developer didn't manually verify changes (only build + lint)  
-**Tasks:**
-- [ ] Dev-server: all pages and functions
-- [ ] Mobile breakpoint (360px, 768px)
-- [ ] Dark/light themes visually
-- [ ] Accessibility (screen reader, keyboard navigation)
-- [ ] Performance (1000+ sessions in virtuoso)
-- [ ] FCP < 1.5s after code splitting
-
-**Priority:** HIGH  
-**Complexity:** Medium (3-4 hours)  
-**Dependencies:** Task #4
-
----
-
-### Testing
-
-#### 11. Backend Unit Tests
-**Role:** Backend  
-- [ ] Set up Vitest or Jest
-- [ ] Tests for `/api/sessions`, `/api/chat`, `/api/models`
-- [ ] Coverage >70%
-
-**Priority:** MEDIUM (for v1.1)
-
----
-
-#### 12. E2E Tests
-**Role:** Frontend  
-- [ ] Playwright or Cypress
-- [ ] Tests: session creation, message sending, model switching
-
-**Priority:** LOW (for v1.2)
-
----
-
-### UX Improvements
-
-#### 13. Session Search (server-side)
-**Role:** Backend + Frontend  
-- [ ] FTS5 index in SQLite
-- [ ] API endpoint `/api/sessions/search`
-- [ ] Integration with client-side search (T1.13)
-
-**Priority:** MEDIUM (for v1.1)
-
----
-
-#### ✅ 14. Keyboard Shortcuts
-**Role:** Frontend  
-- [x] `Ctrl/Cmd + K` — focus on search
-- [x] `Ctrl/Cmd + N` — new session
-- [x] `Ctrl/Cmd + Enter` — send message
-
-**Priority:** LOW (for v1.2)  
-**Status:** ✅ COMPLETED (2026-06-05)
-
----
-
-#### 15. Session Export
-**Role:** Backend + Frontend  
-- [ ] Export to Markdown / JSON
-- [ ] "Export" button in ChatPage
-- [ ] Backend endpoint for export generation
-
-**Priority:** LOW (for v1.2)
-
-
-#### ✅ 16. New Message Notifications
-**Role:** Frontend  
-- [x] Browser notifications (Notification API)
-- [x] Badge on tab icon
-- [x] Toggle in Navbar and Settings page
-- [x] Zustand store for synced state
-
-**Priority:** LOW (for v1.2)  
-**Status:** ✅ COMPLETED (2026-06-05)
-
----
-
-#### 17. CI/CD Pipeline
-**Role:** Backend  
-- [ ] GitHub Actions workflow
-- [ ] Lint + test on PR
-- [ ] Auto-build Docker image
-- [ ] Auto-deploy on merge (optional)
-
-**Priority:** MEDIUM (for v1.1)
-
----
-
-#### 18. Docker Support (optional)
-**Role:** Backend  
-- [ ] Multi-stage Dockerfile (build frontend + serve via Node)
-- [ ] `docker-compose.yml` with volumes for data and .env
-- [ ] `.dockerignore` (node_modules, .git, etc)
-- [ ] Documentation in README for Docker launch
-
-**Priority:** LOW (for v1.2)  
-**Note:** Not critical for MVP, as setup script (#3) covers 90% of cases
-
----
-
-### Mobile Adaptation and Accessibility
-
-#### 19. Mobile Adaptation (improvements)
-**Role:** Frontend  
-- [ ] Touch-friendly buttons (increase sizes)
-- [ ] Responsive typography (fluid scaling)
-- [ ] Swipe gestures for session deletion
-
-**Priority:** LOW (for v1.2)
-
-
-
----
-
-#### ✅ 20. Internationalization (i18n)
-**Role:** Frontend  
-**Files:** `src/i18n/`, all pages and components  
-**Library:** `react-i18next` + `i18next` + `i18next-browser-languagedetector`  
-**Status:** ✅ COMPLETED (2026-06-06, v0.5.0)
-
-**Completed:**
-- ✅ Install dependencies
-- ✅ Create `src/i18n/index.ts` with language detection (browser + localStorage)
-- ✅ Import i18n in `main.tsx`
-- ✅ Create 4 translation files: `en`, `ru`, `es`, `de` (~175 strings each)
-- ✅ Replace hardcoded strings in 15 files (all pages, components, api.ts)
-- ✅ Pluralization: en/es/de (`_one`/`_other`), ru (`_one`/`_few`/`_many`)
-- ✅ Interpolation: `{{count}}`, `{{toolName}}`, `{{query}}`, etc.
-- ✅ Language selector dropdown in Settings → General (4 languages)
-- ✅ Instant language switch without page reload
-- ✅ `npm run build` — 0 errors, `npm run lint` — 0 errors
-
-
----
-
-### 21. Multi-Agent Federation (1230UI as OS)
-
-**Role:** Fullstack  
-**Files:** `server.js`, `src/pages/`, new `src/pages/ClusterPage.tsx`, new `routes/federation.js`  
-**Description:** Transform 1230UI from single-agent WebUI into multi-agent OS. Allow one 1230UI installation to communicate with multiple Hermes agents on different servers.
-
-**Design document:** `FEDERATION_DESIGN.md`
-
-**Architecture: Symmetric Federation**
-- Each 1230UI is an equal node (no master/slave)
-- Two API layers: Federation API (what each node exposes) + Orchestration API (cluster management on home node)
-- Lazy polling for status, SSE proxy for chat streaming
-- Graceful degradation when nodes offline
-
-**Phases:**
-
-**Phase 1 — Federation Identity + Health**
-- [ ] Add `remote_nodes` and `node_cache` tables to uiDb
-- [ ] Federation auth middleware (X-Federation-Node-Id + Bearer token)
-- [ ] `GET /api/federation/identity` — return node info
-- [ ] `GET /api/federation/health` — return health status
-- [ ] `GET/POST/DELETE /api/cluster/nodes` — node registry CRUD
-- [ ] `POST /api/cluster/nodes/:id/ping` — health check with latency
-- [ ] `GET /api/cluster/status` — aggregated status of all nodes
-- [ ] UI: ClusterPage with node list, status indicators, add/remove nodes
-
-**Phase 2 — Federation Sessions**
-- [ ] `GET /api/federation/sessions` — expose local sessions to other nodes
-- [ ] `GET /api/federation/sessions/:id` — single session details
-- [ ] `GET /api/federation/sessions/:id/messages` — session messages
-- [ ] `GET /api/cluster/sessions` — aggregate sessions from all nodes (or filter by nodeId)
-- [ ] UI: SessionsPage shows sessions grouped by node, node badge on each session
-
-**Phase 3 — Federation Chat (SSE proxy)**
-- [ ] `POST /api/federation/chat` — proxy chat to local Hermes
-- [ ] `POST /api/cluster/chat/:nodeId` — full SSE proxy to remote node
-- [ ] UI: ChatPage supports selecting target node for chat
-- [ ] Node selector in NewSessionPage
-
-**Phase 4 — Cluster Aggregation**
-- [ ] Cross-node session search
-- [ ] Unified dashboard with stats from all nodes
-- [ ] Node capability detection and UI adaptation
-
-**Technical decisions:**
-- Full proxy for SSE streaming (not redirect)
-- 30-second polling for node health (not WebSocket)
-- `node_cache` table for graceful degradation
-- Capability-based routing (hide unsupported features per node)
-
-**Priority:** LOW (far future, after v1.0 stable)  
-**Complexity:** High (20-40 hours total)  
-**Dependencies:** Stable v1.0, multiple servers with 1230UI deployed
-
----
-
-## 🐛 Known Issues
-
-### Frontend
-- **ChatPage lint errors:** 2 issues with `react-hooks/set-state-in-effect` and `react-hooks/exhaustive-deps` (false positive in React 19) — **Task #4**
-- **SettingsPage `formatTimestamp`:** not unified with `lib/time.ts` (low priority)
-
-### Backend
-- **Hardcoded paths:** `/home/pingvin1230/.hermes/...` in server.js — **Task #1**
-- **No validation:** request body not validated — **Task #6**
-- **No rate limiting:** API open to abuse — **Task #6**
-
 ---
 
 ## 📊 Project Metrics
 
-- **Lines of Code:** ~2500 (backend) + ~3500 (frontend, after refactor)
-- **Test Coverage:** 0% (need to add tests — Task #11, #12)
-- **TypeScript:** 100% coverage
-- **Bundle Size:** ~615KB (gzip: ~189KB)
-- **Code Splitting:** Dashboard 10KB, Sessions 68KB, Settings 14KB, Chat 344KB, NewSession 4KB
-- **New files (after refactor):** 8 components, 1 hook, 2 libraries, 1 store
-
----
-
-## 👥 Task Distribution by Roles
-
-### Backend Developer
-**Critical (P0):**
-- #0.5 Session management (endpoints for delete, rename, pin, archive, bulk)
-- #1 Centralized configuration
-- #2 .gitignore
-- #3 Setup script for installation
-
-**Important (P1):**
-- #5 Configuration validation
-- #6 Input validation and rate limiting
-- #7 CORS configuration
-- #8 Security headers
-
-**Enhancements (P2):**
-- #0 Smart titles (LLM generation, endpoint for generate-title)
-- #11 Unit tests
-- #19 CI/CD pipeline
-
-### Frontend Developer
-**Critical (P0):**
-- #0.5 Session management (delete/rename/pin/archive buttons, bulk actions)
-- #0.7 Agent work visualization (real-time tool call rendering, indicators)
-- #0.8 UI text and error messages internationalization
-- #4 Fix lint errors in ChatPage
-
-**Important (P1):**
-- #9 Design tokens unification
-- #10 Complete manual verification
-
-**Enhancements (P2):**
-- #12 E2E tests
-- #13-18 UX improvements
-- #20-23 Mobile adaptation, PWA, a11y, ~~i18n~~ ✅
-
-### Fullstack / Joint
-- #0 Smart titles (backend + frontend integration)
-- #0.5 Session management (CRUD operations)
-- #0.7 Agent work visualization (streaming tool calls end-to-end)
-- #0.8 Internationalization (Russian → English)
-- #10 Complete manual verification (frontend + backend)
-- #13 Session search (server-side)
-- #16 Session export
-
----
-
-## 🔍 What Else Might Be Missing
-
-### Critical for MVP (check)
-1. **✅ Session deletion** — task #0.5 (full CRUD: delete, rename, pin, archive, bulk)
-2. **✅ Agent work visualization** — task #0.7 (real-time tool calls)
-3. **✅ Internationalization** — task #20 (4 languages: en, ru, es, de)
-4. **⚠️ Smart session titles (LLM)** — task #0 (moved to P2, manual editing done)
-5. **⚠️ Provider health-check** — currently if provider unavailable, error only when sending message
-   - Possibly add endpoint `GET /api/models/health` to check provider availability
-   - UI: status indicator in Settings (green/yellow/red)
-6. **⚠️ Long message handling** — what happens if user sends very long message?
-   - Check Hermes API limits
-   - UI: warning if message > N characters
-
-### Can be postponed (P1+)
-- Tags/folders for sessions
-- Per-session model parameters (model selection for each session separately)
-- Message edit/branch (editing sent messages)
-- Reactions to messages
-- Multi-user (session separation by users)
-- Webhooks/Telegram integration
-- Backup/restore
-
----
-
-## 📝 Architecture
-
-```
-1230-ui/
-├── src/                    # React frontend
-│   ├── components/         # UI components
-│   │   ├── ErrorBoundary.tsx    # Error Boundary
-│   │   ├── ErrorMessage.tsx     # Error component
-│   │   ├── Layout.tsx
-│   │   ├── MarkdownRenderer.tsx
-│   │   └── ToolCall.tsx
-│   ├── pages/              # Pages
-│   │   ├── ChatPage.tsx    # Chat with streaming
-│   │   ├── DashboardPage.tsx
-│   │   ├── NewSessionPage.tsx
-│   │   ├── SessionsPage.tsx
-│   │   └── SettingsPage.tsx
-│   └── lib/api.ts          # API client (retry, SSE, error handling)
-├── server.js               # Express backend (logging, error handling)
-├── scripts/                # Python scripts
-│   ├── create_session.py
-│   ├── save_messages.py
-│   └── sync_providers.py
-└── data/1230-ui.db         # UI database (providers, models, cache)
-```
+- **Lines of Code:** ~2 500 (backend) + ~3 500 (frontend)
+- **TypeScript:** 100% coverage on frontend
+- **Test Coverage:** 0% (post-1.0)
+- **Bundle Size (gzip):** ~190 KB total; ChatPage is the largest chunk due to highlight.js
+- **Code Splitting:** Dashboard 5.8 KB · Sessions 75 KB · Settings 21 KB · Chat 350 KB · NewSession 5 KB · Providers 9 KB
+- **i18n:** ~200 strings × 4 languages (en, ru, es, de)
+- **Known open tasks for v1.0.0:** 8 (19, 23, 24, 25, 10, 17, 26, 27)
 
 ---
 
 ## 🔧 Useful Commands
 
 ```bash
+# PM2 (process manager)
 pm2 status                    # Status
 pm2 logs 1230-ui              # Logs
 pm2 restart 1230-ui           # Restart
 
+# Dev & build
 npm run dev                   # Dev server
-npm run build                 # Production build
+npm run build                 # Production build (tsc + vite)
+npm run lint                  # ESLint
 
+# Quick API checks
 curl http://localhost:3001/api/health
 curl http://localhost:3001/api/system/status
 
+# Hermes API
 systemctl status hermes-api   # Hermes API status
 journalctl -u hermes-api -f   # Hermes API logs
 ```
+
+---
+
+## 📁 Project Structure
+
+```
+1230-ui/
+├── src/                    # React frontend
+│   ├── components/         # UI components
+│   ├── pages/              # Pages (lazy-loaded)
+│   ├── store/              # Zustand stores
+│   ├── hooks/              # React hooks
+│   ├── lib/                # API client, helpers
+│   ├── i18n/               # 4-language translation files
+│   └── types/              # TypeScript types
+├── server.js               # Express backend
+├── middleware/             # Security middleware (rate limit, XSS)
+├── scripts/                # Python scripts (Hermes DB, providers, sync)
+├── data/1230-ui.db         # UI database (providers, models, cache, presets*)
+└── docs/                   # Architecture, API, installation
+```
+
+\* `presets` table will be added by Task #25.

@@ -1,22 +1,24 @@
 # 1230-UI — Hermes Web Interface
 
-> **⚠️ ALPHA VERSION** — Early-stage project. Features may be incomplete or unstable.
+> **Status:** `v0.5.1` — UX-polish release (Provider Keys page, sidebar quick controls, Hermes status indicator)
 
 Modern web interface for managing sessions and interacting with [Hermes Agent](https://github.com/anthropics/hermes-agent) through a browser.
 
 ## Features
 
-- **Dashboard** — system overview, recent sessions, quick chat
+- **Dashboard** — quick chat, recent sessions, Hermes API status
 - **Session Management** — create, rename, pin, archive, delete, bulk actions
 - **Real-time Chat** — streaming responses, markdown rendering, syntax highlighting, tool calls visualization
 - **Model Management** — enable/disable models, select default model
+- **Provider Keys** — manage API keys for all bundled `api_key` providers from the UI (no terminal needed)
 - **System Commands** — execute `hermes update` and `hermes doctor --fix`
+- **Hermes API Status** — header indicator (green/red/gray) with live polling every 60s
 - **Keyboard Shortcuts** — Ctrl+K (search), Ctrl+N (new session), Ctrl+Enter (send)
-- **Browser Notifications** — alerts for new messages
-- **Dark/Light Themes** — with saved preference
+- **Browser Notifications** — alerts for new messages (toggle in sidebar)
+- **Dark/Light Themes** — with saved preference (toggle in sidebar)
 - **Internationalization** — 4 languages (English, Русский, Español, Deutsch) with auto-detection
 - **Responsive Design** — mobile-friendly with bottom navigation
-- **Security** — rate limiting, XSS protection, CORS, security headers
+- **Security** — rate limiting, XSS protection, CORS, security headers, rate-limited provider-key writes
 
 ## Quick Start
 

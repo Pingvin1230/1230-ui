@@ -176,6 +176,92 @@ PATCH /api/models/models/:id/toggle
 
 Enables/disables a model.
 
+## Providers (key management)
+
+Manage API keys for Hermes model providers. Keys are written to `~/.hermes/.env`
+through `scripts/manage_provider_key.py`, which delegates to Hermes' own
+`hermes_cli.config.save_env_value()` for `set` (atomic temp+rename, chmod 600,
+in-process env cache invalidation) and performs an atomic read-modify-replace
+for `remove`. **Secret values are never stored in 1230-UI** — API responses
+only return a `••••last4` mask.
+
+### List Bundled Providers
+```
+GET /api/providers/available
+```
+
+Returns all Hermes-bundled providers with `auth_type == "api_key"` and a
+flag for which of their `env_vars` are currently set in `~/.hermes/.env`.
+OAuth / AWS / Copilot providers are hidden (use `hermes login` from the CLI
+for those).
+
+Query parameters (optional):
+- `configured=1` — only providers with a key
+- `configured=0` — only providers without a key
+
+Response:
+```json
+{
+  "providers": [
+    {
+      "name": "anthropic",
+      "display_name": "anthropic",
+      "description": "Claude models via Anthropic API",
+      "signup_url": "https://console.anthropic.com/",
+      "auth_type": "api_key",
+      "env_vars": ["ANTHROPIC_API_KEY", "ANTHROPIC_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"],
+      "configured_env_var": "ANTHROPIC_API_KEY",
+      "is_configured": true,
+      "base_url": "https://api.anthropic.com"
+    }
+  ]
+}
+```
+
+`configured_env_var` is the first `env_var` that has a non-empty value in
+`~/.hermes/.env` (or `null` if none). `env_vars` is the full list of aliases
+the provider accepts.
+
+### Set Provider Key
+```
+POST /api/providers/:name/key
+```
+
+Body:
+```json
+{
+  "env_var": "ANTHROPIC_API_KEY",
+  "value": "sk-ant-..."
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "provider": "anthropic",
+  "env_var": "ANTHROPIC_API_KEY",
+  "masked": "••••a1b2"
+}
+```
+
+Validation:
+- `env_var` must match `^[A-Z][A-Z0-9_]*$` and be present in the provider's profile
+- `value` must be non-empty, ≤ 512 chars, ASCII printable
+
+After the call, restart Hermes for the new key to take effect (env vars are
+loaded at process start).
+
+### Remove Provider Key
+```
+DELETE /api/providers/:name/key?env_var=ANTHROPIC_API_KEY
+```
+
+Removes a single line from `~/.hermes/.env` atomically. The local `uiDb`
+rows for that provider (and its models) are also deleted so that a re-sync
+doesn't show stale data. Idempotent — returns success even if the line
+wasn't there.
+
 ## System
 
 ### Health Check
@@ -201,6 +287,29 @@ GET /api/system/status
 
 Returns Hermes connection status, providers, and statistics.
 
+Response (200):
+```json
+{
+  "hermes": {
+    "status": "connected",        // "connected" | "disconnected"
+    "version": "v1.2.3 (4567)",   // current Hermes Agent version
+    "updateAvailable": 3,         // commits behind, or null
+    "latestVersion": "v1.2.6"     // latest known release, or null
+  },
+  "providers": [
+    {
+      "name": "anthropic",
+      "displayName": "Anthropic",
+      "syncStatus": "ok",         // "ok" | "pending" | "error"
+      "lastSyncedAt": "2026-06-07T10:00:00Z"
+    }
+  ],
+  "stats": {
+    "totalSessions": 42
+  }
+}
+```
+
 ### Execute Command
 ```
 POST /api/system/exec
@@ -212,6 +321,112 @@ Body:
   "command": "update"  // or "doctor"
 }
 ```
+
+## Likes
+
+### Send a Like
+```
+POST /api/like
+```
+
+Sends a "like" webhook to the configured Mattermost channel. Anti-spam is enforced:
+- Per-IP rate limit: 5 requests/hour (`likeLimiter`)
+- Per-user DB-backed cooldown: 1 hour by default (`LIKES_COOLDOWN_SEC`)
+- Returns `429` with `Retry-After` header on cooldown
+- Returns `502` on webhook failure
+- Returns `503` if `LIKES_WEBHOOK_URL` is not configured
+
+Body: _(empty — uses request IP and User-Agent to identify the user)_
+
+Response (200):
+```json
+{
+  "success": true,
+  "sent_at": 1749300000000
+}
+```
+
+Response (429):
+```json
+{
+  "error": "Like cooldown active",
+  "retry_after": 2843
+}
+```
+
+The webhook payload sent to Mattermost includes: `ip`, `country` (via `geoip-lite`), `user_agent`, `timestamp` (ISO 8601).
+
+## Provider Keys
+
+Manage API keys for Hermes-bundled `api_key` providers. All endpoints are rate-limited (`providerLimiter`, 10 writes/min). Secret values are never returned in responses — only `••••last4` masks.
+
+### List Available Providers
+```
+GET /api/providers/available[?configured=0|1]
+```
+
+Query parameters:
+- `configured` — `1` to show only configured providers, `0` for unconfigured, omit for all
+
+Response (200):
+```json
+{
+  "providers": [
+    {
+      "name": "anthropic",
+      "display_name": "Anthropic",
+      "description": "Claude models from Anthropic",
+      "signup_url": "https://console.anthropic.com/",
+      "auth_type": "api_key",
+      "env_vars": ["ANTHROPIC_API_KEY"],
+      "configured_env_var": "ANTHROPIC_API_KEY",
+      "is_configured": true,
+      "base_url": "https://api.anthropic.com"
+    }
+  ]
+}
+```
+
+### Set a Provider Key
+```
+POST /api/providers/:name/key
+```
+
+Body:
+```json
+{
+  "env_var": "ANTHROPIC_API_KEY",
+  "value": "sk-ant-..."
+}
+```
+
+Response (200):
+```json
+{
+  "success": true,
+  "provider": "anthropic",
+  "env_var": "ANTHROPIC_API_KEY",
+  "masked": "••••wxyz"
+}
+```
+
+Writes atomically via Hermes' `save_env_value()` (chmod 600, cache invalidation). The `env_var` must match one of the provider's allowed `env_vars`; the `value` must be non-empty ASCII printable ≤ 512 characters.
+
+### Remove a Provider Key
+```
+DELETE /api/providers/:name/key?env_var=ANTHROPIC_API_KEY
+```
+
+Response (200):
+```json
+{
+  "success": true,
+  "provider": "anthropic",
+  "env_var": "ANTHROPIC_API_KEY"
+}
+```
+
+Removes the `env_var` line from `~/.hermes/.env`. Hermes' `key_required` providers will stop working until a new key is added and Hermes is restarted.
 
 ## Error Responses
 
@@ -243,6 +458,8 @@ Error types:
 - General API: 100 requests/minute
 - Chat API: 30 requests/minute
 - System commands: 5 requests/5 minutes
+- Likes: 5 requests/hour per IP
+- Provider key writes (`POST` / `DELETE`): 10 requests/minute
 
 ## Next Steps
 

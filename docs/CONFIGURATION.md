@@ -32,6 +32,13 @@
 |----------|-------------|---------|
 | `CORS_ORIGINS` | Allowed origins (comma-separated) | `http://localhost:3001` |
 
+### Likes (optional)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LIKES_WEBHOOK_URL` | Incoming-webhook URL for the "Like" button (Mattermost-compatible). Leave empty to disable the feature. | _(unset)_ |
+| `LIKES_COOLDOWN_SEC` | Per-user cooldown for sending likes (in seconds) | `3600` |
+
 ## Example .env File
 
 ```bash
@@ -50,6 +57,10 @@ UI_DB_PATH=./data/1230-ui.db
 
 # Security
 CORS_ORIGINS=http://localhost:3001,https://your-domain.com
+
+# Likes (optional)
+LIKES_WEBHOOK_URL=
+LIKES_COOLDOWN_SEC=3600
 ```
 
 ## Configuration Validation
@@ -72,6 +83,8 @@ Built-in rate limiting protects against abuse:
 - General API: 100 requests/minute
 - Chat API: 30 requests/minute
 - System commands: 5 requests/5 minutes
+- Likes: 5 requests/hour per IP
+- Provider key writes (`POST` / `DELETE`): 10 requests/minute
 
 ### CORS
 
