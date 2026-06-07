@@ -20,6 +20,26 @@ Modern web interface for managing sessions and interacting with [Hermes Agent](h
 - **Responsive Design** — mobile-friendly with bottom navigation
 - **Security** — rate limiting, XSS protection, CORS, security headers, rate-limited provider-key writes
 
+## Screenshots
+
+<p align="center">
+  <img src="screenshots/dashboard-light.png" alt="Dashboard (light mode)" width="900"/>
+</p>
+
+<p align="center">
+  <img src="screenshots/sessions-light.png" alt="Sessions list" width="450"/>
+  &nbsp;&nbsp;
+  <img src="screenshots/settings-light.png" alt="Settings" width="450"/>
+</p>
+
+<p align="center">
+  <img src="screenshots/dashboard-dark.png" alt="Dashboard (dark mode)" width="900"/>
+</p>
+
+<p align="center">
+  <em>Dashboard with Quick Chat and Recent Sessions, Sessions list grouped by date, and Settings — light &amp; dark themes. Note the green <strong>Hermes API</strong> status indicator in the header (right of search) and the new quick toggles at the bottom of the sidebar.</em>
+</p>
+
 ## Quick Start
 
 ```bash
