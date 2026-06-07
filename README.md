@@ -23,17 +23,13 @@ Modern web interface for managing sessions and interacting with [Hermes Agent](h
 ## Screenshots
 
 <p align="center">
-  <img src="screenshots/dashboard-light.png" alt="Dashboard (light mode)" width="900"/>
-</p>
-
-<p align="center">
-  <img src="screenshots/sessions-light.png" alt="Sessions list" width="450"/>
-  &nbsp;&nbsp;
-  <img src="screenshots/settings-light.png" alt="Settings" width="450"/>
-</p>
-
-<p align="center">
-  <img src="screenshots/dashboard-dark.png" alt="Dashboard (dark mode)" width="900"/>
+  <img src="screenshots/dashboard-light.png" alt="Dashboard (light mode)" width="640"/>
+  <br/>
+  <img src="screenshots/sessions-light.png" alt="Sessions list" width="640"/>
+  <br/>
+  <img src="screenshots/settings-light.png" alt="Settings" width="640"/>
+  <br/>
+  <img src="screenshots/dashboard-dark.png" alt="Dashboard (dark mode)" width="640"/>
 </p>
 
 <p align="center">
