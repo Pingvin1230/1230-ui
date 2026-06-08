@@ -126,7 +126,24 @@
 
 ### Backend
 
-- **`server.js`** — Express 5 app; ~1 900 lines; initialises DBs, runs schema migrations, seeds starter assistants, registers all routes
+The backend is split into focused modules (v0.8.0):
+
+| File | Lines | Responsibility |
+|---|---|---|
+| `server.js` | 39 | Entry point: open DBs → migrate → seed → listen |
+| `app.js` | 87 | Express instance, middleware stack, route mounting |
+| `db/connections.js` | 81 | Open `db` / `hermesDbWrite` / `uiDb`; export `closeAll()` |
+| `db/migrate.js` | 109 | `initSchema()`: `CREATE TABLE IF NOT EXISTS` + idempotent `ALTER TABLE` migrations |
+| `db/seed.js` | 60 | `seedStarterAssistants()`: seeds 2-3 assistants on first run |
+| `db/helpers.js` | 62 | Shared pure helpers: `rowToAssistant`, `getDefaultModelId`, `getProviderFromModel` |
+| `routes/system.js` | 166 | `/api/system/status`, `/api/system/exec`, `/api/health` |
+| `routes/sessions.js` | 462 | Full session CRUD + messages (`/api/sessions/*`, `/api/messages`) |
+| `routes/chat.js` | 217 | SSE streaming chat (`POST /api/chat`) |
+| `routes/models.js` | 148 | `/api/models/*` (list, providers, sync, toggle) |
+| `routes/assistants.js` | 235 | `/api/assistants/*` CRUD + fork-on-edit + archive/restore/duplicate |
+| `routes/providers.js` | 154 | `/api/providers/*` (list, set key, remove key) |
+| `routes/likes.js` | 100 | `POST /api/like` (cooldown, geoip, Mattermost webhook) |
+
 - **`middleware/security.ts`** — TypeScript source for all security middleware; compiled to `security.js` for runtime
 
 ### Databases (SQLite)

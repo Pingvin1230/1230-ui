@@ -21,10 +21,12 @@ export interface ChatError {
 
 export interface CreateAssistantInput {
   name: string;
-  description?: string | null;
   color?: string | null;
   icon?: string | null;
   modelId?: string | null;
+  style?: string | null;
+  depth?: string | null;
+  systemPrompt?: string | null;
 }
 
 export type UpdateAssistantInput = Partial<CreateAssistantInput>;
@@ -505,10 +507,12 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: input.name,
-        description: input.description ?? null,
         color: input.color ?? null,
         icon: input.icon ?? null,
         model_id: input.modelId ?? null,
+        style: input.style ?? null,
+        depth: input.depth ?? null,
+        system_prompt: input.systemPrompt ?? null,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -519,10 +523,13 @@ export const api = {
   async updateAssistant(id: number, input: UpdateAssistantInput): Promise<{ assistant: Assistant; forked: boolean; previousId?: number }> {
     const body: Record<string, unknown> = {};
     if (input.name !== undefined) body.name = input.name;
-    if (input.description !== undefined) body.description = input.description;
+
     if (input.color !== undefined) body.color = input.color;
     if (input.icon !== undefined) body.icon = input.icon;
     if (input.modelId !== undefined) body.model_id = input.modelId;
+    if (input.style !== undefined) body.style = input.style;
+    if (input.depth !== undefined) body.depth = input.depth;
+    if (input.systemPrompt !== undefined) body.system_prompt = input.systemPrompt;
     const res = await fetch(`${API_BASE}/api/assistants/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

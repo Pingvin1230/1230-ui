@@ -1,6 +1,6 @@
 # 1230-UI — Hermes Web Interface
 
-> **Status:** `v0.7.0` — Code quality sprint: recursive XSS sanitization, async Hermes version check, Vitest test suite, CI/CD pipeline, TypeScript middleware, optional geoip-lite.
+> **Status:** `v0.8.0` — Backend modularization (server.js 1911 → 39 lines, 12 route modules) + UX improvements (navigation guard, section headers, dynamic highlight.js import, button visibility) + **Assistants Phase 2** (style, depth, system prompt).
 
 Modern web interface for managing sessions and interacting with [Hermes Agent](https://github.com/anthropics/hermes-agent) through a browser.
 
@@ -13,7 +13,7 @@ Modern web interface for managing sessions and interacting with [Hermes Agent](h
 - **Provider Keys** — manage API keys for all bundled `api_key` providers from the UI (no terminal needed)
 - **System Commands** — execute `hermes update` and `hermes doctor --fix`
 - **Hermes API Status** — header indicator (green/red/gray) with live polling every 60s
-- **Assistants** — named bundles (name, description, color, icon, model) that show up as tiles on the New Session page. Create / edit / archive / duplicate / restore from `/assistants`. Tile grid (1/2/3 cols), context menu (MoreVertical), tab filters with counts. Editing a bundle that already has sessions **forks** it (the old version is archived; existing sessions keep the original reference). Duplicating opens the editor prefilled with the source — nothing is written until you click "Create copy"
+- **Assistants** — named bundles (name, color, icon, model, style, depth, system prompt) that show up as tiles on the New Session page. Create / edit / archive / duplicate / restore from `/assistants`. Tile grid (1/2/3 cols), context menu (MoreVertical), tab filters with counts. Style badges (💬 Friendly · 📋 Formal · ✂️ Concise · 🎨 Creative) and depth indicators (●○○ Quick · ●●○ Standard · ●●● Thorough) on tiles. System prompt (≤ 4000 chars) injected into every chat turn. Editing a bundle that already has sessions **forks** it (the old version is archived; existing sessions keep the original reference). Duplicating opens the editor prefilled with the source — nothing is written until you click "Create copy"
 - **Keyboard Shortcuts** — Ctrl+K (search), Ctrl+N (new session), Ctrl+Enter (send)
 - **Browser Notifications** — alerts for new messages (toggle in sidebar)
 - **Dark/Light Themes** — with saved preference (toggle in sidebar)

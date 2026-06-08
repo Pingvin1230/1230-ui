@@ -94,7 +94,10 @@
     "archiveSession": "Archive session",
     "unarchiveSession": "Unarchive session",
     "failedToDeleteSession": "Failed to delete session",
-    "breadcrumbsSessions": "Sessions"
+    "breadcrumbsSessions": "Sessions",
+    "leavePageTitle": "Leave this page?",
+    "leavePageDesc": "You have unsent text. If you leave now, it will be lost.",
+    "leavePageConfirm": "Leave"
   },
 
   "sessions": {
@@ -120,7 +123,8 @@
     "deleteSessionsConfirm": "Delete {{count}} session? This action cannot be undone.",
     "deleteSessionsConfirm_one": "Delete {{count}} session? This action cannot be undone.",
     "deleteSessionsConfirm_other": "Delete {{count}} sessions? This action cannot be undone.",
-    "failedToLoadSessions": "Failed to load sessions"
+    "failedToLoadSessions": "Failed to load sessions",
+    "holdToSelect": "Hold to select"
   },
 
   "dashboard": {
@@ -141,7 +145,10 @@
     "standardTile": "Standard",
     "create": "Create",
     "createFirstAssistant": "Create your first assistant",
-    "createFirstAssistantHint": "Bundle a model and a name so you can start a chat in one click."
+    "createFirstAssistantHint": "Bundle a model and a name so you can start a chat in one click.",
+    "sectionQuickStart": "Quick Start",
+    "sectionAssistants": "Assistants",
+    "manageAssistants": "Manage"
   },
 
   "settings": {
@@ -381,6 +388,20 @@
     "confirmRestore": "Restore this assistant? It will appear on the New Session page again.",
     "restoredToast": "Assistant restored",
     "errorRestore": "Failed to restore assistant",
-    "actionsLabel": "Actions"
+    "actionsLabel": "Actions",
+    "systemPromptLabel": "Role / instructions",
+    "systemPromptPlaceholder": "e.g. You are an advertising specialist. Always suggest two options and rate them by cost.",
+    "systemPromptHint": "The assistant will follow these instructions in every session. Leave empty to use default behaviour.",
+    "styleLabel": "Communication style",
+    "styleHint": "Sets the tone of responses. Click again to deselect.",
+    "styleFriendly": "Friendly",
+    "styleFormal": "Formal",
+    "styleConcise": "Concise",
+    "styleCreative": "Creative",
+    "depthLabel": "Response depth",
+    "depthHint": "Controls how thoroughly the assistant analyses the request. Click again to deselect.",
+    "depthQuick": "Quick",
+    "depthStandard": "Standard",
+    "depthThorough": "Thorough"
   }
 }

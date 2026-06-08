@@ -21,10 +21,31 @@ export const ASSISTANT_ICONS = [
 export const ASSISTANT_NAME_MAX = 60;
 export const ASSISTANT_DESC_MAX = 200;
 
+// ── Tone / communication style ────────────────────────────────────────────
+export const STYLE_OPTIONS = [
+  { id: 'friendly',   emoji: '💬', label: 'assistants.styleFriendly' },
+  { id: 'formal',     emoji: '📋', label: 'assistants.styleFormal' },
+  { id: 'concise',    emoji: '✂️',  label: 'assistants.styleConcise' },
+  { id: 'creative',   emoji: '🎨', label: 'assistants.styleCreative' },
+] as const;
+
+export type AssistantStyleId = (typeof STYLE_OPTIONS)[number]['id'];
+
+// ── Response depth (maps to max_iterations in Hermes) ─────────────────────
+export const DEPTH_OPTIONS = [
+  { id: 'quick',    dots: 1, label: 'assistants.depthQuick' },
+  { id: 'standard', dots: 2, label: 'assistants.depthStandard' },
+  { id: 'thorough', dots: 3, label: 'assistants.depthThorough' },
+] as const;
+
+export type AssistantDepthId = (typeof DEPTH_OPTIONS)[number]['id'];
+
 export interface AssistantFormValues {
   name: string;
   description: string;
   color: AssistantColorId | null;
   icon: string | null;
   modelId: string | null;
+  style: AssistantStyleId | null;
+  depth: AssistantDepthId | null;
 }

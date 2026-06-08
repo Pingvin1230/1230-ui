@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
 import type { Assistant } from '../types/api';
 import { getAssistantColorClasses } from '../lib/assistantColors';
+import { STYLE_OPTIONS, DEPTH_OPTIONS } from '../types/assistant';
 
 interface AssistantTileProps {
   assistant: Assistant;
@@ -11,10 +12,27 @@ interface AssistantTileProps {
   disabled?: boolean;
 }
 
+/** Three-dot depth indicator: ●●○ */
+function DepthDots({ dots, colorClass }: { dots: number; colorClass: string }) {
+  return (
+    <span className="flex items-center gap-0.5" aria-hidden="true">
+      {[1, 2, 3].map((n) => (
+        <span
+          key={n}
+          className={`w-1.5 h-1.5 rounded-full ${n <= dots ? colorClass : 'bg-fg-muted/25'}`}
+        />
+      ))}
+    </span>
+  );
+}
+
 export function AssistantTile({ assistant, modelLabel, onClick, loading, disabled }: AssistantTileProps) {
   const { t } = useTranslation();
   const colors = getAssistantColorClasses(assistant.color);
   const archived = assistant.isArchived;
+
+  const styleOption = STYLE_OPTIONS.find((s) => s.id === assistant.style) ?? null;
+  const depthOption = DEPTH_OPTIONS.find((d) => d.id === assistant.depth) ?? null;
 
   return (
     <button
@@ -27,7 +45,14 @@ export function AssistantTile({ assistant, modelLabel, onClick, loading, disable
           : `${colors.border} hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 ${colors.ring}`
       }`}
     >
-      <div className="flex items-center gap-2 w-full">
+      {/* Loading spinner — top-right corner */}
+      {loading && (
+        <span className="absolute top-3 right-3">
+          <Loader2 className={`w-4 h-4 animate-spin ${colors.accent}`} />
+        </span>
+      )}
+
+      <div className="flex items-center gap-2 w-full pr-6">
         {assistant.icon && (
           <span className="text-2xl flex-shrink-0" aria-hidden="true">
             {assistant.icon}
@@ -41,19 +66,27 @@ export function AssistantTile({ assistant, modelLabel, onClick, loading, disable
         )}
       </div>
 
-      {assistant.description && (
-        <p className="text-xs text-fg-secondary line-clamp-2 w-full">{assistant.description}</p>
-      )}
-
-      <div className="mt-auto w-full flex items-center justify-between gap-2">
+      {/* Bottom: model pill + style/depth indicators */}
+      <div className="mt-auto w-full flex items-center gap-2 flex-wrap">
         {modelLabel && (
-          <span className={`text-xs px-1.5 py-0.5 rounded ${colors.bgSubtle} ${colors.text} truncate`}>
+          <span className={`text-xs px-1.5 py-0.5 rounded ${colors.bgSubtle} ${colors.text} truncate max-w-[120px]`}>
             {modelLabel}
           </span>
         )}
-        <span className={`text-xs ${colors.accent} font-medium ml-auto opacity-0 group-hover:opacity-100 transition-opacity`}>
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : t('newSession.create')}
-        </span>
+        {styleOption && (
+          <span
+            className="flex items-center gap-1 text-xs text-fg-secondary"
+            title={t(styleOption.label)}
+          >
+            <span aria-hidden="true">{styleOption.emoji}</span>
+            <span className="hidden sm:inline">{t(styleOption.label)}</span>
+          </span>
+        )}
+        {depthOption && (
+          <span title={t(depthOption.label)} aria-label={t(depthOption.label)}>
+            <DepthDots dots={depthOption.dots} colorClass={colors.bg} />
+          </span>
+        )}
       </div>
     </button>
   );

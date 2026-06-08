@@ -97,16 +97,36 @@ npm run preview      # Preview production build locally
 │   ├── App.tsx                   # Root component (routes, lazy pages, ErrorBoundary)
 │   ├── index.css                 # Design tokens (@theme), dark mode vars, base styles
 │   └── main.tsx                  # Entry point
-├── server.js                     # Backend (Express 5, Node.js ESM)
+│
+├── server.js                     # Entry point (39 lines): open DBs → migrate → seed → listen
+├── app.js                        # Express app: middleware + route mounting (87 lines)
 ├── config.js                     # Zod-validated config loader
+│
+├── db/                           # Database layer
+│   ├── connections.js            # Open db / hermesDbWrite / uiDb; export closeAll()
+│   ├── migrate.js                # initSchema(): CREATE TABLE + idempotent ALTER TABLE
+│   ├── seed.js                   # seedStarterAssistants()
+│   └── helpers.js                # rowToAssistant, getDefaultModelId, getProviderFromModel
+│
+├── routes/                       # Express route modules (one per domain)
+│   ├── system.js                 # /api/system/*, /api/health
+│   ├── sessions.js               # /api/sessions/*, /api/messages
+│   ├── chat.js                   # /api/chat (SSE streaming)
+│   ├── models.js                 # /api/models/*
+│   ├── assistants.js             # /api/assistants/*
+│   ├── providers.js              # /api/providers/*
+│   └── likes.js                  # /api/like
+│
 ├── middleware/
 │   ├── security.js               # Runtime: rate limiters + recursive XSS sanitization
 │   └── security.ts               # TypeScript source (authoritative, checked by tsc)
+│
 ├── scripts/                      # Python helpers (interface to Hermes)
 │   ├── save_messages.py          # Save messages to Hermes DB
 │   ├── sync_providers.py         # Sync providers/models from Hermes → UI DB
 │   ├── list_bundled_providers.py # Enumerate Hermes api_key providers with metadata
 │   └── manage_provider_key.py    # Atomic set/remove of ~/.hermes/.env key
+│
 ├── tests/                        # Backend tests (Vitest)
 │   └── security.test.js          # 9 tests for sanitizeBody
 ├── .github/

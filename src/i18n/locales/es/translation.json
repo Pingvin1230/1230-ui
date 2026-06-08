@@ -92,7 +92,10 @@
     "archiveSession": "Archivar sesión",
     "unarchiveSession": "Desarchivar sesión",
     "failedToDeleteSession": "Error al eliminar la sesión",
-    "breadcrumbsSessions": "Sesiones"
+    "breadcrumbsSessions": "Sesiones",
+    "leavePageTitle": "¿Salir de esta página?",
+    "leavePageDesc": "Tienes texto sin enviar. Si sales ahora, se perderá.",
+    "leavePageConfirm": "Salir"
   },
   "sessions": {
     "title": "Sesiones",
@@ -117,7 +120,8 @@
     "deleteSessionsConfirm": "¿Eliminar {{count}} sesión? Esta acción no se puede deshacer.",
     "deleteSessionsConfirm_one": "¿Eliminar {{count}} sesión? Esta acción no se puede deshacer.",
     "deleteSessionsConfirm_other": "¿Eliminar {{count}} sesiones? Esta acción no se puede deshacer.",
-    "failedToLoadSessions": "Error al cargar las sesiones"
+    "failedToLoadSessions": "Error al cargar las sesiones",
+    "holdToSelect": "Mantén presionado para seleccionar"
   },
   "dashboard": {
     "welcome": "Bienvenido",
@@ -136,7 +140,10 @@
     "standardTile": "Estándar",
     "create": "Crear",
     "createFirstAssistant": "Crea tu primer asistente",
-    "createFirstAssistantHint": "Asigna un nombre y un modelo para iniciar un chat con un solo clic."
+    "createFirstAssistantHint": "Asigna un nombre y un modelo para iniciar un chat con un solo clic.",
+    "sectionQuickStart": "Inicio rápido",
+    "sectionAssistants": "Asistentes",
+    "manageAssistants": "Gestionar"
   },
   "settings": {
     "title": "Configuración",
@@ -368,6 +375,20 @@
     "confirmRestore": "¿Restaurar este asistente? Volverá a aparecer en la página de nueva sesión.",
     "restoredToast": "Asistente restaurado",
     "errorRestore": "Error al restaurar el asistente",
-    "actionsLabel": "Acciones"
+    "actionsLabel": "Acciones",
+    "systemPromptLabel": "Rol / instrucciones",
+    "systemPromptPlaceholder": "p.ej. Eres un especialista en publicidad. Siempre propón dos opciones y evalúalas por coste.",
+    "systemPromptHint": "El asistente seguirá estas instrucciones en cada sesión. Dejar vacío para el comportamiento predeterminado.",
+    "styleLabel": "Estilo de comunicación",
+    "styleHint": "Define el tono de las respuestas. Haz clic de nuevo para deseleccionar.",
+    "styleFriendly": "Amigable",
+    "styleFormal": "Formal",
+    "styleConcise": "Conciso",
+    "styleCreative": "Creativo",
+    "depthLabel": "Profundidad de respuesta",
+    "depthHint": "Controla cuán detalladamente el asistente analiza la solicitud. Haz clic de nuevo para deseleccionar.",
+    "depthQuick": "Rápido",
+    "depthStandard": "Estándar",
+    "depthThorough": "Detallado"
   }
 }

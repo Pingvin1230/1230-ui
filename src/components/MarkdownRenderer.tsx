@@ -1,8 +1,33 @@
-import { useRef, useState, type HTMLAttributes, type ReactNode } from 'react';
+import { useRef, useState, useEffect, type HTMLAttributes, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
 import { Check, Copy } from 'lucide-react';
+
+// UX-13: Load rehype-highlight + the 37-language "common" lowlight bundle
+// lazily so they are excluded from the initial ChatPage chunk. The CSS theme
+// is also loaded dynamically here (once) instead of via a static import in
+// ChatPage.tsx, which keeps it out of the main bundle entirely.
+//
+// We use a module-level flag so the dynamic import runs only once across all
+// MarkdownRenderer instances in the same page lifetime.
+let _rehypeHighlight: typeof import('rehype-highlight')['default'] | null = null;
+let _highlightLoading = false;
+const _highlightCallbacks: Array<() => void> = [];
+
+function loadHighlight(onReady: () => void) {
+  if (_rehypeHighlight) { onReady(); return; }
+  _highlightCallbacks.push(onReady);
+  if (_highlightLoading) return;
+  _highlightLoading = true;
+  Promise.all([
+    import('rehype-highlight'),
+    import('highlight.js/styles/github-dark.css'),
+  ]).then(([mod]) => {
+    _rehypeHighlight = mod.default;
+    _highlightCallbacks.forEach((cb) => cb());
+    _highlightCallbacks.length = 0;
+  });
+}
 
 interface MarkdownRendererProps {
   content: string;
@@ -50,11 +75,23 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
   className = '',
 }) => {
+  // UX-13: Re-render once highlight module is loaded.
+  const [highlightReady, setHighlightReady] = useState(!!_rehypeHighlight);
+
+  useEffect(() => {
+    if (_rehypeHighlight) return;
+    loadHighlight(() => setHighlightReady(true));
+  }, []);
+
+  const rehypePlugins: import('unified').Pluggable[] = highlightReady && _rehypeHighlight
+    ? [[_rehypeHighlight, { detect: true, ignoreMissing: true }]]
+    : [];
+
   return (
     <div className={`markdown-content ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
+        rehypePlugins={rehypePlugins}
         components={{
           h1: ({ ...props }) => (
             <h1 className="text-2xl font-bold mt-6 first:mt-0 mb-3 text-fg-primary" {...props} />

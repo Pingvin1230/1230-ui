@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, MessageSquare, Settings2 } from 'lucide-react';
+import { AlertCircle, Settings2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useToast } from '../hooks/useToast';
-import type { Assistant, Session } from '../types/api';
+import type { Assistant } from '../types/api';
 import { NoModelsIllustration } from '../assets/illustrations';
-import { formatTimeAgo, formatFullDateTime } from '../lib/time';
 import { AssistantTile } from '../components/AssistantTile';
 
 interface ModelsResponse {
@@ -21,7 +20,6 @@ export function NewSessionPage() {
   const [model, setModel] = useState('');
   const [models, setModels] = useState<ModelsResponse | null>(null);
   const [assistants, setAssistants] = useState<Assistant[]>([]);
-  const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [creatingFrom, setCreatingFrom] = useState<string | null>(null);
 
@@ -29,14 +27,12 @@ export function NewSessionPage() {
     let cancelled = false;
     (async () => {
       try {
-        const [sessionsData, modelsData, assistantsData] = await Promise.all([
-          api.getSessions(5, 0),
+        const [modelsData, assistantsData] = await Promise.all([
           api.getModels(),
           api.getAssistants(false),
         ]);
 
         if (cancelled) return;
-        setSessions(sessionsData.sessions);
         setModels(modelsData);
         setAssistants(assistantsData.assistants.filter((a) => !a.isArchived));
 
@@ -116,119 +112,90 @@ export function NewSessionPage() {
         <p className="text-sm text-fg-muted mt-1">{t('newSession.description')}</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {/* Standard tile — model picker inside */}
-        <form
-          onSubmit={handleStartStandard}
-          className="flex flex-col gap-3 p-4 sm:p-5 rounded-xl border-2 border-border-default bg-bg-primary min-h-[120px] focus-within:ring-2 focus-within:ring-blue-500"
-        >
-          <div className="flex items-center gap-2 w-full">
-            <Settings2 className="w-5 h-5 text-fg-secondary flex-shrink-0" />
-            <span className="font-semibold text-fg-primary">{t('newSession.standardTile')}</span>
-          </div>
-          {models ? (
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-border-default bg-bg-primary text-fg-primary focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] text-sm"
+      {/* Assistants section — first */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xs font-semibold text-fg-muted uppercase tracking-wider">
+            {t('newSession.sectionAssistants')}
+          </h2>
+          {assistants.length > 0 && (
+            <Link
+              to="/assistants"
+              className="text-xs text-fg-muted hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
             >
-              {Object.entries(models.providers).map(([providerId, provider]) => (
-                <optgroup key={providerId} label={provider.name}>
-                  {provider.models.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                      {models.default?.id === m.id ? ` ${t('common.defaultSuffix')}` : ''}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          ) : (
-            <div className="flex flex-col items-center text-center py-2">
-              <NoModelsIllustration className="w-10 h-10 text-fg-muted" />
-              <p className="text-fg-muted text-xs mt-1">{t('common.noModelsAvailable')}</p>
-            </div>
+              {t('newSession.manageAssistants')}
+            </Link>
           )}
-          <button
-            type="submit"
-            disabled={!model}
-            className="mt-auto w-full px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
-          >
-            {t('newSession.create')}
-          </button>
-        </form>
-
-        {/* Assistant tiles */}
-        {assistants.map((a) => (
-          <AssistantTile
-            key={a.id}
-            assistant={a}
-            modelLabel={a.modelId ? modelLabelMap.get(a.modelId) ?? null : null}
-            onClick={() => handleStartAssistant(a)}
-            loading={creatingFrom === `assistant:${a.id}`}
-          />
-        ))}
-
-        {assistants.length === 0 && (
-          <Link
-            to="/assistants/new"
-            className="flex flex-col items-center justify-center gap-1 p-4 sm:p-5 rounded-xl border-2 border-dashed border-border-default text-fg-muted hover:text-fg-primary hover:border-blue-300 min-h-[120px] text-center"
-          >
-            <span className="text-sm font-medium">{t('newSession.createFirstAssistant')}</span>
-            <span className="text-xs">{t('newSession.createFirstAssistantHint')}</span>
-          </Link>
-        )}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {assistants.map((a) => (
+            <AssistantTile
+              key={a.id}
+              assistant={a}
+              modelLabel={a.modelId ? modelLabelMap.get(a.modelId) ?? null : null}
+              onClick={() => handleStartAssistant(a)}
+              loading={creatingFrom === `assistant:${a.id}`}
+            />
+          ))}
+          {assistants.length === 0 && (
+            <Link
+              to="/assistants/new"
+              className="flex flex-col items-center justify-center gap-1 p-4 sm:p-5 rounded-xl border-2 border-dashed border-border-default text-fg-muted hover:text-fg-primary hover:border-blue-300 min-h-[120px] text-center"
+            >
+              <span className="text-sm font-medium">{t('newSession.createFirstAssistant')}</span>
+              <span className="text-xs">{t('newSession.createFirstAssistantHint')}</span>
+            </Link>
+          )}
+        </div>
       </div>
 
-      {sessions.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-lg font-semibold text-fg-primary mb-3">{t('newSession.recentSessions')}</h2>
-          <div className="space-y-2">
-            {sessions.slice(0, 5).map((session) => {
-              const titleText = session.title ||
-                (session.preview
-                  ? session.preview.length > 60
-                    ? session.preview.slice(0, 60) + '...'
-                    : session.preview
-                  : t('common.untitledSession'));
-              return (
-                <Link
-                  key={session.id}
-                  to={`/chat/${session.id}`}
-                  className="block bg-bg-primary border border-border-default rounded-lg p-4 hover:border-blue-300 dark:hover:border-blue-600 transition-all hover:shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-4 mb-2">
-                    <h3 className="font-semibold text-fg-primary truncate">{titleText}</h3>
-                    <span
-                      className="text-xs text-fg-muted whitespace-nowrap flex-shrink-0"
-                      title={formatFullDateTime(session.lastMessageAt ?? session.startedAt)}
-                    >
-                      {formatTimeAgo(session.lastMessageAt ?? session.startedAt)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-fg-muted flex-wrap">
-                    {session.assistant && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-bg-secondary text-fg-secondary">
-                        {session.assistant.icon && <span aria-hidden="true">{session.assistant.icon}</span>}
-                        <span className="truncate max-w-[160px]">{session.assistant.name}</span>
-                      </span>
-                    )}
-                    {session.model && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                        {session.model}
-                      </span>
-                    )}
-                    <span className="inline-flex items-center gap-1">
-                      <MessageSquare className="w-3 h-3" />
-                      {session.messageCount}
-                    </span>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
+      {/* Quick Start section — second */}
+      <div>
+        <h2 className="text-xs font-semibold text-fg-muted uppercase tracking-wider mb-3">
+          {t('newSession.sectionQuickStart')}
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <form
+            onSubmit={handleStartStandard}
+            className="flex flex-col gap-3 p-4 sm:p-5 rounded-xl border-2 border-border-default bg-bg-primary min-h-[120px] focus-within:ring-2 focus-within:ring-blue-500"
+          >
+            <div className="flex items-center gap-2 w-full">
+              <Settings2 className="w-5 h-5 text-fg-secondary flex-shrink-0" />
+              <span className="font-semibold text-fg-primary">{t('newSession.standardTile')}</span>
+            </div>
+            {models ? (
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-border-default bg-bg-primary text-fg-primary focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] text-sm"
+              >
+                {Object.entries(models.providers).map(([providerId, provider]) => (
+                  <optgroup key={providerId} label={provider.name}>
+                    {provider.models.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                        {models.default?.id === m.id ? ` ${t('common.defaultSuffix')}` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            ) : (
+              <div className="flex flex-col items-center text-center py-2">
+                <NoModelsIllustration className="w-10 h-10 text-fg-muted" />
+                <p className="text-fg-muted text-xs mt-1">{t('common.noModelsAvailable')}</p>
+              </div>
+            )}
+            <button
+              type="submit"
+              disabled={!model}
+              className="mt-auto w-full px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+            >
+              {t('newSession.create')}
+            </button>
+          </form>
         </div>
-      )}
+      </div>
 
       {!loading && !models && (
         <div className="mt-4 bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-center gap-2 text-sm text-red-500">

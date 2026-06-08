@@ -2,6 +2,220 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - 2026-06-08
+
+Backend refactoring sprint + UX improvements + **Assistants Phase 2** (style, depth, system prompt). `server.js` (1911 lines) split into a modular directory structure. 5 open items from the UX/UI audit closed. Task #25 Phase 2 partially shipped.
+
+### Assistants Phase 2 — style, depth, system prompt (Task #25)
+
+#### New assistant fields
+
+Three new fields added to the `assistants` table via idempotent `ALTER TABLE` migrations:
+
+| Field | Type | Values | Purpose |
+|---|---|---|---|
+| `style` | TEXT NULL | `friendly` / `formal` / `concise` / `creative` | Communication tone displayed on tiles |
+| `depth` | TEXT NULL | `quick` / `standard` / `thorough` | Response depth (maps to `max_iterations` in future) |
+| `system_prompt` | TEXT NULL | free text ≤ 4000 chars | Injected as `system` message on every chat turn |
+
+#### AssistantTile — visual indicators
+
+- **Style badge** — emoji + label (e.g. `💬 Friendly`). On mobile (`< sm`) only the emoji is shown to save space.
+- **Depth dots** — three filled/empty dots `●●○` in the assistant's accent colour (e.g. `●●○` = Standard). Uses a `DepthDots` helper component.
+- Both indicators appear only when the field is set; tiles without style/depth look identical to before.
+- Loading spinner moved to the top-right corner of the tile (absolute position). The hover "create →" text is removed — the tile itself is the CTA.
+
+#### Assistant editor — new fields, new order
+
+Form field order (top → bottom):
+1. **Name**
+2. **Role / instructions** (`system_prompt`) — monospaced textarea, resize, up to 4000 chars, counter. Placeholder gives a concrete example in each language.
+3. **Communication style** — 4 pill buttons (click to select/deselect): 💬 Friendly · 📋 Formal · ✂️ Concise · 🎨 Creative
+4. **Response depth** — 3 pill buttons with dot indicators: `●○○` Quick · `●●○` Standard · `●●●` Thorough
+5. **Model** — unchanged
+6. **Color** — unchanged
+7. **Icon** — unchanged
+
+**Description field removed.** It is now derived automatically on the backend: first 100 characters of `system_prompt` (or `null` when no prompt is set). The field is kept in the DB for compatibility but is never shown or edited in the UI.
+
+#### Backend changes
+
+- `routes/assistants.js` — `sanitizeAssistantInput` no longer accepts `description` from the client; generates it from `system_prompt`. Validates `style` against allowed set, `depth` against allowed set, `system_prompt` ≤ 4000 chars. All four write paths (CREATE, UPDATE in-place, FORK insert, DUPLICATE) include the new fields.
+- `db/helpers.js` — `rowToAssistant` returns `style`, `depth`, `systemPrompt` (camelCase).
+- `db/migrate.js` — three new idempotent column migrations for `assistants`.
+- `db/seed.js` — starter assistants seeded with style/depth: General Assistant (`friendly` / `standard`), Code Helper (`concise` / `thorough`), Creative Writer (`creative` / `standard`).
+
+#### Frontend changes
+
+- `src/types/api.ts` — `Assistant` interface: added `style`, `depth`, `systemPrompt`; removed `description`.
+- `src/types/assistant.ts` — added `STYLE_OPTIONS`, `DEPTH_OPTIONS` constant arrays; `AssistantStyleId`, `AssistantDepthId` types; removed `ASSISTANT_DESC_MAX`.
+- `src/lib/api.ts` — `CreateAssistantInput`: removed `description`, added `style`, `depth`, `systemPrompt`. `createAssistant` and `updateAssistant` updated accordingly.
+- `src/components/AssistantTile.tsx` — rewritten bottom row; loading spinner relocated; "create" text removed; style/depth indicators added.
+- `src/components/AssistantCard.tsx`, `AssistantManageTile.tsx` — description display removed.
+- `src/pages/AssistantEditPage.tsx` — description state/field removed; system prompt, style, depth fields added in new order.
+
+#### New Session page layout
+
+- **Assistants section moved above Quick Start** — the primary workflow (pick an assistant) is now at the top; the fallback (plain model picker) is below.
+- **Recent Sessions block removed** — eliminated the `getSessions(5)` API call on page load; page now loads with two parallel requests instead of three.
+
+#### i18n — 13 new keys × 4 languages
+
+```
+assistants.systemPromptLabel  assistants.systemPromptPlaceholder  assistants.systemPromptHint
+assistants.styleLabel         assistants.styleHint
+assistants.styleFriendly      assistants.styleFormal
+assistants.styleConcise       assistants.styleCreative
+assistants.depthLabel         assistants.depthHint
+assistants.depthQuick         assistants.depthStandard  assistants.depthThorough
+```
+
+### Refactoring
+
+- **`server.js` — 1911 → 39 lines** — file is now a thin entry point that
+  opens DB connections, runs migrations, seeds data, then hands off to
+  `app.js`.
+
+- **`app.js`** — new file (87 lines). Owns Express instantiation, all
+  middleware, and route mounting. Can be imported by tests without starting
+  the HTTP listener.
+
+- **`db/connections.js`** — DB open/close logic extracted from `server.js`.
+  Exports `db` (Hermes readonly), `hermesDbWrite` (Hermes writable),
+  `uiDb` (UI DB), and `closeAll()` for graceful shutdown.
+
+- **`db/migrate.js`** — `initSchema()` function: all `CREATE TABLE IF NOT
+  EXISTS` statements and idempotent `ALTER TABLE` column migrations.
+
+- **`db/seed.js`** — `seedStarterAssistants()` extracted verbatim; now
+  receives `uiDb` as a parameter instead of closing over a module-level
+  global.
+
+- **`db/helpers.js`** — shared pure helpers used across multiple route
+  modules: `rowToAssistant`, `getDefaultModelId`, `getProviderFromModel`.
+
+- **`routes/system.js`** — `GET /api/system/status`, `POST /api/system/exec`,
+  `GET /api/health`.
+
+- **`routes/sessions.js`** — full session CRUD + messages; `POST /api/messages`
+  co-located here. Two dead-code routes (`DELETE /:id` and `PATCH /:id/title`
+  as Hermes API proxy) removed — they were unreachable since Express
+  short-circuits at the first matching handler.
+
+- **`routes/chat.js`** — `POST /api/chat` with SSE streaming and tool-call
+  event injection.
+
+- **`routes/models.js`** — `GET /api/models`, `GET /api/models/providers`,
+  `POST /api/models/sync`, `PATCH /api/models/models/:id/toggle`.
+
+- **`routes/assistants.js`** — full assistants CRUD including fork-on-edit,
+  archive, restore, duplicate.
+
+- **`routes/providers.js`** — `GET /api/providers/available`,
+  `POST /api/providers/:name/key`, `DELETE /api/providers/:name/key`.
+
+- **`routes/likes.js`** — `POST /api/like` with cooldown, geoip, webhook.
+
+### Bug fix (dead code removal)
+
+- Removed duplicate `DELETE /api/sessions/:id` and `PATCH /api/sessions/:id/title`
+  route handlers (lines ~1231 and ~1259 in the original file) that proxied
+  to the Hermes API. These handlers were never reachable in practice because
+  Express matched the identically-pathed handlers on lines ~630 and ~594
+  first. The direct-SQLite handlers (first match) are the correct ones and
+  are preserved.
+
+### UX-4 — Navigation guard in ChatPage
+
+When the user has typed text in the input but has not sent it, navigating away
+(clicking a link, pressing Back, selecting another session) now shows a
+confirmation modal before proceeding.
+
+Implemented as a three-layer manual guard (the project uses `BrowserRouter`
+which does not support `useBlocker`, which requires a data router):
+
+- **`beforeunload`** — native browser dialog on tab close / hard navigation
+- **`popstate`** — intercepts Back/Forward button; pushes current state back
+  so the URL does not change until the user confirms
+- **`click` capture phase** — intercepts `<Link>` / `<a>` clicks before
+  React Router handles them; stores the target URL and shows the modal
+
+Modal has two buttons: **Cancel** (stay) and **Leave** (clears input, then
+navigates). Keyboard-accessible.
+
+New i18n keys: `chat.leavePageTitle`, `chat.leavePageDesc`,
+`chat.leavePageConfirm` × 4 languages.
+
+### UX-6 — Section headers on New Session page
+
+The single flat grid of tiles on `/new` is split into two named sections:
+
+- **"Quick Start"** (`newSession.sectionQuickStart`) — contains the Standard
+  tile (model picker + Create button).
+- **"Assistants"** (`newSession.sectionAssistants`) — contains all assistant
+  tiles, with a "Manage →" link to `/assistants` when at least one exists.
+
+New i18n keys: `newSession.sectionQuickStart`, `newSession.sectionAssistants`,
+`newSession.manageAssistants` × 4 languages.
+
+### UX-8 — "Hold to select" affordance on mobile
+
+`SessionCard` now renders a small hint line below the preview text on
+**touch-only devices** (`hover: none and pointer: coarse`) until the user
+triggers bulk mode for the first time. After the first long-press the hint is
+suppressed permanently via `localStorage` key `bulk_mode_hint_shown`.
+
+New i18n key: `sessions.holdToSelect` × 4 languages.
+
+### UX-9 — Consistent button visibility in ChatPage (desktop vs mobile)
+
+Copy and Regenerate buttons on assistant messages were fully invisible on
+desktop until hover (`md:opacity-0`), while always visible on mobile. This
+created a discoverability gap on desktop.
+
+Changed: `md:opacity-0` → `md:opacity-40` so the buttons are faintly visible
+at rest and reach full opacity on hover/focus. Mobile behaviour unchanged
+(always `opacity-60`).
+
+### UX-13 — Dynamic import of highlight.js (ChatPage chunk 350 KB → 183 KB)
+
+`rehype-highlight` and `highlight.js/styles/github-dark.css` are no longer
+part of the initial ChatPage chunk. Both are loaded lazily via a
+module-level `Promise.all([ import('rehype-highlight'), import('highlight.js/styles/github-dark.css') ])` inside `MarkdownRenderer`.
+
+A module-level singleton pattern ensures the dynamic import runs exactly once
+per page lifetime, regardless of how many `MarkdownRenderer` instances are
+mounted. Syntax highlighting activates as soon as the chunk resolves (~first
+message with code blocks).
+
+**Bundle impact:**
+
+| Chunk | Before | After |
+|---|---|---|
+| `ChatPage` | 350 KB gzip | 183 KB gzip |
+| `rehype-highlight` (new lazy) | — | 53 KB gzip |
+| `github-dark.css` (new lazy) | (inlined) | 0.4 KB gzip |
+
+Net initial payload reduction: **~167 KB gzip** for users who visit chat pages.
+
+### New file summary
+
+```
+server.js              39 lines  entry point
+app.js                 87 lines  Express app + middleware + route mounting
+db/connections.js      81 lines  SQLite connections + closeAll()
+db/migrate.js         109 lines  initSchema()
+db/seed.js             60 lines  seedStarterAssistants()
+db/helpers.js          62 lines  rowToAssistant / getDefaultModelId / getProviderFromModel
+routes/system.js      166 lines  /api/system/*, /api/health
+routes/sessions.js    462 lines  /api/sessions/*, /api/messages
+routes/chat.js        217 lines  /api/chat (SSE)
+routes/models.js      148 lines  /api/models/*
+routes/assistants.js  235 lines  /api/assistants/*
+routes/providers.js   154 lines  /api/providers/*
+routes/likes.js       100 lines  /api/like
+```
+
 ## [0.7.0] - 2026-06-08
 
 Code quality sprint. All 12 issues identified in the code audit are closed. No user-facing behaviour changes.

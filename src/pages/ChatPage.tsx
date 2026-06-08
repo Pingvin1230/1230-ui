@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useLocation, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, type ChatMessage, type ChatError } from '../lib/api';
@@ -12,7 +12,7 @@ import { formatTimeAgo, formatFullDateTime } from '../lib/time';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useNotifications } from '../hooks/useNotifications';
 import { useNotificationsStore } from '../store/notificationsStore';
-import 'highlight.js/styles/github-dark.css';
+// highlight.js CSS is loaded lazily in MarkdownRenderer (UX-13)
 
 export function ChatPage() {
   const { t } = useTranslation();
@@ -56,6 +56,79 @@ export function ChatPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+
+  // UX-4: Navigation guard — show confirmation modal when input has unsent text.
+  // BrowserRouter does not support useBlocker (data-router only), so we implement
+  // the guard manually:
+  //  - beforeunload  → native browser dialog on tab close / hard navigation
+  //  - popstate      → back/forward button intercept
+  //  - click capture → intercept <Link> / <a> clicks before React Router handles them
+  const [leaveGuardPending, setLeaveGuardPending] = useState(false);
+  const pendingUrlRef = useRef<string | null>(null);
+  const inputHasText = input.trim().length > 0;
+  const inputHasTextRef = useRef(inputHasText);
+  useEffect(() => { inputHasTextRef.current = inputHasText; }, [inputHasText]);
+
+  // 1. Browser-native guard for tab close / external navigation
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (inputHasTextRef.current) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
+  // 2. Back/forward button guard
+  useEffect(() => {
+    const handler = (e: PopStateEvent) => {
+      if (!inputHasTextRef.current) return;
+      // Push the current state back so the URL doesn't change
+      window.history.pushState(e.state, '', window.location.href);
+      pendingUrlRef.current = null; // popstate doesn't give us the target URL easily
+      setLeaveGuardPending(true);
+    };
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
+  }, []);
+
+  // 3. Click intercept for in-app <Link> / <a> tags
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (!inputHasTextRef.current) return;
+      const target = (e.target as Element).closest('a[href]');
+      if (!target) return;
+      const href = (target as HTMLAnchorElement).getAttribute('href');
+      if (!href || href.startsWith('#') || href.startsWith('http') || href.startsWith('mailto')) return;
+      // Same page — no guard needed
+      const currentPath = window.location.pathname;
+      if (href === currentPath) return;
+      e.preventDefault();
+      e.stopPropagation();
+      pendingUrlRef.current = href;
+      setLeaveGuardPending(true);
+    };
+    // Capture phase so we intercept before React Router's Link handler
+    document.addEventListener('click', handler, true);
+    return () => document.removeEventListener('click', handler, true);
+  }, []);
+
+  const handleLeaveConfirm = useCallback(() => {
+    setLeaveGuardPending(false);
+    setInput('');
+    if (pendingUrlRef.current) {
+      navigate(pendingUrlRef.current);
+      pendingUrlRef.current = null;
+    }
+  }, [navigate]);
+
+  const handleLeaveCancel = useCallback(() => {
+    setLeaveGuardPending(false);
+    pendingUrlRef.current = null;
+  }, []);
+
   const { enabled: notificationsEnabled } = useNotificationsStore();
   const { notify, setBadge, clearBadge } = useNotifications({
     enabled: notificationsEnabled,
@@ -560,7 +633,7 @@ export function ChatPage() {
                         type="button"
                         onClick={() => handleCopyMessage(msg.id, msg.content || '')}
                         aria-label={copiedMessageId === msg.id ? t('chat.messageCopied') : t('chat.copyMessage')}
-                        className="p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-fg-muted opacity-60 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 transition-opacity hover:bg-bg-secondary"
+                        className="p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-fg-muted opacity-60 md:opacity-40 md:group-hover:opacity-100 md:focus-visible:opacity-100 transition-opacity hover:bg-bg-secondary"
                       >
                         {copiedMessageId === msg.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
@@ -589,7 +662,7 @@ export function ChatPage() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 opacity-60 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1 opacity-60 md:opacity-40 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity">
                       <button
                         type="button"
                         onClick={() => handleCopyMessage(msg.id, msg.content || '')}
@@ -729,6 +802,36 @@ export function ChatPage() {
             >
               {t('common.close')}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* UX-4: Navigation guard modal */}
+      {leaveGuardPending && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-bg-primary rounded-xl border border-border-default shadow-xl max-w-sm w-full p-6">
+            <h2 className="text-base font-semibold text-fg-primary mb-2">
+              {t('chat.leavePageTitle')}
+            </h2>
+            <p className="text-sm text-fg-secondary mb-5">
+              {t('chat.leavePageDesc')}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={handleLeaveCancel}
+                className="px-4 py-2 rounded-lg bg-bg-secondary hover:bg-bg-muted text-fg-primary text-sm font-medium transition-colors"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={handleLeaveConfirm}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"
+              >
+                {t('chat.leavePageConfirm')}
+              </button>
+            </div>
           </div>
         </div>
       )}

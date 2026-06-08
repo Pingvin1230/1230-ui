@@ -95,7 +95,10 @@
     "archiveSession": "Архивировать сессию",
     "unarchiveSession": "Разархивировать сессию",
     "failedToDeleteSession": "Не удалось удалить сессию",
-    "breadcrumbsSessions": "Сессии"
+    "breadcrumbsSessions": "Сессии",
+    "leavePageTitle": "Покинуть страницу?",
+    "leavePageDesc": "У вас есть неотправленный текст. Если вы уйдёте, он будет потерян.",
+    "leavePageConfirm": "Уйти"
   },
 
   "sessions": {
@@ -121,7 +124,8 @@
     "deleteSessionsConfirm_one": "Удалить {{count}} сессию? Это действие нельзя отменить.",
     "deleteSessionsConfirm_few": "Удалить {{count}} сессии? Это действие нельзя отменить.",
     "deleteSessionsConfirm_many": "Удалить {{count}} сессий? Это действие нельзя отменить.",
-    "failedToLoadSessions": "Не удалось загрузить сессии"
+    "failedToLoadSessions": "Не удалось загрузить сессии",
+    "holdToSelect": "Удержите для выбора"
   },
 
   "dashboard": {
@@ -142,7 +146,10 @@
     "standardTile": "Стандартная",
     "create": "Создать",
     "createFirstAssistant": "Создайте первого помощника",
-    "createFirstAssistantHint": "Задайте имя и модель — и запускайте чат в один клик."
+    "createFirstAssistantHint": "Задайте имя и модель — и запускайте чат в один клик.",
+    "sectionQuickStart": "Быстрый старт",
+    "sectionAssistants": "Ассистенты",
+    "manageAssistants": "Управлять"
   },
 
   "settings": {
@@ -382,6 +389,20 @@
     "confirmRestore": "Восстановить помощника? Он снова появится на странице новой сессии.",
     "restoredToast": "Помощник восстановлен",
     "errorRestore": "Не удалось восстановить помощника",
-    "actionsLabel": "Действия"
+    "actionsLabel": "Действия",
+    "systemPromptLabel": "Роль / инструкции",
+    "systemPromptPlaceholder": "например: Ты специалист по рекламе. Всегда предлагай два варианта и оценивай их по стоимости.",
+    "systemPromptHint": "Помощник будет следовать этим инструкциям в каждом диалоге. Оставьте пустым для стандартного поведения.",
+    "styleLabel": "Стиль общения",
+    "styleHint": "Определяет тон ответов. Нажмите ещё раз чтобы снять выбор.",
+    "styleFriendly": "Дружелюбный",
+    "styleFormal": "Официальный",
+    "styleConcise": "Краткий",
+    "styleCreative": "Творческий",
+    "depthLabel": "Глубина ответа",
+    "depthHint": "Насколько тщательно помощник анализирует запрос. Нажмите ещё раз чтобы снять выбор.",
+    "depthQuick": "Быстро",
+    "depthStandard": "Стандартно",
+    "depthThorough": "Тщательно"
   }
 }

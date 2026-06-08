@@ -92,7 +92,10 @@
     "archiveSession": "Sitzung archivieren",
     "unarchiveSession": "Sitzung wiederherstellen",
     "failedToDeleteSession": "Sitzung konnte nicht gelöscht werden",
-    "breadcrumbsSessions": "Sitzungen"
+    "breadcrumbsSessions": "Sitzungen",
+    "leavePageTitle": "Seite verlassen?",
+    "leavePageDesc": "Sie haben ungesendeten Text. Wenn Sie jetzt gehen, geht er verloren.",
+    "leavePageConfirm": "Verlassen"
   },
   "sessions": {
     "title": "Sitzungen",
@@ -117,7 +120,8 @@
     "deleteSessionsConfirm": "{{count}} Sitzung löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
     "deleteSessionsConfirm_one": "{{count}} Sitzung löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
     "deleteSessionsConfirm_other": "{{count}} Sitzungen löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
-    "failedToLoadSessions": "Sitzungen konnten nicht geladen werden"
+    "failedToLoadSessions": "Sitzungen konnten nicht geladen werden",
+    "holdToSelect": "Gedrückt halten zum Auswählen"
   },
   "dashboard": {
     "welcome": "Willkommen",
@@ -136,7 +140,10 @@
     "standardTile": "Standard",
     "create": "Erstellen",
     "createFirstAssistant": "Erstellen Sie Ihren ersten Assistenten",
-    "createFirstAssistantHint": "Name und Modell festlegen — Chat mit einem Klick starten."
+    "createFirstAssistantHint": "Name und Modell festlegen — Chat mit einem Klick starten.",
+    "sectionQuickStart": "Schnellstart",
+    "sectionAssistants": "Assistenten",
+    "manageAssistants": "Verwalten"
   },
   "settings": {
     "title": "Einstellungen",
@@ -368,6 +375,20 @@
     "confirmRestore": "Diesen Assistenten wiederherstellen? Er wird wieder auf der Seite \"Neue Sitzung\" angezeigt.",
     "restoredToast": "Assistent wiederhergestellt",
     "errorRestore": "Assistent konnte nicht wiederhergestellt werden",
-    "actionsLabel": "Aktionen"
+    "actionsLabel": "Aktionen",
+    "systemPromptLabel": "Rolle / Anweisungen",
+    "systemPromptPlaceholder": "z.B. Du bist ein Werbespezialist. Schlage immer zwei Optionen vor und bewerte sie nach Kosten.",
+    "systemPromptHint": "Der Assistent befolgt diese Anweisungen in jeder Sitzung. Leer lassen für Standardverhalten.",
+    "styleLabel": "Kommunikationsstil",
+    "styleHint": "Legt den Ton der Antworten fest. Erneut klicken zum Abwählen.",
+    "styleFriendly": "Freundlich",
+    "styleFormal": "Formell",
+    "styleConcise": "Prägnant",
+    "styleCreative": "Kreativ",
+    "depthLabel": "Antworttiefe",
+    "depthHint": "Steuert, wie gründlich der Assistent die Anfrage analysiert. Erneut klicken zum Abwählen.",
+    "depthQuick": "Schnell",
+    "depthStandard": "Standard",
+    "depthThorough": "Gründlich"
   }
 }

@@ -1,7 +1,7 @@
 # 1230-UI — Tasks and Progress
 
-**Last updated:** 2026-06-07
-**Current version:** 0.5.2 (uncommitted, in working tree)
+**Last updated:** 2026-06-08 (v0.8.0 Assistants Phase 2)
+**Current version:** 0.8.0
 **Release target:** v1.0.0 — friendly web interface for non-technical Hermes Agent users
 
 ---
@@ -144,7 +144,7 @@ Tasks that must ship with v1.0.0. Ordered roughly by user-impact priority within
 
 #### 📋 25. Session Presets — "Model + Parameters" Templates
 **Role:** Fullstack
-**Status:** 🛠 In Progress (P1) — Phase 1 shipped in v0.6.0 (data model, CRUD, tiles, fork-on-edit, clone-before-save). Phase 2 (system prompt + inference parameters) pending.
+**Status:** 🛠 In Progress (P1) — Phase 1 shipped in v0.6.0 (data model, CRUD, tiles, fork-on-edit, clone-before-save). Phase 2 partially shipped in v0.8.0 (style, depth, system_prompt fields + UI; system_prompt injection into Hermes chat pending).
 
 **Problem:**
 - Today, every new session is created with just a model. All other parameters (system prompt, temperature, top_p, max_tokens, response format, stop sequences, etc.) are either hidden or set globally
@@ -253,21 +253,6 @@ Tasks that must ship with v1.0.0. Ordered roughly by user-impact priority within
 
 ### Code cleanup (carried from old "Known Issues")
 
-#### 📋 26. Lint warnings in ChatPage
-**Role:** Frontend
-**File:** `src/pages/ChatPage.tsx:152`
-**Description:** The `useEffect` on line 152 still emits a `react-hooks/exhaustive-deps` warning (missing `location.state` and `t` in deps). Marked ✅ in task #4, but the warning is still produced on every CI run.
-
-**Tasks:**
-- [ ] Add explicit deps or eslint-disable with justification comment
-- [ ] Verify no behavioural regression in initial-message-send flow
-
-**Priority:** MEDIUM (CI hygiene)
-**Complexity:** Low
-**Dependencies:** None
-
----
-
 #### 📋 27. SettingsPage `formatTimestamp` unification
 **Role:** Frontend
 **Files:** `src/pages/SettingsPage.tsx:238`, `src/lib/time.ts`
@@ -281,6 +266,47 @@ Tasks that must ship with v1.0.0. Ordered roughly by user-impact priority within
 **Priority:** LOW (refactor, not user-facing)
 **Complexity:** Low (30 min)
 **Dependencies:** None
+
+---
+
+#### 📋 28. UX-3 — Remove technical jargon from UI
+**Role:** Frontend
+**Files:** `src/pages/SettingsPage.tsx`, `src/pages/ProvidersPage.tsx`, i18n
+**Description:** Non-technical users encounter raw infrastructure terminology:
+"Model Providers", "model id", "API key", "provider". These terms create friction
+and go against the v1.0.0 goal of a jargon-free interface.
+
+**Tasks:**
+- [ ] Rename "Model Providers" → "Connected Services" (i18n key `settings.modelProviders`)
+- [ ] Rename "API key" → "Access key" on ProvidersPage (i18n key `providers.apiKeyLabel`)
+- [ ] Add one-line description for each provider on ProvidersPage (sourced from `list_bundled_providers.py` `description` field — already available)
+- [ ] Review SettingsPage for any other raw infra terms visible to users
+- [ ] Update all 4 languages (en / ru / es / de)
+
+**Priority:** HIGH (P1 — blocks "non-technical user" goal)
+**Complexity:** Low
+**Dependencies:** None
+
+---
+
+#### 📋 29. UX-7 — Onboarding / welcome flow
+**Role:** Frontend + Backend
+**Files:** `src/pages/DashboardPage.tsx`, `src/lib/api.ts`
+**Description:** A new user after install sees an empty Dashboard but has no guidance
+on what to do next. The onboarding steps are: configure a provider key → enable a
+model → create the first session.
+
+**Tasks:**
+- [ ] Detect "no providers configured" state via `GET /api/providers/available?configured=1`
+- [ ] Show a dismissable banner on Dashboard when no providers are configured:
+  step 1 "Add a provider key" → step 2 "Choose a model" → step 3 "Start chatting"
+- [ ] Persist dismiss state in localStorage (`onboarding_dismissed` key)
+- [ ] Do not show banner if ≥1 session already exists (user has figured it out)
+- [ ] Banner must work correctly in dark/light themes and on mobile
+
+**Priority:** MEDIUM (P2)
+**Complexity:** Medium
+**Dependencies:** Task #23 not required; can ship independently
 
 ---
 
@@ -374,6 +400,21 @@ Tasks explicitly deferred past v1.0.0. Re-prioritized per release after v1.0.0 s
 
 ---
 
+#### 📋 30. UX-10 — Settings page navigation
+**Role:** Frontend
+**File:** `src/pages/SettingsPage.tsx`
+**Description:** SettingsPage contains General, Models, Commands, Hermes Status, About —
+all in one long scroll (~785 lines). Hard to navigate, especially on mobile.
+
+**Options (pick one):**
+- Anchor links (`#general`, `#models`, etc.) with a sticky mini-nav at the top
+- Sub-routes: `/settings/general`, `/settings/models` (prec. already set by `/settings/providers`)
+
+**Priority:** LOW (P3)
+**Complexity:** Medium
+
+---
+
 ### Other ideas (no task number, will get one when picked up)
 
 - **Tags / folders for sessions** — organize by topic
@@ -385,12 +426,80 @@ Tasks explicitly deferred past v1.0.0. Re-prioritized per release after v1.0.0 s
 - **Provider health-check endpoint** — `GET /api/models/health`; green/yellow/red badge in Settings
 - **Long-message warning** — UI hint when user is about to send something over the model limit
 - **Per-message actions** — copy, regenerate, "explain this", "translate this"
+- **Assistant marketplace** — import/export assistant configs as JSON; sharing between instances
+- **Usage analytics** — per-session stats: token counts, latency histograms, model usage breakdown
+- **Numbered DB migrations** — replace ad-hoc `PRAGMA table_info` checks with a versioned migration runner
+- **FTS5 full-text search** — search inside message content (depends on Task #13 API endpoint)
+- **`skip-to-content` link** — accessibility improvement for keyboard users
+- **`prefers-reduced-motion` audit** — verify all animations respect the media query
+
+---
+
+## ❌ Задачи которые мы не будем делать
+
+Tasks that were considered and explicitly rejected. Kept for reference so we don't revisit the same decision.
+
+#### ~~📋 31. UX-11 — Token counter in chat input~~
+**Reason:** Requires model context-window metadata from Hermes (not exposed). Users rarely hit limits with typical prompts. The counter would add visual noise for marginal benefit. If truncation becomes a real problem, a silent server-side clamp is preferable to a UI counter.
+
+#### ~~📋 32. UX-12 — Version indicator in header~~
+**Reason:** Version is already shown in Settings → About and in the sidebar copyright line. Adding another badge would clutter the UI for a value that almost no user needs during normal operation.
+
+#### ~~📋 33. IA — Assistants link in Sidebar and MobileNav~~
+**Reason:** `/assistants` is a management page, not a primary workflow. Most users create sessions from the New Session page tiles and rarely need to manage assistants. The Settings → Assistants path is sufficient for the occasional admin task. Adding it to the 4-item MobileNav would require removing something more important.
 
 ---
 
 ## ✅ Завершённые (history)
 
 Done features, kept for reference. Organized by release / category. Last release at the top.
+
+### v0.8.0 — Backend modularization + UX sprint + Assistants Phase 2 (2026-06-08)
+
+**Backend modularization (CODE-1):**
+- ✅ **CODE-1** — `server.js` 1911 → 39 lines; split into `app.js`, `db/` (connections, migrate, seed, helpers), `routes/` (system, sessions, chat, models, assistants, providers, likes)
+- ✅ Dead-code removal: duplicate `DELETE /api/sessions/:id` and `PATCH /api/sessions/:id/title` routes that were never reachable
+
+**UX improvements:**
+- ✅ **UX-4** — Navigation guard in ChatPage: manual 3-layer guard (`beforeunload` + `popstate` + click capture) shows confirmation modal when unsent text exists
+- ✅ **UX-6** — New Session page: Assistants section moved above Quick Start; Recent Sessions block removed
+- ✅ **UX-8** — "Hold to select" hint on touch devices (shown once until first use, stored in localStorage)
+- ✅ **UX-9** — Copy/Regenerate buttons visible at `opacity-40` on desktop (was fully hidden until hover)
+- ✅ **UX-13** — Dynamic import of `rehype-highlight`: ChatPage chunk 350 KB → 183 KB gzip
+- ✅ **Bugfix** — `/api/health` and `POST /api/messages` broken after CODE-1 refactor; fixed via named exports
+
+**Task #25 Phase 2 — Assistants style / depth / system_prompt:**
+- ✅ New DB columns: `assistants.style`, `assistants.depth`, `assistants.system_prompt` (idempotent migrations)
+- ✅ `description` field removed from UI — auto-derived from first 100 chars of `system_prompt` on backend
+- ✅ `AssistantTile` — style badge (emoji + label) + depth dots (●●○) in assistant colour; spinner in corner; "create" text removed
+- ✅ `AssistantEditPage` — new field order: Name → Role/instructions → Style → Depth → Model → Color → Icon
+- ✅ Communication style picker: 💬 Friendly · 📋 Formal · ✂️ Concise · 🎨 Creative (pill buttons, toggle)
+- ✅ Response depth picker: ●○○ Quick · ●●○ Standard · ●●● Thorough (pill buttons with dot preview)
+- ✅ Role / instructions field: monospaced textarea, resize, ≤ 4000 chars, counter, localised placeholder
+- ✅ Starter assistants updated: General=friendly/standard · Code Helper=concise/thorough · Creative Writer=creative/standard
+- ✅ i18n: 13 new keys × 4 languages (en/ru/es/de)
+- ⏳ **Pending (Phase 2 remainder):** inject `system_prompt` into Hermes chat as `system` message (`routes/chat.js`)
+
+**Changed files:** `db/migrate.js`, `db/seed.js`, `db/helpers.js`, `routes/assistants.js`, `src/types/api.ts`, `src/types/assistant.ts`, `src/lib/api.ts`, `src/components/AssistantTile.tsx`, `src/components/AssistantCard.tsx`, `src/components/AssistantManageTile.tsx`, `src/pages/AssistantEditPage.tsx`, `src/pages/NewSessionPage.tsx`, i18n locales (×4), `server.js`, `app.js`, `db/connections.js`, `routes/system.js`, `routes/sessions.js`, `routes/chat.js`, `routes/models.js`, `routes/providers.js`, `routes/likes.js`, `ChatPage.tsx`, `SessionCard.tsx`, `MarkdownRenderer.tsx`.
+
+---
+
+### v0.7.0 — Code quality sprint (2026-06-08)
+- ✅ **CODE-2** — Vitest added; 22 tests (security + time utilities)
+- ✅ **CODE-3** — Dual Hermes DB connections documented
+- ✅ **CODE-4** — `execSync` → `execFile` async in `/api/system/status`
+- ✅ **CODE-5** — DB cleanup on startup failure (close before `process.exit`)
+- ✅ **CODE-6** — 5 `useEffect` exhaustive-deps warnings fixed
+- ✅ **CODE-7** — `formatTimestamp` deduplication → `formatRelativeTimestamp` in `lib/time.ts`
+- ✅ **CODE-8** — `package.json` version synced with release tag
+- ✅ **CODE-9** — `geoip-lite` moved to `optionalDependencies`, lazy import
+- ✅ **CODE-10** — GitHub Actions CI: lint → typecheck → test → build
+- ✅ **CODE-11** — XSS sanitization made recursive (depth cap 10)
+- ✅ **CODE-14** — `middleware/security.ts` (TypeScript source for runtime `security.js`)
+- ✅ **Task #26** — `useEffect` lint warnings in ChatPage resolved
+- ✅ **Task #27** — `formatTimestamp` unified in `lib/time.ts`
+
+---
 
 ### v0.6.1 — Assistants UX polish (2026-06-08)
 - ✅ **Tile grid on `/assistants`** — management page uses same 1/2/3 column tile grid as `/new`
@@ -499,7 +608,7 @@ Done features, kept for reference. Organized by release / category. Last release
 - ✅ **#1** Centralized Configuration — `config.js`, `.env.example`, hardcoded paths removed
 - ✅ **#2** `.gitignore` for publishing
 - ✅ **#3** Setup Script — `install.sh` with Node/Python/Hermes checks, npm install/build, PM2 setup
-- ✅ **#4** Fix Lint Errors in ChatPage — most cases (one residual warning → #26 above)
+- ✅ **#4** Fix Lint Errors in ChatPage — most cases (one residual warning → resolved in v0.7.0)
 
 ### P1 — Production-ready
 - ✅ **#5** Configuration Validation (zod schema, path/URL checks, friendly error messages)
@@ -550,13 +659,13 @@ Done features, kept for reference. Organized by release / category. Last release
 
 ## 📊 Project Metrics
 
-- **Lines of Code:** ~2 500 (backend) + ~3 500 (frontend)
+- **Lines of Code:** ~1 900 (backend, modular) + ~3 700 (frontend)
 - **TypeScript:** 100% coverage on frontend
-- **Test Coverage:** 0% (post-1.0)
-- **Bundle Size (gzip):** ~190 KB total; ChatPage is the largest chunk due to highlight.js
-- **Code Splitting:** Dashboard 6 KB · Sessions 80 KB · Settings 21 KB · Chat 350 KB · NewSession 8 KB · Providers 9 KB · Assistants 9 KB · AssistantEdit 9 KB (v0.6.1; Sessions grew ~5 KB in v0.5.2 with `SessionCard` + `useSwipe`)
-- **i18n:** ~220 strings × 4 languages (en, ru, es, de)
-- **Known open tasks for v1.0.0:** 7 (23, 24, 25, 10, 17, 26, 27)
+- **Test Coverage:** 22 tests (security + time utilities); backend routes not yet covered
+- **Bundle Size (gzip):** ChatPage 183 KB · Sessions 80 KB · rehype-highlight 53 KB (lazy) · Settings 22 KB · index 66 KB
+- **Code Splitting:** Dashboard 6 KB · NewSession 9 KB · Assistants 9 KB · AssistantEdit 9 KB · Providers 9 KB · Settings 22 KB · Sessions 80 KB · Chat 183 KB + 53 KB lazy
+- **i18n:** ~230 strings × 4 languages (en, ru, es, de)
+- **Known open tasks for v1.0.0:** 5 (23, 24, 25, 28, 29) + release infra (10, 17)
 
 ---
 

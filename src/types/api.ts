@@ -1,10 +1,12 @@
 export interface Assistant {
   id: number;
   name: string;
-  description: string | null;
   color: string | null;
   icon: string | null;
   modelId: string | null;
+  style: string | null;
+  depth: string | null;
+  systemPrompt: string | null;
   isArchived: boolean;
   archivedAt: string | null;
   createdAt: string;

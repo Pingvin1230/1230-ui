@@ -98,11 +98,6 @@ export function AssistantManageTile({
         </button>
       </div>
 
-      {/* Description */}
-      {assistant.description && (
-        <p className="text-xs text-fg-secondary line-clamp-2 w-full relative z-10">{assistant.description}</p>
-      )}
-
       {/* Bottom row: model label */}
       <div className="mt-auto w-full relative z-10">
         {modelLabel && (

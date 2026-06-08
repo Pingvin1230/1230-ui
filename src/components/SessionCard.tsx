@@ -6,6 +6,10 @@ import type { Session } from '../types/api';
 import { formatTimeAgo, formatFullDateTime } from '../lib/time';
 import { useSwipe } from '../hooks/useSwipe';
 
+// UX-8: localStorage key for tracking whether the user has ever used bulk-mode.
+// Once set, the "Hold to select" hint is never shown again.
+const BULK_HINT_KEY = 'bulk_mode_hint_shown';
+
 interface SessionCardProps {
   session: Session;
   bulkMode: boolean;
@@ -34,10 +38,20 @@ export function SessionCard({
     onSwipeLeft: () => onSwipeDelete(session),
     onLongPress: () => {
       longPressHandledRef.current = true;
+      // Mark hint as shown when bulk mode is triggered for the first time.
+      try { localStorage.setItem(BULK_HINT_KEY, '1'); } catch { /* ignore */ }
       onLongPress?.(session);
     },
     disabled: bulkMode,
   });
+
+  // UX-8: Show "Hold to select" hint on touch devices until first long-press.
+  // We check localStorage so it only renders when the hint hasn't been shown.
+  const showBulkHint =
+    !bulkMode &&
+    typeof window !== 'undefined' &&
+    window.matchMedia('(hover: none) and (pointer: coarse)').matches &&
+    !localStorage.getItem(BULK_HINT_KEY);
 
   const handleClick = (e: React.MouseEvent) => {
     if (longPressHandledRef.current) {
@@ -154,6 +168,13 @@ export function SessionCard({
             {session.preview && (
               <p className="text-sm text-fg-secondary line-clamp-2">
                 {session.preview}
+              </p>
+            )}
+            {/* UX-8: "Hold to select" affordance — touch devices only, until first use */}
+            {showBulkHint && (
+              <p className="mt-1.5 text-xs text-fg-muted flex items-center gap-1 select-none">
+                <span aria-hidden="true">☰</span>
+                {t('sessions.holdToSelect')}
               </p>
             )}
           </div>

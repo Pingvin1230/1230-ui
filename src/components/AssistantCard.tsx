@@ -41,9 +41,6 @@ export function AssistantCard({ assistant, modelLabel, onArchive, onDuplicate }:
             </span>
           )}
         </div>
-        {assistant.description && (
-          <p className="text-sm text-fg-secondary mt-0.5 line-clamp-1">{assistant.description}</p>
-        )}
         <div className="flex items-center gap-2 mt-1 text-xs text-fg-muted">
           {modelLabel && (
             <span className={`inline-flex items-center px-2 py-0.5 rounded-md ${colors.bgSubtle} ${colors.text}`}>

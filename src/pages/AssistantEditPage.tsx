@@ -7,8 +7,11 @@ import { useToast } from '../hooks/useToast';
 import type { Assistant } from '../types/api';
 import {
   ASSISTANT_NAME_MAX,
-  ASSISTANT_DESC_MAX,
+  STYLE_OPTIONS,
+  DEPTH_OPTIONS,
   type AssistantColorId,
+  type AssistantStyleId,
+  type AssistantDepthId,
 } from '../types/assistant';
 import { ColorPicker } from '../components/ColorPicker';
 import { IconPicker } from '../components/IconPicker';
@@ -33,12 +36,14 @@ export function AssistantEditPage() {
   const [assistant, setAssistant] = useState<Assistant | null>(null);
   const [sourceName, setSourceName] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
   const [color, setColor] = useState<AssistantColorId | null>(null);
   const [icon, setIcon] = useState<string | null>(null);
   const [modelId, setModelId] = useState<string>('');
   const [models, setModels] = useState<ModelOption[]>([]);
   const [defaultModelId, setDefaultModelId] = useState<string | null>(null);
+  const [style, setStyle] = useState<AssistantStyleId | null>(null);
+  const [depth, setDepth] = useState<AssistantDepthId | null>(null);
+  const [systemPrompt, setSystemPrompt] = useState<string>('');
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -70,18 +75,22 @@ export function AssistantEditPage() {
           const a = results[1] as Assistant;
           setAssistant(a);
           setName(a.name);
-          setDescription(a.description ?? '');
           setColor((a.color as AssistantColorId | null) ?? null);
           setIcon(a.icon ?? null);
           setModelId(a.modelId ?? '');
+          setStyle((a.style as AssistantStyleId | null) ?? null);
+          setDepth((a.depth as AssistantDepthId | null) ?? null);
+          setSystemPrompt(a.systemPrompt ?? '');
         } else if (isCloning) {
           const source = results[1] as Assistant;
           setSourceName(source.name);
           setName(t('assistants.cloneNameSuggestion', { name: source.name }));
-          setDescription(source.description ?? '');
           setColor((source.color as AssistantColorId | null) ?? null);
           setIcon(source.icon ?? null);
           setModelId(source.modelId ?? '');
+          setStyle((source.style as AssistantStyleId | null) ?? null);
+          setDepth((source.depth as AssistantDepthId | null) ?? null);
+          setSystemPrompt(source.systemPrompt ?? '');
         }
       } catch (err) {
         if (cancelled) return;
@@ -113,10 +122,12 @@ export function AssistantEditPage() {
     try {
       const payload = {
         name: name.trim(),
-        description: description.trim() || null,
         color,
         icon,
         modelId: modelId || null,
+        style,
+        depth,
+        systemPrompt: systemPrompt.trim() || null,
       };
       if (isNew) {
         await api.createAssistant(payload);
@@ -215,21 +226,79 @@ export function AssistantEditPage() {
             </div>
 
             <div>
-              <label htmlFor="assistant-desc" className="block text-sm font-medium text-fg-primary mb-1">
-                {t('assistants.descriptionLabel')}
+              <label htmlFor="assistant-system-prompt" className="block text-sm font-medium text-fg-primary mb-1">
+                {t('assistants.systemPromptLabel')}
               </label>
               <textarea
-                id="assistant-desc"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                maxLength={ASSISTANT_DESC_MAX}
-                rows={2}
-                placeholder={t('assistants.descriptionPlaceholder')}
-                className="w-full px-3 py-2 rounded-lg border border-border-default bg-bg-primary text-fg-primary focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                id="assistant-system-prompt"
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                maxLength={4000}
+                rows={4}
+                placeholder={t('assistants.systemPromptPlaceholder')}
+                className="w-full px-3 py-2 rounded-lg border border-border-default bg-bg-primary text-fg-primary focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y text-sm font-mono"
               />
-              <p className="text-xs text-fg-muted mt-1">
-                {description.length} / {ASSISTANT_DESC_MAX}
-              </p>
+              <div className="flex items-center justify-between mt-1">
+                <p className="text-xs text-fg-muted">{t('assistants.systemPromptHint')}</p>
+                <p className="text-xs text-fg-muted">{systemPrompt.length} / 4000</p>
+              </div>
+            </div>
+
+            {/* Style picker */}
+            <div>
+              <label className="block text-sm font-medium text-fg-primary mb-2">
+                {t('assistants.styleLabel')}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {STYLE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setStyle(style === opt.id ? null : opt.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-all min-h-[36px] ${
+                      style === opt.id
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 font-medium'
+                        : 'border-border-default text-fg-secondary hover:border-blue-300 hover:text-fg-primary'
+                    }`}
+                  >
+                    <span aria-hidden="true">{opt.emoji}</span>
+                    <span>{t(opt.label)}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-fg-muted mt-1">{t('assistants.styleHint')}</p>
+            </div>
+
+            {/* Depth picker */}
+            <div>
+              <label className="block text-sm font-medium text-fg-primary mb-2">
+                {t('assistants.depthLabel')}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {DEPTH_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setDepth(depth === opt.id ? null : opt.id)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm transition-all min-h-[36px] ${
+                      depth === opt.id
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 font-medium'
+                        : 'border-border-default text-fg-secondary hover:border-blue-300 hover:text-fg-primary'
+                    }`}
+                  >
+                    <span className="flex items-center gap-0.5" aria-hidden="true">
+                      {[1, 2, 3].map((n) => (
+                        <span
+                          key={n}
+                          className={`w-2 h-2 rounded-full ${n <= opt.dots ? 'bg-current' : 'bg-current opacity-20'}`}
+                        />
+                      ))}
+                    </span>
+                    <span>{t(opt.label)}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-fg-muted mt-1">{t('assistants.depthHint')}</p>
             </div>
 
             <div>
