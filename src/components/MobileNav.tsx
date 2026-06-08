@@ -22,7 +22,7 @@ export function MobileNav() {
   return (
     <nav
       aria-label="Primary"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-bg-primary border-t border-border-default"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-bg-primary border-t border-border-default pb-[env(safe-area-inset-bottom)]"
     >
       <ul className="flex items-stretch justify-around">
         {ITEMS.map(({ to, label, icon: Icon, end }) => (

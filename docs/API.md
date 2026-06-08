@@ -32,7 +32,15 @@ Response:
       "preview": "First user message...",
       "lastMessageAt": 1780686760.93,
       "pinned": 0,
-      "archived": 0
+      "archived": 0,
+      "assistant": {
+        "id": 1,
+        "name": "Code Helper",
+        "color": "green",
+        "icon": "💻",
+        "modelId": "qwen3.6-plus",
+        "isArchived": false
+      }
     }
   ],
   "total": 42,
@@ -60,9 +68,12 @@ Body:
 ```json
 {
   "model": "qwen3.6-plus",
-  "title": "My Session"
+  "title": "My Session",
+  "assistantId": 1
 }
 ```
+
+`assistantId` is optional. When provided, the backend resolves the model from the assistant's `model_id` (the `model` field is still required as a fallback). Returns `409` if the assistant is archived or its model is disabled/missing.
 
 Response:
 ```json
@@ -262,6 +273,87 @@ rows for that provider (and its models) are also deleted so that a re-sync
 doesn't show stale data. Idempotent — returns success even if the line
 wasn't there.
 
+## Assistants
+
+Named bundles (name, description, color, icon, model) used as session presets.
+
+### List Assistants
+```
+GET /api/assistants
+```
+
+Query parameters:
+- `include_archived` — `1` to include archived assistants (default: `0`)
+
+Response:
+```json
+[
+  {
+    "id": 1,
+    "name": "Code Helper",
+    "description": "Helpful for code reviews and debugging.",
+    "color": "green",
+    "icon": "💻",
+    "modelId": "qwen3.6-plus",
+    "isArchived": false,
+    "archivedAt": null,
+    "createdAt": "2026-06-08T10:00:00Z",
+    "updatedAt": "2026-06-08T10:00:00Z"
+  }
+]
+```
+
+### Get Assistant
+```
+GET /api/assistants/:id
+```
+
+### Create Assistant
+```
+POST /api/assistants
+```
+
+Body:
+```json
+{
+  "name": "My Assistant",
+  "description": "Optional description",
+  "color": "blue",
+  "icon": "🤖",
+  "modelId": "qwen3.6-plus"
+}
+```
+
+Validation: `name` 1–60 chars; `description` ≤ 200 chars; `color` must be in the supported 8-color palette; `icon` ≤ 8 chars; `modelId` must reference an enabled model (or `null` for the global default).
+
+### Update Assistant
+```
+PATCH /api/assistants/:id
+```
+
+Same body as Create. If the assistant already has sessions referencing it, the update **forks** it: the existing row is archived (existing sessions retain their reference) and a new row is created with the updated fields. The fork happens atomically in a SQLite transaction.
+
+### Archive Assistant
+```
+POST /api/assistants/:id/archive
+```
+
+### Restore Assistant
+```
+POST /api/assistants/:id/restore
+```
+
+Restores an archived assistant to active status.
+
+### Duplicate Assistant
+```
+POST /api/assistants/:id/duplicate
+```
+
+Creates an immediate copy with name `"<name> (copy)"`. The UI uses the editor prefill flow (`?from=<id>`) instead of this endpoint to avoid writing a DB row before the user confirms.
+
+---
+
 ## System
 
 ### Health Check
@@ -354,7 +446,7 @@ Response (429):
 }
 ```
 
-The webhook payload sent to Mattermost includes: `ip`, `country` (via `geoip-lite`), `user_agent`, `timestamp` (ISO 8601).
+The webhook payload sent to Mattermost includes: `ip`, `country` (via `geoip-lite` if installed; `null` otherwise — see `DISABLE_GEOIP`), `user_agent`, `timestamp` (ISO 8601).
 
 ## Provider Keys
 

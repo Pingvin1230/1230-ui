@@ -6,7 +6,11 @@ import helmet from 'helmet';
 import cors from 'cors';
 import config from './config.js';
 import { apiLimiter, chatLimiter, execLimiter, likeLimiter, providerLimiter, sanitizeMiddleware } from './middleware/security.js';
-import geoip from 'geoip-lite';
+// geoip-lite is an optional heavy dependency (~30 MB of MaxMind data).
+// It is imported lazily at runtime so the server starts fine even if the
+// package is absent (e.g. in CI or stripped production images).
+// Set DISABLE_GEOIP=true to skip the lookup regardless of whether the
+// package is installed.
 import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -64,6 +68,29 @@ app.use((req, res, next) => {
   };
   next();
 });
+
+// --- Database connections ---
+//
+// Three SQLite connections are opened at startup:
+//
+//   db            — Hermes DB, read-only.  Used for all SELECTs against
+//                   Hermes-managed tables (sessions, messages, models…).
+//                   Opening in readonly mode lets SQLite share the WAL
+//                   checkpointing with the Hermes API process without
+//                   interfering with its write transactions.
+//
+//   hermesDbWrite — Hermes DB, writable.  Opened separately in WAL mode so
+//                   that the UI can delete sessions from the Hermes DB
+//                   (Hermes has no delete endpoint).  Non-critical: if this
+//                   open fails the server starts anyway with delete disabled.
+//
+//   uiDb          — UI DB (1230-ui.db), writable.  Stores UI-only state:
+//                   session_meta (pin/archive/assistant), providers, models
+//                   cache, likes, assistants.  Completely separate from the
+//                   Hermes DB so a Hermes upgrade never touches UI state.
+//
+// Cleanup: if uiDb fails to open, db and hermesDbWrite are closed before
+// process.exit so the SQLite WAL files are left in a clean state.
 
 let db, uiDb, hermesDbWrite;
 try {
@@ -128,7 +155,36 @@ try {
       created_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_likes_user_hash ON likes(user_hash, created_at);
+
+    CREATE TABLE IF NOT EXISTS assistants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT,
+      color TEXT,
+      icon TEXT,
+      model_id TEXT,
+      is_archived INTEGER DEFAULT 0,
+      archived_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_assistants_archived ON assistants(is_archived);
+    CREATE INDEX IF NOT EXISTS idx_assistants_model ON assistants(model_id);
   `);
+
+  // Idempotent column add for session_meta.assistant_id
+  const sessionMetaColumns = new Set(
+    uiDb.prepare('PRAGMA table_info(session_meta)').all().map((c) => c.name)
+  );
+  if (!sessionMetaColumns.has('assistant_id')) {
+    try {
+      uiDb.exec('ALTER TABLE session_meta ADD COLUMN assistant_id INTEGER REFERENCES assistants(id) ON DELETE SET NULL');
+      uiDb.exec('CREATE INDEX IF NOT EXISTS idx_session_meta_assistant ON session_meta(assistant_id)');
+      console.log('Added column session_meta.assistant_id');
+    } catch (err) {
+      console.warn(`Failed to add column session_meta.assistant_id: ${err.message}`);
+    }
+  }
 
   // Idempotent column migrations for the `providers` table.
   // SQLite has no "ADD COLUMN IF NOT EXISTS" so we check pragma table_info first.
@@ -152,9 +208,65 @@ try {
   }
 
   console.log('UI DB tables initialized');
+
+  // Seed starter assistants on first run only.
+  seedStarterAssistants();
 } catch (error) {
   console.error(`Failed to connect to UI DB: ${error}`);
+  // Close the already-opened Hermes DB connections so SQLite WAL files are
+  // left in a clean state before the process exits.
+  try { hermesDbWrite?.close(); } catch (_) { /* ignore */ }
+  try { db?.close(); } catch (_) { /* ignore */ }
   process.exit(1);
+}
+
+function seedStarterAssistants() {
+  try {
+    const count = uiDb.prepare('SELECT COUNT(*) AS n FROM assistants').get().n;
+    if (count > 0) return;
+
+    const enabledModels = uiDb.prepare(`
+      SELECT m.id, m.model_id, m.display_name, p.name AS provider_name
+      FROM models m
+      JOIN providers p ON p.id = m.provider_id
+      WHERE m.enabled = 1
+      ORDER BY p.id, m.id
+    `).all();
+    if (enabledModels.length === 0) return;
+
+    const pickWithKeyword = (kws) => enabledModels.find(m =>
+      kws.some(k => (m.display_name || m.model_id || '').toLowerCase().includes(k))
+    );
+    const firstOfDifferentProvider = (excludeIds) => {
+      const lastProvider = enabledModels.find(m => excludeIds.includes(m.id))?.provider_name;
+      return enabledModels.find(m => !excludeIds.includes(m.id) && m.provider_name !== lastProvider)
+        || enabledModels.find(m => !excludeIds.includes(m.id));
+    };
+
+    const slot1 = enabledModels[0];
+    const slot2 = pickWithKeyword(['code', 'coder', 'deepseek'])
+      || firstOfDifferentProvider([slot1.id]);
+    const slot3 = pickWithKeyword(['max', 'opus', 'creative'])
+      || enabledModels.find(m => m.id !== slot1.id && m.id !== slot2.id);
+
+    const starters = [
+      { key: 'general', name: 'General Assistant', color: 'blue',   icon: '🤖', model_id: slot1.model_id, description: 'Free-form chat with the default model.' },
+      { key: 'code',    name: 'Code Helper',        color: 'green',  icon: '💻', model_id: slot2.model_id, description: 'Helpful for code reviews, refactoring, and debugging.' },
+    ];
+    if (slot3) {
+      starters.push({ key: 'creative', name: 'Creative Writer', color: 'purple', icon: '✨', model_id: slot3.model_id, description: 'Long-form writing with a more expressive style.' });
+    }
+
+    const insert = uiDb.prepare(`
+      INSERT INTO assistants (name, description, color, icon, model_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `);
+    const tx = uiDb.transaction((rows) => { for (const r of rows) insert.run(r.name, r.description, r.color, r.icon, r.model_id); });
+    tx(starters);
+    console.log(`Seeded ${starters.length} starter assistant(s).`);
+  } catch (err) {
+    console.warn(`Failed to seed starter assistants: ${err.message}`);
+  }
 }
 
 app.get('/api/system/status', async (req, res) => {
@@ -178,9 +290,16 @@ app.get('/api/system/status', async (req, res) => {
     }
 
     // Get Hermes version info
+    // Use execFile (async) instead of execSync to avoid blocking the event loop
+    // while the shell process runs.
     try {
-      const { execSync } = await import('child_process');
-      const versionOutput = execSync('hermes --version', { encoding: 'utf-8' });
+      const { execFile } = await import('child_process');
+      const { promisify } = await import('util');
+      const execFileAsync = promisify(execFile);
+      const { stdout: versionOutput } = await execFileAsync('hermes', ['--version'], {
+        encoding: 'utf-8',
+        timeout: 5000,
+      });
       const versionMatch = versionOutput.match(/Hermes Agent (v[\d.]+(?:\s*\([\d.]+\))?)/);
       if (versionMatch) {
         hermesVersion = versionMatch[1];
@@ -354,18 +473,31 @@ app.get('/api/sessions', (req, res) => {
       ORDER BY ${orderBy}
     `).all();
 
-    const metaAll = uiDb.prepare('SELECT session_id, pinned, archived FROM session_meta').all();
+    const metaAll = uiDb.prepare('SELECT session_id, pinned, archived, assistant_id FROM session_meta').all();
     const metaMap = {};
     for (const m of metaAll) {
       metaMap[m.session_id] = m;
     }
 
-    let filtered = sessions.map(s => ({
-      ...s,
-      lastMessageAt: s.lastMessageAt ?? null,
-      pinned: metaMap[s.id]?.pinned ?? 0,
-      archived: metaMap[s.id]?.archived ?? 0,
-    }));
+    const assistantIds = [...new Set(metaAll.map(m => m.assistant_id).filter(id => id != null))];
+    const assistantMap = {};
+    if (assistantIds.length > 0) {
+      const placeholders = assistantIds.map(() => '?').join(',');
+      const rows = uiDb.prepare(`SELECT * FROM assistants WHERE id IN (${placeholders})`).all(...assistantIds);
+      for (const a of rows) assistantMap[a.id] = a;
+    }
+
+    let filtered = sessions.map(s => {
+      const meta = metaMap[s.id];
+      const assistant = meta?.assistant_id ? assistantMap[meta.assistant_id] : null;
+      return {
+        ...s,
+        lastMessageAt: s.lastMessageAt ?? null,
+        pinned: meta?.pinned ?? 0,
+        archived: meta?.archived ?? 0,
+        assistant: assistant ? rowToAssistant(assistant) : null,
+      };
+    });
 
     if (!includeArchived) {
       filtered = filtered.filter(s => s.archived !== 1);
@@ -409,7 +541,13 @@ app.get('/api/sessions/:id', async (req, res) => {
     `).get(req.params.id);
 
     if (session) {
-      return res.json(session);
+      const meta = uiDb.prepare('SELECT assistant_id FROM session_meta WHERE session_id = ?').get(session.id);
+      let assistant = null;
+      if (meta?.assistant_id) {
+        const a = uiDb.prepare('SELECT * FROM assistants WHERE id = ?').get(meta.assistant_id);
+        if (a) assistant = rowToAssistant(a);
+      }
+      return res.json({ ...session, assistant });
     }
 
     // Fallback: fetch from Hermes API (for newly created sessions not yet in state.db)
@@ -422,6 +560,13 @@ app.get('/api/sessions/:id', async (req, res) => {
       if (response.ok) {
         const data = await response.json();
         const s = data.session;
+        // Even for fallback path, try to attach assistant from session_meta
+        const meta = uiDb.prepare('SELECT assistant_id FROM session_meta WHERE session_id = ?').get(s.id);
+        let assistant = null;
+        if (meta?.assistant_id) {
+          const a = uiDb.prepare('SELECT * FROM assistants WHERE id = ?').get(meta.assistant_id);
+          if (a) assistant = rowToAssistant(a);
+        }
         return res.json({
           id: s.id,
           title: s.title || 'Untitled session',
@@ -432,6 +577,7 @@ app.get('/api/sessions/:id', async (req, res) => {
           messageCount: 0,
           inputTokens: 0,
           outputTokens: 0,
+          assistant,
         });
       }
     } catch (apiErr) {
@@ -988,20 +1134,54 @@ app.post('/api/messages', apiLimiter, async (req, res) => {
 
 // Create new session
 app.post('/api/sessions', apiLimiter, async (req, res) => {
-  const { model, title } = req.body;
+  let { model, title, assistantId } = req.body;
+
+  // If an assistantId is provided, resolve the model from the assistant.
+  // assistant.model_id is optional — if null/empty we fall back to the
+  // global default (first enabled model in the UI DB).
+  if (assistantId != null) {
+    if (!Number.isInteger(assistantId)) {
+      return res.status(400).json({ error: 'assistantId must be an integer' });
+    }
+    const assistant = uiDb.prepare(
+      'SELECT id, model_id, is_archived FROM assistants WHERE id = ?'
+    ).get(assistantId);
+    if (!assistant) return res.status(404).json({ error: 'Assistant not found' });
+    if (assistant.is_archived) {
+      return res.status(409).json({ error: 'Cannot start a session from an archived assistant' });
+    }
+    if (assistant.model_id) {
+      const modelRow = uiDb.prepare(
+        'SELECT 1 FROM models WHERE model_id = ? AND enabled = 1'
+      ).get(assistant.model_id);
+      if (!modelRow) {
+        return res.status(409).json({
+          error: 'Assistant model is unavailable',
+          code: 'assistant_model_unavailable',
+          assistantId,
+        });
+      }
+      model = assistant.model_id;
+    }
+  }
 
   if (!model) {
-    return res.status(400).json({ error: 'model is required' });
+    model = getDefaultModelId();
+  }
+
+  if (!model) {
+    return res.status(400).json({ error: 'model is required and no default model is available' });
   }
 
   try {
+    const sessionId = `${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
     const response = await fetch(`${HERMES_API_URL}/api/sessions`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${HERMES_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ model, title, source: 'webui' })
+      body: JSON.stringify({ id: sessionId, model, title, source: '1230UI' })
     });
 
     if (!response.ok) {
@@ -1014,9 +1194,9 @@ app.post('/api/sessions', apiLimiter, async (req, res) => {
     }
 
     const data = await response.json();
-    const sessionId = data.session?.id;
+    const returnedId = data.session?.id;
 
-    if (!sessionId) {
+    if (!returnedId) {
       return res.status(500).json({ error: 'No session ID in response' });
     }
 
@@ -1027,7 +1207,21 @@ app.post('/api/sessions', apiLimiter, async (req, res) => {
       await new Promise(r => setTimeout(r, 500));
     }
 
-    res.json({ success: true, sessionId });
+    // Persist the assistant link in session_meta so we can show the badge
+    // and resolve the name even if the assistant is later archived/edited.
+    if (assistantId != null) {
+      try {
+        uiDb.prepare(`
+          INSERT INTO session_meta (session_id, pinned, archived, assistant_id)
+          VALUES (?, 0, 0, ?)
+          ON CONFLICT(session_id) DO UPDATE SET assistant_id = excluded.assistant_id
+        `).run(sessionId, assistantId);
+      } catch (err) {
+        console.warn(`Failed to link session ${sessionId} to assistant ${assistantId}: ${err.message}`);
+      }
+    }
+
+    res.json({ success: true, sessionId, model, assistantId: assistantId ?? null });
   } catch (error) {
     console.error('Error creating session:', error);
     res.status(500).json({ error: 'Failed to create session' });
@@ -1197,11 +1391,253 @@ app.patch('/api/models/models/:id/toggle', (req, res) => {
 });
 
 // =====================================================================
-// Provider management endpoints (key lifecycle in ~/.hermes/.env)
-// All write paths go through scripts/manage_provider_key.py which uses
-// Hermes' own save_env_value() (atomic write, chmod 600, cache invalidate).
-// API responses NEVER include the secret value — only a ••••last4 mask.
+// Assistants (Phase 1 of Task #25 — "Session Presets")
+// A named bundle that the user picks when creating a session. Phase 1
+// only persists identity (name/color/icon/model). The actual model
+// parameters and system prompt integration is Phase 2.
+//
+// Storage:
+//   assistants(id, name, description, color, icon, model_id, is_archived, ...)
+//   session_meta(assistant_id → assistants.id)
+//
+// Edit semantics: when an assistant is PATCHed and at least one session
+// already references it, the existing row is archived and a NEW row is
+// created with the updated fields. Old sessions keep pointing at the
+// archived row. This preserves the "what model was used for this chat"
+// history. (Duplicate is a separate explicit operation that does NOT
+// archive the source.)
 // =====================================================================
+
+const ASSISTANT_PALETTE = new Set(['blue', 'green', 'purple', 'red', 'orange', 'yellow', 'pink', 'gray']);
+const MAX_ASSISTANT_NAME = 60;
+const MAX_ASSISTANT_DESC = 200;
+const MAX_ASSISTANT_ICON_LEN = 8;
+
+function sanitizeAssistantInput({ name, description, color, icon, model_id }) {
+  if (typeof name !== 'string') throw new Error('name must be a string');
+  const trimmed = name.trim();
+  if (trimmed.length < 1 || trimmed.length > MAX_ASSISTANT_NAME) {
+    throw new Error(`name must be 1-${MAX_ASSISTANT_NAME} characters`);
+  }
+  const desc = description == null ? null : String(description);
+  if (desc != null && desc.length > MAX_ASSISTANT_DESC) {
+    throw new Error(`description must be <= ${MAX_ASSISTANT_DESC} characters`);
+  }
+  const col = color == null || color === '' ? null : String(color);
+  if (col != null && !ASSISTANT_PALETTE.has(col)) {
+    throw new Error('color must be one of the supported palette values');
+  }
+  const ic = icon == null || icon === '' ? null : String(icon);
+  if (ic != null && ic.length > MAX_ASSISTANT_ICON_LEN) {
+    throw new Error('icon is too long');
+  }
+  const mid = model_id == null || model_id === '' ? null : String(model_id);
+  if (mid != null) {
+    const modelRow = uiDb.prepare('SELECT 1 FROM models WHERE model_id = ? AND enabled = 1').get(mid);
+    if (!modelRow) throw new Error('model_id references an unknown or disabled model');
+  }
+  return { name: trimmed, description: desc, color: col, icon: ic, model_id: mid };
+}
+
+function rowToAssistant(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    color: row.color,
+    icon: row.icon,
+    modelId: row.model_id,
+    isArchived: !!row.is_archived,
+    archivedAt: row.archived_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function getDefaultModelId() {
+  const row = uiDb.prepare(`
+    SELECT m.model_id
+    FROM models m
+    JOIN providers p ON p.id = m.provider_id
+    WHERE m.enabled = 1
+    ORDER BY p.id, m.id
+    LIMIT 1
+  `).get();
+  return row ? row.model_id : null;
+}
+
+app.get('/api/assistants', apiLimiter, (req, res) => {
+  try {
+    const includeArchived = req.query.include_archived === '1';
+    const rows = uiDb.prepare(`
+      SELECT a.*, m.display_name AS model_display_name, m.enabled AS model_enabled,
+             p.name AS provider_name
+      FROM assistants a
+      LEFT JOIN models m ON m.model_id = a.model_id
+      LEFT JOIN providers p ON p.id = m.provider_id
+      ${includeArchived ? '' : 'WHERE a.is_archived = 0'}
+      ORDER BY a.is_archived ASC, a.id ASC
+    `).all();
+    res.json({ assistants: rows.map(rowToAssistant) });
+  } catch (error) {
+    console.error('Error fetching assistants:', error);
+    res.status(500).json({ error: 'Failed to fetch assistants' });
+  }
+});
+
+app.get('/api/assistants/:id', apiLimiter, (req, res) => {
+  try {
+    const row = uiDb.prepare(`
+      SELECT a.*, m.display_name AS model_display_name, m.enabled AS model_enabled,
+             p.name AS provider_name
+      FROM assistants a
+      LEFT JOIN models m ON m.model_id = a.model_id
+      LEFT JOIN providers p ON p.id = m.provider_id
+      WHERE a.id = ?
+    `).get(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Assistant not found' });
+    res.json(rowToAssistant(row));
+  } catch (error) {
+    console.error('Error fetching assistant:', error);
+    res.status(500).json({ error: 'Failed to fetch assistant' });
+  }
+});
+
+app.post('/api/assistants', apiLimiter, (req, res) => {
+  try {
+    const input = sanitizeAssistantInput(req.body || {});
+    const result = uiDb.prepare(`
+      INSERT INTO assistants (name, description, color, icon, model_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `).run(input.name, input.description, input.color, input.icon, input.model_id);
+    const row = uiDb.prepare('SELECT * FROM assistants WHERE id = ?').get(result.lastInsertRowid);
+    res.status(201).json({ assistant: rowToAssistant(row), forked: false });
+  } catch (error) {
+    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      return res.status(409).json({ error: 'An active assistant with this name already exists' });
+    }
+    console.error('Error creating assistant:', error);
+    res.status(400).json({ error: error.message || 'Failed to create assistant' });
+  }
+});
+
+app.patch('/api/assistants/:id', apiLimiter, (req, res) => {
+  try {
+    const existing = uiDb.prepare('SELECT * FROM assistants WHERE id = ?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Assistant not found' });
+    if (existing.is_archived) {
+      return res.status(409).json({ error: 'Cannot edit an archived assistant' });
+    }
+
+    const input = sanitizeAssistantInput({
+      name: req.body.name ?? existing.name,
+      description: req.body.description !== undefined ? req.body.description : existing.description,
+      color: req.body.color !== undefined ? req.body.color : existing.color,
+      icon: req.body.icon !== undefined ? req.body.icon : existing.icon,
+      model_id: req.body.model_id !== undefined ? req.body.model_id : existing.model_id,
+    });
+
+    const linkedSessions = uiDb.prepare(
+      'SELECT COUNT(*) AS n FROM session_meta WHERE assistant_id = ?'
+    ).get(existing.id).n;
+
+    const performUpdate = uiDb.transaction(() => {
+      if (linkedSessions > 0) {
+        // Fork-on-edit: archive existing, create new row with updated fields.
+        uiDb.prepare(`
+          UPDATE assistants
+          SET is_archived = 1, archived_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(existing.id);
+        const ins = uiDb.prepare(`
+          INSERT INTO assistants (name, description, color, icon, model_id, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `).run(input.name, input.description, input.color, input.icon, input.model_id);
+        const created = uiDb.prepare('SELECT * FROM assistants WHERE id = ?').get(ins.lastInsertRowid);
+        return { assistant: rowToAssistant(created), forked: true, previousId: existing.id };
+      }
+      uiDb.prepare(`
+        UPDATE assistants
+        SET name = ?, description = ?, color = ?, icon = ?, model_id = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(input.name, input.description, input.color, input.icon, input.model_id, existing.id);
+      const updated = uiDb.prepare('SELECT * FROM assistants WHERE id = ?').get(existing.id);
+      return { assistant: rowToAssistant(updated), forked: false };
+    });
+
+    const result = performUpdate();
+    res.json(result);
+  } catch (error) {
+    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      return res.status(409).json({ error: 'An active assistant with this name already exists' });
+    }
+    console.error('Error updating assistant:', error);
+    res.status(400).json({ error: error.message || 'Failed to update assistant' });
+  }
+});
+
+app.post('/api/assistants/:id/archive', apiLimiter, (req, res) => {
+  try {
+    const existing = uiDb.prepare('SELECT * FROM assistants WHERE id = ?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Assistant not found' });
+    if (existing.is_archived) return res.json({ assistant: rowToAssistant(existing) });
+    uiDb.prepare(`
+      UPDATE assistants SET is_archived = 1, archived_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(existing.id);
+    const row = uiDb.prepare('SELECT * FROM assistants WHERE id = ?').get(existing.id);
+    res.json({ assistant: rowToAssistant(row) });
+  } catch (error) {
+    console.error('Error archiving assistant:', error);
+    res.status(500).json({ error: 'Failed to archive assistant' });
+  }
+});
+
+app.post('/api/assistants/:id/restore', apiLimiter, (req, res) => {
+  try {
+    const existing = uiDb.prepare('SELECT * FROM assistants WHERE id = ?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Assistant not found' });
+    if (!existing.is_archived) return res.json({ assistant: rowToAssistant(existing) });
+    uiDb.prepare(`
+      UPDATE assistants SET is_archived = 0, archived_at = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(existing.id);
+    const row = uiDb.prepare('SELECT * FROM assistants WHERE id = ?').get(existing.id);
+    res.json({ assistant: rowToAssistant(row) });
+  } catch (error) {
+    console.error('Error restoring assistant:', error);
+    res.status(500).json({ error: 'Failed to restore assistant' });
+  }
+});
+
+app.post('/api/assistants/:id/duplicate', apiLimiter, (req, res) => {
+  try {
+    const existing = uiDb.prepare('SELECT * FROM assistants WHERE id = ?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Assistant not found' });
+    // Append " (copy)" to the name; rely on UNIQUE active-name constraint
+    // and surface 409 to the UI if there's a conflict (caller can rename).
+    const baseName = existing.name;
+    let candidate = `${baseName} (copy)`;
+    let suffix = 1;
+    while (uiDb.prepare('SELECT 1 FROM assistants WHERE name = ? AND is_archived = 0').get(candidate)) {
+      suffix += 1;
+      candidate = `${baseName} (copy ${suffix})`;
+      if (suffix > 50) return res.status(409).json({ error: 'Too many copies of this name' });
+    }
+    const result = uiDb.prepare(`
+      INSERT INTO assistants (name, description, color, icon, model_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `).run(candidate, existing.description, existing.color, existing.icon, existing.model_id);
+    const row = uiDb.prepare('SELECT * FROM assistants WHERE id = ?').get(result.lastInsertRowid);
+    res.status(201).json({ assistant: rowToAssistant(row) });
+  } catch (error) {
+    console.error('Error duplicating assistant:', error);
+    res.status(500).json({ error: 'Failed to duplicate assistant' });
+  }
+});
+
+
 
 async function runPythonScript(scriptPath, args, env = {}) {
   const { spawn } = await import('child_process');
@@ -1405,11 +1841,13 @@ app.post('/api/like', likeLimiter, async (req, res) => {
       });
     }
 
-    const country = (() => {
+    const country = await (async () => {
+      if (process.env.DISABLE_GEOIP === 'true') return null;
       try {
-        const lookup = geoip.lookup(ip);
-        return lookup?.country || null;
+        const { default: geoip } = await import('geoip-lite');
+        return geoip.lookup(ip)?.country || null;
       } catch {
+        // Package not installed or lookup failed — non-critical
         return null;
       }
     })();

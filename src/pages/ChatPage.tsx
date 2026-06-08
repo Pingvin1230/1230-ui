@@ -114,14 +114,15 @@ export function ChatPage() {
     setTimeout(() => titleInputRef.current?.focus(), 0);
   }
 
+  const locationState = location.state as { initialMessage?: string } | null;
+
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
     initialSentRef.current = false;
     
     // Сохраняем initialMessage из location.state, если он есть
-    const newInitialMessage = (location.state as { initialMessage?: string })?.initialMessage;
-    initialMessageRef.current = newInitialMessage;
+    initialMessageRef.current = locationState?.initialMessage;
     
     (async () => {
       try {
@@ -149,7 +150,7 @@ export function ChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, retryTrigger]);
+  }, [id, retryTrigger, locationState, t]);
 
   useEffect(() => {
     if (isAtBottomRef.current) {
@@ -192,18 +193,6 @@ export function ChatPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- doSend is intentionally excluded: initialMessage should only be sent once when available, not on every doSend recreation. initialSentRef prevents duplicate sends.
   }, [loading, session, messages.length]);
-
-  async function saveMessage(sessionId: string, role: string, content: string, toolName?: string) {
-    try {
-      await fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, role, content, toolName }),
-      });
-    } catch (error) {
-      console.error('Failed to save message:', error);
-    }
-  }
 
   function doSend(content: string) {
     const userContent = content.trim();
@@ -298,9 +287,6 @@ export function ChatPage() {
 
         const preview = fullContent.slice(0, 100) + (fullContent.length > 100 ? '...' : '');
         notify(t('chat.responseReceived'), preview);
-
-        await saveMessage(id!, 'user', userContent);
-        await saveMessage(id!, 'assistant', fullContent);
       },
       onError: (chatError) => {
         console.error('[ChatPage] Chat error:', JSON.stringify(chatError, null, 2));
@@ -342,7 +328,7 @@ export function ChatPage() {
     }
   }
 
-  async function handleStop() {
+  function handleStop() {
     abortRef.current?.abort();
     if (streamingContent) {
       const fullContent = streamingContent + '\n\n*[stopped]*';
@@ -354,7 +340,6 @@ export function ChatPage() {
         timestamp: Date.now() / 1000,
       };
       setMessages(prev => [...prev, assistantMessage]);
-      await saveMessage(id!, 'assistant', fullContent);
     }
     setStreamingContent('');
     setSending(false);
@@ -397,16 +382,16 @@ export function ChatPage() {
   if (loading) {
     return (
       <div className="flex flex-col h-full">
-        <div className="px-4 py-3 border-b border-border-default bg-bg-primary">
+        <div className="px-3 sm:px-4 py-3 border-b border-border-default bg-bg-primary">
           <div className="h-5 w-40 bg-bg-muted rounded animate-pulse" />
           <div className="h-3 w-24 bg-bg-muted rounded mt-2 animate-pulse" />
         </div>
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto p-4 space-y-3">
+          <div className="max-w-4xl mx-auto p-3 sm:p-4 space-y-3">
             {[0, 1, 2].map((i) => (
               <div key={i} className={`flex gap-3 ${i % 2 === 0 ? '' : 'flex-row-reverse'}`}>
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-bg-muted animate-pulse" />
-                <div className="flex-1 min-w-0 rounded-lg p-4 bg-bg-primary border border-border-default animate-pulse space-y-2">
+                <div className="flex-1 min-w-0 rounded-lg p-3 sm:p-4 bg-bg-primary border border-border-default animate-pulse space-y-2">
                   <div className="h-3 bg-bg-muted rounded w-full" />
                   <div className="h-3 bg-bg-muted rounded w-5/6" />
                   {i === 0 && <div className="h-3 bg-bg-muted rounded w-2/3" />}
@@ -421,9 +406,9 @@ export function ChatPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-border-default bg-bg-primary">
-        <div className="flex items-center justify-between gap-2">
-          <nav className="flex items-center gap-1.5 min-w-0 flex-1" aria-label="Breadcrumb">
+      <div className="px-3 sm:px-4 py-3 border-b border-border-default bg-bg-primary">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <nav className="flex items-center gap-1.5 min-w-0 flex-1 basis-full sm:basis-auto" aria-label="Breadcrumb">
             <Link
               to="/sessions"
               className="text-sm text-fg-muted hover:text-blue-600 dark:hover:text-blue-400 flex-shrink-0"
@@ -431,7 +416,7 @@ export function ChatPage() {
               {t('chat.breadcrumbsSessions')}
             </Link>
             <ChevronRight className="w-3.5 h-3.5 text-fg-muted flex-shrink-0" />
-            
+
             {isEditingTitle ? (
               <div className="flex items-center gap-1.5 min-w-0 flex-1">
                 <input
@@ -444,14 +429,14 @@ export function ChatPage() {
                     if (e.key === 'Escape') setIsEditingTitle(false);
                   }}
                   disabled={isSavingTitle}
-                  className="text-lg font-semibold text-fg-primary bg-transparent border-b-2 border-blue-500 outline-none min-w-0 flex-1 disabled:opacity-50"
+                  className="text-base md:text-lg font-semibold text-fg-primary bg-transparent border-b-2 border-blue-500 outline-none min-w-0 flex-1 disabled:opacity-50"
                   placeholder={t('chat.sessionTitlePlaceholder')}
                 />
                 <button
                   type="button"
                   onClick={handleSaveTitle}
                   disabled={isSavingTitle || !editingTitle.trim()}
-                  className="p-1 rounded text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 flex-shrink-0"
+                  className="p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 flex-shrink-0"
                   aria-label={t('chat.saveTitle')}
                 >
                   {isSavingTitle ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -460,7 +445,7 @@ export function ChatPage() {
                   type="button"
                   onClick={() => setIsEditingTitle(false)}
                   disabled={isSavingTitle}
-                  className="p-1 rounded text-fg-muted hover:bg-bg-secondary disabled:opacity-50 flex-shrink-0"
+                  className="p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-fg-muted hover:bg-bg-secondary disabled:opacity-50 flex-shrink-0"
                   aria-label={t('chat.cancelEditing')}
                 >
                   <AlertCircle className="w-4 h-4" />
@@ -468,13 +453,13 @@ export function ChatPage() {
               </div>
             ) : (
               <>
-                <h1 className="text-lg font-semibold text-fg-primary truncate min-w-0">
+                <h1 className="text-base md:text-lg font-semibold text-fg-primary truncate min-w-0">
                   {session?.title || t('common.session')}
                 </h1>
                 <button
                   type="button"
                   onClick={handleStartEditTitle}
-                  className="p-1 rounded text-fg-muted hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex-shrink-0"
+                  className="p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-fg-muted hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex-shrink-0"
                   aria-label={t('chat.editTitle')}
                   title={t('chat.editTitle')}
                 >
@@ -483,15 +468,15 @@ export function ChatPage() {
               </>
             )}
           </nav>
-          
-          <div className="flex items-center gap-1 flex-shrink-0">
+
+          <div className="flex items-center gap-1 flex-shrink-0 ml-auto sm:ml-0">
             {confirmDelete ? (
               <>
                 <button
                   type="button"
                   onClick={handleDeleteSession}
                   disabled={isDeleting}
-                  className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors disabled:opacity-50 flex items-center gap-1"
+                  className="px-3 py-2 min-h-[44px] bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors disabled:opacity-50 flex items-center gap-1"
                 >
                   {isDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                   {t('chat.deleteConfirm')}
@@ -500,7 +485,7 @@ export function ChatPage() {
                   type="button"
                   onClick={() => setConfirmDelete(false)}
                   disabled={isDeleting}
-                  className="px-2 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-fg-primary text-xs rounded transition-colors disabled:opacity-50"
+                  className="px-3 py-2 min-h-[44px] bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-fg-primary text-sm rounded transition-colors disabled:opacity-50"
                 >
                   {t('common.cancel')}
                 </button>
@@ -510,7 +495,7 @@ export function ChatPage() {
                 type="button"
                 onClick={() => setConfirmDelete(true)}
                 disabled={isDeleting}
-                className="p-1.5 rounded text-fg-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
+                className="p-1.5 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-fg-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
                 aria-label={t('chat.deleteSession')}
                 title={t('chat.deleteSession')}
               >
@@ -519,13 +504,19 @@ export function ChatPage() {
             )}
           </div>
         </div>
-        <div className="text-sm text-fg-muted mt-1">
-          {session?.model} • {session?.source}
+        <div className="flex items-center gap-2 text-sm text-fg-muted mt-1 flex-wrap">
+          {session?.assistant && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-bg-secondary text-fg-secondary">
+              {session.assistant.icon && <span aria-hidden="true">{session.assistant.icon}</span>}
+              <span className="truncate max-w-[120px]">{session.assistant.name}</span>
+            </span>
+          )}
+          <span>{session?.model}</span>
         </div>
       </div>
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto p-4 space-y-3">
+        <div className="max-w-4xl mx-auto p-3 sm:p-4 space-y-3">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center py-24 text-center">
               <NoMessagesIllustration className="w-24 h-24 mb-4 text-fg-muted" />
@@ -559,7 +550,7 @@ export function ChatPage() {
                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-700 dark:text-blue-300">
                     <User className="w-4 h-4" />
                   </div>
-                  <div className="flex-1 min-w-0 relative rounded-lg p-4 bg-bg-secondary border-2 border-blue-500 text-fg-primary">
+                  <div className="flex-1 min-w-0 relative rounded-lg p-3 sm:p-4 bg-bg-secondary border-2 border-blue-500 text-fg-primary">
                     <MarkdownRenderer content={msg.content || ''} className="user-message" />
                     <div className="flex items-center justify-between mt-2">
                       <div className="text-xs text-fg-muted" title={formatFullDateTime(msg.timestamp)}>
@@ -569,7 +560,7 @@ export function ChatPage() {
                         type="button"
                         onClick={() => handleCopyMessage(msg.id, msg.content || '')}
                         aria-label={copiedMessageId === msg.id ? t('chat.messageCopied') : t('chat.copyMessage')}
-                        className="p-1 rounded text-fg-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity hover:bg-bg-secondary"
+                        className="p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-fg-muted opacity-60 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 transition-opacity hover:bg-bg-secondary"
                       >
                         {copiedMessageId === msg.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
@@ -584,7 +575,7 @@ export function ChatPage() {
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-bg-muted flex items-center justify-center text-fg-secondary">
                   <Bot className="w-4 h-4" />
                 </div>
-                <div className="flex-1 min-w-0 relative rounded-lg p-4 bg-bg-primary border border-border-default text-fg-primary">
+                <div className="flex-1 min-w-0 relative rounded-lg p-3 sm:p-4 bg-bg-primary border border-border-default text-fg-primary">
                   <MarkdownRenderer content={msg.content || ''} className="assistant-message" />
                   <div className="flex items-center justify-between mt-2">
                     <div className="flex items-center gap-2 text-xs text-fg-muted">
@@ -598,12 +589,12 @@ export function ChatPage() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1 opacity-60 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity">
                       <button
                         type="button"
                         onClick={() => handleCopyMessage(msg.id, msg.content || '')}
                         aria-label={copiedMessageId === msg.id ? 'Message copied' : 'Copy message'}
-                        className="p-1 rounded text-fg-muted hover:bg-bg-secondary"
+                        className="p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-fg-muted hover:bg-bg-secondary"
                       >
                         {copiedMessageId === msg.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
@@ -612,7 +603,7 @@ export function ChatPage() {
                         onClick={handleRetry}
                         disabled={sending}
                         aria-label={t('chat.regenerateResponse')}
-                        className="p-1 rounded text-fg-muted hover:bg-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-fg-muted hover:bg-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
                       </button>
@@ -680,7 +671,7 @@ export function ChatPage() {
 
           {streamingContent && (
             <div key="streaming" className="max-w-3xl">
-              <div className="bg-bg-primary rounded-lg p-4 border border-border-default">
+              <div className="bg-bg-primary rounded-lg p-3 sm:p-4 border border-border-default">
                 <MarkdownRenderer content={streamingContent} />
               </div>
             </div>
@@ -688,7 +679,7 @@ export function ChatPage() {
           
           {isWaitingForResponse && !streamingContent && activeToolCalls.size === 0 && (
             <div key="waiting" className="max-w-3xl">
-              <div className="bg-bg-primary rounded-lg p-4 border border-border-default">
+              <div className="bg-bg-primary rounded-lg p-3 sm:p-4 border border-border-default">
                 <div className="flex items-center gap-2 text-fg-muted">
                   <div className="flex gap-1">
                     <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
@@ -725,7 +716,7 @@ export function ChatPage() {
       </div>
 
       {error && (
-        <div className="px-4 py-3 bg-bg-primary border-t border-border-default">
+        <div className="px-3 sm:px-4 py-3 bg-bg-primary border-t border-border-default">
           <div className="max-w-4xl mx-auto">
             <ErrorMessage
               error={error}
@@ -742,7 +733,7 @@ export function ChatPage() {
         </div>
       )}
 
-      <div className="p-4 border-t border-border-default bg-bg-primary">
+      <div className="p-3 sm:p-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-border-default bg-bg-primary">
         <div className="max-w-4xl mx-auto">
           {isSessionBlocked ? (
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
@@ -790,7 +781,7 @@ export function ChatPage() {
                 <button
                   onClick={handleStop}
                   aria-label={t('chat.stopGenerating')}
-                  className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
+                  className="px-4 py-2 min-h-[44px] rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
                 >
                   {t('common.stop')}
                 </button>
@@ -799,7 +790,7 @@ export function ChatPage() {
                   onClick={handleSend}
                   disabled={!input.trim()}
                   aria-label={t('chat.sendMessage')}
-                  className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2 min-h-[44px] rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {t('common.send')}
                 </button>

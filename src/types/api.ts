@@ -1,3 +1,16 @@
+export interface Assistant {
+  id: number;
+  name: string;
+  description: string | null;
+  color: string | null;
+  icon: string | null;
+  modelId: string | null;
+  isArchived: boolean;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Session {
   id: string;
   title: string | null;
@@ -12,6 +25,7 @@ export interface Session {
   lastMessageAt?: number | null;
   pinned?: number;
   archived?: number;
+  assistant?: Assistant | null;
 }
 
 export interface ToolCall {

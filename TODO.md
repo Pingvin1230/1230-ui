@@ -1,7 +1,7 @@
 # 1230-UI — Tasks and Progress
 
 **Last updated:** 2026-06-07
-**Current version:** 0.5.0
+**Current version:** 0.5.2 (uncommitted, in working tree)
 **Release target:** v1.0.0 — friendly web interface for non-technical Hermes Agent users
 
 ---
@@ -25,24 +25,6 @@ Everything in **🚨 Необходимые для релиза v1.0.0** must be
 Tasks that must ship with v1.0.0. Ordered roughly by user-impact priority within each group.
 
 ### User-facing features (UX-critical for non-tech users)
-
-#### 📋 19. Mobile Adaptation (improvements)
-**Role:** Frontend
-**Files:** `src/components/MobileNav.tsx`, `src/pages/ChatPage.tsx`, `src/pages/SessionsPage.tsx`, `src/components/Sidebar.tsx`, `src/index.css`
-**Description:** Polish the mobile experience so that a non-technical user on a phone has the same workflow as on a desktop.
-
-**Tasks:**
-- [ ] Touch-friendly button sizes (min 44×44 px hit targets)
-- [ ] Responsive typography (fluid scaling, no horizontal scroll)
-- [ ] Swipe gesture to delete a session in Sessions list
-- [ ] Verify all pages at 360 px, 768 px, 1024 px breakpoints
-- [ ] No overlapping elements in mobile bottom-nav / sidebar combo
-
-**Priority:** HIGH (promoted from P2 — non-tech users are on mobile)
-**Complexity:** Medium
-**Dependencies:** None
-
----
 
 #### 📋 23. File Upload to Session
 **Role:** Fullstack
@@ -162,7 +144,7 @@ Tasks that must ship with v1.0.0. Ordered roughly by user-impact priority within
 
 #### 📋 25. Session Presets — "Model + Parameters" Templates
 **Role:** Fullstack
-**Status:** 📋 Backlog (P2) — promoted to v1.0.0
+**Status:** 🛠 In Progress (P1) — Phase 1 shipped in v0.6.0 (data model, CRUD, tiles, fork-on-edit, clone-before-save). Phase 2 (system prompt + inference parameters) pending.
 
 **Problem:**
 - Today, every new session is created with just a model. All other parameters (system prompt, temperature, top_p, max_tokens, response format, stop sequences, etc.) are either hidden or set globally
@@ -410,6 +392,47 @@ Tasks explicitly deferred past v1.0.0. Re-prioritized per release after v1.0.0 s
 
 Done features, kept for reference. Organized by release / category. Last release at the top.
 
+### v0.6.1 — Assistants UX polish (2026-06-08)
+- ✅ **Tile grid on `/assistants`** — management page uses same 1/2/3 column tile grid as `/new`
+- ✅ **Context menu (`MoreVertical`)** — Edit / Duplicate / Archive moved to dropdown via `createPortal`
+- ✅ **Tab filters with counts** — `Active (N)` / `Archived (M)` with `border-b-2` active indicator
+- ✅ **Archived visual treatment** — `line-through` name + yellow warning badge
+- ✅ **Restore action** — archived assistants can be restored from context menu
+- ✅ **Sticky save bar** — action bar is `flex-shrink-0` at bottom of viewport
+- ✅ **New assistant button hidden on empty state**
+
+**New files:** `src/components/AssistantManageTile.tsx`.
+**Changed:** `AssistantsPage.tsx`, `AssistantEditPage.tsx`, `server.js`, `src/lib/api.ts`, i18n (4 languages).
+
+### v0.6.0 — Assistants Phase 1 (2026-06-08)
+- ✅ **Assistants** — named bundles (name, description, color, icon, model) as tiles on New Session page
+- ✅ **Assistants management page** (`/assistants`) — Active / Archived filter, list view with action column
+- ✅ **Assistant editor page** (`/assistants/:id`, `/assistants/new`) — name, description, color, icon, model
+- ✅ **Clone before save** — Duplicate navigates to editor prefilled; new row written only on "Create copy"
+- ✅ **3 starter assistants** — seeded on first run
+- ✅ **Fork-on-edit** — editing an assistant with sessions archives the old, creates new
+- ✅ **Per-session assistant badge** — sessions list shows assistant pill (icon + name)
+
+**New files:** `src/types/assistant.ts`, `src/lib/assistantColors.ts`, `src/store/assistantsStore.ts`, `src/components/ColorPicker.tsx`, `src/components/IconPicker.tsx`, `src/components/AssistantCard.tsx`, `src/components/AssistantTile.tsx`, `src/pages/AssistantsPage.tsx`, `src/pages/AssistantEditPage.tsx`.
+**Backend:** `assistants` table, `session_meta.assistant_id`, 6 new endpoints, 3-assistant seeder.
+
+### v0.5.2 — Mobile adaptation (2026-06-07)
+- ✅ **Sidebar hidden on mobile** — `hidden md:flex`; hamburger button in `Navbar` also hidden (`< md` is covered by the bottom `MobileNav`).
+- ✅ **Touch-friendly action buttons (44×44 px hit targets)** — every interactive icon in `ChatPage` (Edit / Save / Cancel / Delete session, per-message Copy / Regenerate, Send / Stop), `SessionsPage` (Pin / Archive / bulk checkbox, header buttons, bulk-action bar), and the swipe confirm modal now enforces a minimum 44×44 px touch surface via `min-h-[44px] min-w-[44px]`.
+- ✅ **Action buttons visible on touch** — Pin/Archive on session cards and Copy/Regenerate on chat messages used to be `opacity-0 group-hover:opacity-100` only (invisible on touch). They now default to `opacity-100` (or `opacity-60` for chat-message actions) on mobile and `md:opacity-0 md:group-hover:opacity-100` on desktop.
+- ✅ **Swipe-to-delete on session cards** — drag a card left to reveal a red "Delete" affordance, release past the threshold to open a confirm modal. New `useSwipe` hook (native `touchstart` / `touchmove` / `touchend` — no new dependencies) with a `data-swipe-ignore` attribute for nested buttons.
+- ✅ **Long-press to enter bulk mode** — hold a session card for 500 ms to enable bulk-mode and select that card in one gesture. Shares the same `useSwipe` hook's touch tracker.
+- ✅ **Safe-area insets** — `MobileNav` and the ChatPage input area use `env(safe-area-inset-bottom)` so the iOS home indicator doesn't overlap the bottom nav or the textarea.
+- ✅ **Fluid typography** — `html { font-size: clamp(14px, 0.5vw + 13px, 16px) }` smoothly scales from 14 px on a 360-px screen to 16 px on a 768-px+ screen.
+- ✅ **Responsive page padding** — `p-3 sm:p-4 md:p-6` on `DashboardPage`, `NewSessionPage`, `SessionsPage`, and the inner containers of `ChatPage`.
+- ✅ **Responsive header layouts** — `SessionsPage` header buttons collapse to icons-only on mobile; bulk-action bar wraps to two rows on mobile; `ChatPage` header is `flex-wrap` with a `basis-full sm:basis-auto` breadcrumb so the delete-confirm row drops to a second line on 360-px screens.
+
+**New files:** `src/hooks/useSwipe.ts`, `src/components/SessionCard.tsx`.
+
+**Bundle impact:** `SessionsPage` chunk 75 KB → 80.49 KB (+5 KB for the card extraction + hook). No change to other chunks.
+
+**Manual verification still pending (deferred, not required for tagging):** visual check at 360 / 768 / 1024 px in Chrome DevTools, real-device swipe + long-press, iOS safe-area.
+
 ### v0.5.0+ — UI polish & reorganization (2026-06-07)
 - ✅ **Sidebar quick controls** — Dark Mode + Notifications toggles moved from header to sidebar. Settings → General keeps them as fallback.
 - ✅ **Hermes API status indicator** — `Server` icon in the header, color-coded (green/red/gray) with localized tooltip showing version. Read-only.
@@ -531,9 +554,9 @@ Done features, kept for reference. Organized by release / category. Last release
 - **TypeScript:** 100% coverage on frontend
 - **Test Coverage:** 0% (post-1.0)
 - **Bundle Size (gzip):** ~190 KB total; ChatPage is the largest chunk due to highlight.js
-- **Code Splitting:** Dashboard 5.8 KB · Sessions 75 KB · Settings 21 KB · Chat 350 KB · NewSession 5 KB · Providers 9 KB
-- **i18n:** ~200 strings × 4 languages (en, ru, es, de)
-- **Known open tasks for v1.0.0:** 8 (19, 23, 24, 25, 10, 17, 26, 27)
+- **Code Splitting:** Dashboard 6 KB · Sessions 80 KB · Settings 21 KB · Chat 350 KB · NewSession 8 KB · Providers 9 KB · Assistants 9 KB · AssistantEdit 9 KB (v0.6.1; Sessions grew ~5 KB in v0.5.2 with `SessionCard` + `useSwipe`)
+- **i18n:** ~220 strings × 4 languages (en, ru, es, de)
+- **Known open tasks for v1.0.0:** 7 (23, 24, 25, 10, 17, 26, 27)
 
 ---
 

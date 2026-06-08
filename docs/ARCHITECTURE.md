@@ -6,24 +6,26 @@
 ┌─────────────────────────────────────────────────────────┐
 │                     Browser                              │
 │  ┌──────────────────────────────────────────────────┐  │
-│  │         React SPA (Vite + TypeScript)            │  │
+│  │   React 19 SPA (Vite 8 + TypeScript 6)           │  │
 │  │  ┌────────┐ ┌──────────┐ ┌─────┐ ┌──────────┐  │  │
 │  │  │Dashboard│ │Sessions │ │Chat │ │Settings  │  │  │
 │  │  └────────┘ └──────────┘ └─────┘ └──────────┘  │  │
-│  │  Zustand stores │ React Router │ Tailwind CSS   │  │
+│  │  Zustand stores │ React Router v7 │ Tailwind v4 │  │
 │  └──────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
-                           ↕ HTTP/REST API
+                           ↕ HTTP/REST + SSE
 ┌─────────────────────────────────────────────────────────┐
-│              Node.js Backend (Express)                   │
+│          Node.js Backend (Express 5, ESM)                │
 │  ┌──────────────────────────────────────────────────┐  │
-│  │  /api/sessions │ /api/chat │ /api/models │ /api  │  │
+│  │  /api/sessions │ /api/chat (SSE) │ /api/models   │  │
+│  │  /api/assistants │ /api/providers │ /api/system  │  │
 │  └──────────────────────────────────────────────────┘  │
-│  ┌──────────────┐  ┌──────────────┐  ┌─────────────┐  │
-│  │ Hermes DB    │  │  UI DB       │  │ Python      │  │
-│  │ (sessions     │  │ (read-write) │  │ scripts     │  │
-│  │ read + delete)│  │              │  │             │  │
-│  └──────────────┘  └──────────────┘  └─────────────┘  │
+│  ┌────────────────┐ ┌──────────────┐ ┌──────────────┐  │
+│  │  Hermes DB     │ │   UI DB      │ │  Python      │  │
+│  │  (read-only +  │ │  (read-write)│ │  scripts     │  │
+│  │  delete)       │ │              │ │              │  │
+│  └────────────────┘ └──────────────┘ └──────────────┘  │
+│  middleware/security.ts — rate limiting + XSS (recursive)│
 └─────────────────────────────────────────────────────────┘
                            ↕
 ┌─────────────────────────────────────────────────────────┐
@@ -35,91 +37,184 @@
 ## Tech Stack
 
 ### Frontend
-- React 18 + TypeScript + Vite
-- Tailwind CSS v4 — component styling
-- Zustand — state management (sessions, theme)
-- React Router v6 — client-side routing
+- React 19 + TypeScript 6 + Vite 8
+- Tailwind CSS v4 — design-token-based styling
+- Zustand 5 — state management (8 persisted stores)
+- React Router v7 — client-side routing
 - Lucide React — icons
 - react-markdown + remark-gfm + rehype-highlight — markdown rendering
 - highlight.js — code syntax highlighting
+- react-virtuoso — virtualised session list
 
 ### Backend
-- Node.js + Express — REST API server
-- better-sqlite3 — SQLite database handling
-- child_process — Python script and Hermes command execution
+- Node.js (ESM) + Express 5 — REST API + SSE streaming
+- better-sqlite3 — synchronous SQLite (two separate DB files)
+- xss — recursive input sanitization (see `middleware/security.ts`)
+- helmet — security headers (CSP, HSTS, X-Frame-Options, …)
+- express-rate-limit — five rate-limit profiles
+
+### Testing
+- Vitest 4 — unit test runner (`npm test`)
+- 22 tests across 2 files: `tests/security.test.js`, `src/lib/time.test.ts`
+
+### CI/CD
+- GitHub Actions — `.github/workflows/ci.yml`
+- Pipeline: **Lint → Typecheck → Test → Build** on every push/PR to `main`
 
 ### Infrastructure
-- PM2 — process manager
+- PM2 — process manager (`ecosystem.config.json`)
 - Nginx — reverse proxy
-- Authelia — authentication
+- Authelia — SSO / authentication
 - Let's Encrypt — HTTPS certificates
 
 ### External Dependencies
 - Hermes Agent — AI agent (CLI)
-- Python 3.x — for Hermes DB operations
+- Python 3.x — for Hermes DB operations and provider key management
+- geoip-lite — **optional** (~30 MB MaxMind data); used only for the `/api/like` country field; server starts fine without it
+
+---
 
 ## Components
 
-### Frontend (React + TypeScript + Vite)
-- `DashboardPage` — main page with Quick Chat and Recent Sessions
-- `SessionsPage` — session list with virtualization, search, and date grouping
-- `ChatPage` — chat interface with streaming, markdown, tool calls, avatars, copy/regenerate
-- `NewSessionPage` — create new session with model selection
-- `SettingsPage` — model management (default model), system commands with confirm modal, Hermes Agent status block
-- `ProvidersPage` — flat list of all bundled `api_key` providers; per-card "Add key" (inline form) or "Remove key"
-- `HermesStatusIndicator` — header icon (green/red/gray) with localized tooltip showing running version; consumes the persisted `hermes-status` store
-- `Toast` — notification system with queue and auto-dismiss
-- `Modal` — reusable modal component with focus-trap
-- `MobileNav` — bottom navigation for mobile devices
-- `PageSkeleton` — skeleton loading for lazy-loaded pages
+### Frontend Pages (all lazy-loaded via `React.lazy`)
 
-### Frontend state (Zustand stores)
-- `themeStore` — dark/light mode (`hermes-theme`, persisted)
-- `notificationsStore` — browser notification toggle (`hermes-notifications`, persisted)
-- `sidebarStore` — sidebar open/closed (`hermes-sidebar`, persisted)
-- `sessionsSortStore` — created | lastMessage (`hermes-sessions-sort`, persisted)
-- `searchStore` — global session search query (with URL sync)
-- `hermesStatusStore` — Hermes API connection state + version + latestVersion + updateAvailable + lastChecked (`hermes-status`, persisted, shared by the header indicator and Settings)
+| Page | Route | Description |
+|---|---|---|
+| `DashboardPage` | `/` | Quick Chat + Recent Sessions |
+| `SessionsPage` | `/sessions` | Virtualised list, search, date groups, bulk actions |
+| `ChatPage` | `/chat/:id` | Streaming chat, markdown, tool calls, avatars |
+| `NewSessionPage` | `/new` | Assistant tiles + standard model tile |
+| `SettingsPage` | `/settings` | Models, system commands, Hermes status, About |
+| `ProvidersPage` | `/settings/providers` | API key management (add / remove per provider) |
+| `AssistantsPage` | `/assistants` | Tile grid, tab filters (Active/Archived + counts), context menus |
+| `AssistantEditPage` | `/assistants/:id`, `/assistants/new` | Create/edit with sticky action bar; clone mode via `?from=<id>` |
+
+### Frontend Components (selected)
+
+| Component | Description |
+|---|---|
+| `HermesStatusIndicator` | Header icon (green/red/gray) + localized tooltip with running version |
+| `SessionCard` | Per-card swipe-to-delete + long-press bulk, `useSwipe` owned per card |
+| `AssistantManageTile` | Context menu via `createPortal`, colored border, archived treatment |
+| `AssistantTile` | Clickable tile on `/new`, model label, hover "Create" indicator |
+| `ToolCall` | Collapsible block showing tool name, input, output, timing |
+| `Modal` | Focus-trapped modal; used for confirm dialogs and command output |
+| `Toast` | Queued notifications with auto-dismiss |
+| `MobileNav` | Bottom nav (4 routes); iOS safe-area aware |
+
+### Frontend State (Zustand stores, all persisted)
+
+| Store | Key | Contents |
+|---|---|---|
+| `themeStore` | `hermes-theme` | `isDarkMode` |
+| `notificationsStore` | `hermes-notifications` | `enabled` |
+| `sidebarStore` | `hermes-sidebar` | `isOpen` |
+| `sessionsSortStore` | `hermes-sessions-sort` | `sortMode: 'created' \| 'lastMessage'` |
+| `searchStore` | _(session, URL-synced)_ | `query` |
+| `hermesStatusStore` | `hermes-status` | status, version, latestVersion, updateAvailable, lastChecked |
+| `assistantsStore` | _(session)_ | assistants list, fetch / upsert / remove |
 
 ### Hooks
-- `useKeyboardShortcuts` — Ctrl+K (search), Ctrl+N (new session)
-- `useNotifications` — Notification API helpers
-- `useToast` — toast queue
-- `useHermesStatusPoll` — polls `GET /api/system/status` every 60 s in `Layout`; respects 5-min staleness
 
-### Backend (Node.js + Express)
-- REST API server on port 3001
-- Integration with two SQLite databases
-- Request proxying to Hermes API (including SSE streaming)
-- Python script execution for Hermes DB operations
-- Hermes system commands via `child_process`
-- Webhook delivery for the Like button (Mattermost-compatible)
+| Hook | Description |
+|---|---|
+| `useKeyboardShortcuts` | Ctrl+K (search), Ctrl+N (new session), Ctrl+Enter (send) |
+| `useNotifications` | Browser Notification API + Badge API |
+| `useToast` | Toast queue (show / dismiss) |
+| `useHermesStatusPoll` | Polls `/api/system/status` every 60 s with 5-min staleness guard |
+| `useSwipe` | Native `touchstart/touchmove/touchend`: `onSwipeLeft`, `onSwipeRight`, `onLongPress`; `data-swipe-ignore` opt-out for nested buttons |
+
+### Backend
+
+- **`server.js`** — Express 5 app; ~1 900 lines; initialises DBs, runs schema migrations, seeds starter assistants, registers all routes
+- **`middleware/security.ts`** — TypeScript source for all security middleware; compiled to `security.js` for runtime
 
 ### Databases (SQLite)
-- **Hermes DB** (`~/.hermes/state.db`) — read access to sessions/messages + write for session deletion
-- **UI DB** (`./data/1230-ui.db`) — custom DB for:
-  - `providers` — list of model providers (with `description`, `signup_url`, `auth_type` metadata since v0.5.1)
-  - `models` — list of models with enabled flag
-  - `cache` — cache for API responses (GitHub, Hermes)
-  - `likes` — like-button cooldowns, indexed on `(user_hash, created_at)`
+
+**Hermes DB** (`~/.hermes/state.db`)
+
+Managed by Hermes Agent. 1230-UI opens two connections:
+- `db` — read-only (SELECT on sessions, messages, models)
+- `hermesDbWrite` — writable in WAL mode (DELETE sessions only; Hermes has no delete API)
+
+**UI DB** (`./data/1230-ui.db`)
+
+Owned by 1230-UI. Created on first run.
+
+| Table | Purpose |
+|---|---|
+| `providers` | Provider list with `description`, `signup_url`, `auth_type` |
+| `models` | Model list with `enabled` flag |
+| `cache` | TTL cache (GitHub latest version, etc.) |
+| `likes` | Like-button cooldowns, indexed on `(user_hash, created_at)` |
+| `session_meta` | Pin/archive flags + `assistant_id` FK per session |
+| `assistants` | Named bundles (name, color, icon, model_id, is_archived, …) |
+
+Schema migrations are idempotent: `PRAGMA table_info` checked before each `ALTER TABLE`.
 
 ### Python Scripts
-- `save_messages.py` — save messages to Hermes DB
-- `create_session.py` — create new session
-- `sync_providers.py` — sync providers and models from Hermes into the local UI DB (used by Settings → Sync All); reads `~/.hermes/.env` and respects per-provider base URL
-- `list_bundled_providers.py` — enumerate Hermes-bundled `api_key` providers with metadata; returns which env vars are present in `~/.hermes/.env` (no secret values); used by ProvidersPage
-- `manage_provider_key.py` — atomic set/remove of a single key in `~/.hermes/.env` via Hermes' own `save_env_value()` (chmod 600, cache invalidate); used by ProvidersPage
+
+| Script | Purpose |
+|---|---|
+| `save_messages.py` | Save messages to Hermes DB |
+| `sync_providers.py` | Sync providers/models from Hermes → UI DB |
+| `list_bundled_providers.py` | Enumerate `api_key` providers with metadata; check which env vars are set |
+| `manage_provider_key.py` | Atomic set/remove of a key in `~/.hermes/.env` via `save_env_value()` |
+
+### Backend Endpoints
+
+**Sessions**
+- `GET /api/sessions` — list (paginated, sort, include_archived)
+- `GET /api/sessions/:id` — single session (includes linked `assistant` object)
+- `POST /api/sessions` — create (accepts optional `assistantId`)
+- `PATCH /api/sessions/:id/title` — rename
+- `PATCH /api/sessions/:id/pin` — toggle pin
+- `PATCH /api/sessions/:id/archive` — toggle archive
+- `DELETE /api/sessions/:id` — delete
+- `DELETE /api/sessions/bulk` — bulk delete
+
+**Chat**
+- `POST /api/chat` — streaming SSE chat (proxied to Hermes API)
+- `POST /api/messages` — persist message to Hermes DB
+
+**Models**
+- `GET /api/models` — enabled models with default
+- `GET /api/models/providers` — all providers with models
+- `POST /api/models/sync` — sync from Hermes
+- `PATCH /api/models/models/:id/toggle` — enable/disable
+
+**Assistants**
+- `GET /api/assistants[?include_archived=0|1]` — list
+- `GET /api/assistants/:id` — single
+- `POST /api/assistants` — create
+- `PATCH /api/assistants/:id` — update (fork-on-edit if sessions exist)
+- `POST /api/assistants/:id/archive` — archive
+- `POST /api/assistants/:id/restore` — restore archived
+- `POST /api/assistants/:id/duplicate` — duplicate
+
+**Providers**
+- `GET /api/providers/available[?configured=0|1]` — list bundled `api_key` providers
+- `POST /api/providers/:name/key` — set key (rate-limited 10/min)
+- `DELETE /api/providers/:name/key?env_var=…` — remove key
+
+**System**
+- `GET /api/health` — liveness probe
+- `GET /api/system/status` — Hermes version (async `execFile`), provider list, stats
+- `POST /api/system/exec` — run `hermes update` or `hermes doctor --fix`
+- `POST /api/like` — Mattermost webhook like (rate-limited + DB cooldown)
+
+---
 
 ## Implementation Details
 
 ### Design Tokens
 
-All UI colors use a unified token system defined in `src/index.css` via Tailwind CSS v4 `@theme`:
+All UI colors use a unified token system in `src/index.css` via Tailwind CSS v4 `@theme`:
 
 | Token | Light | Dark | Usage |
-|-------|-------|------|-------|
+|---|---|---|---|
 | `bg-bg-primary` | `#ffffff` | `#1f2937` | Cards, panels, message bubbles |
-| `bg-bg-secondary` | `#f9fafb` | `#111827` | Inputs, hover states, page bg |
+| `bg-bg-secondary` | `#f9fafb` | `#111827` | Inputs, hover states, page background |
 | `bg-bg-muted` | `#f3f4f6` | `#374151` | Skeletons, badges, avatars |
 | `text-fg-primary` | `#111827` | `#f9fafb` | Headings, main content |
 | `text-fg-secondary` | `#4b5563` | `#d1d5db` | Labels, descriptions |
@@ -127,58 +222,97 @@ All UI colors use a unified token system defined in `src/index.css` via Tailwind
 | `border-border-default` | `#e5e7eb` | `#374151` | Card borders, dividers |
 | `border-border-strong` | `#d1d5db` | `#4b5563` | Tables, blockquotes |
 
-Accent colors (blue, red, green, yellow) remain as Tailwind utility classes for status indicators and CTAs.
+Accent (blue), danger (red), success (green), warning (yellow) remain as Tailwind utilities for status indicators and CTAs.
 
 ### Streaming Chat (SSE)
 
-Chat is implemented via Server-Sent Events for real-time response delivery:
-1. Frontend sends POST `/api/chat` with messages
-2. Backend proxies request to Hermes API
-3. Hermes returns streaming response (SSE)
-4. Backend forwards chunks to frontend
-5. Frontend accumulates text and updates UI
-6. After completion, message is saved to DB via `/api/messages`
+```
+Frontend → POST /api/chat
+              ↓
+         Backend proxies to Hermes API
+              ↓
+         Hermes returns SSE stream
+         (status events: thinking → executing_tool → generating)
+              ↓
+         Backend forwards chunks + parses tool-call events
+              ↓
+         Frontend accumulates text, updates ToolCall blocks in real time
+              ↓
+         On completion → POST /api/messages to persist
+```
 
-### Two Databases
+### Dual Database Architecture
 
-The project uses separation into two DBs:
-- **Hermes DB** (read + delete) — reads sessions and messages, deletes sessions on user request
-- **UI DB** (read-write) — manages models, providers, cache
+Opening two handles to the Hermes DB is intentional:
 
-This allows:
-- Not modifying Hermes data
-- Storing UI settings separately
-- Easy migration of UI to another server
+```
+db            readonly    — all SELECTs (sessions, messages, models)
+hermesDbWrite WAL mode    — DELETE sessions only
+uiDb          WAL mode    — all UI state (providers, assistants, cache, …)
+```
 
-### Model Management
+Benefits: no interference with Hermes write transactions; Hermes upgrades never touch UI state; UI DB can be safely backed up independently.
 
-Models are synced from Hermes via Python script:
-1. `sync_providers.py` reads `~/.hermes/.env` and gets provider list
-2. For each provider, gets list of available models
-3. Saves to UI DB with `enabled=1` flag by default
-4. User can enable/disable models in Settings
-5. When creating session, only enabled models are shown
+If `uiDb` fails to open, `db` and `hermesDbWrite` are explicitly closed before `process.exit(1)` to leave WAL files clean.
 
-### Caching
+### Security Middleware (`middleware/security.ts`)
 
-To reduce load on external APIs, cache is used:
-- GitHub API (latest Hermes version) — TTL 1 hour
-- Provider and model list — manual update via Sync
-- Cache stored in UI DB `cache` table
+`sanitizeBody` recursively traverses the request body:
+- Strings → sanitized via `xss` (no HTML tags, script/style bodies stripped)
+- Arrays → each element processed recursively
+- Objects → each value processed recursively
+- Depth cap: `MAX_SANITIZE_DEPTH = 10` — prevents DoS via deeply-nested payloads
+
+Rate-limit profiles (all use `express-rate-limit`):
+
+| Profile | Limit | Window |
+|---|---|---|
+| `apiLimiter` | 100 req | 1 min |
+| `chatLimiter` | 30 req | 1 min |
+| `execLimiter` | 5 req | 5 min |
+| `providerLimiter` | 10 req | 1 min |
+| `likeLimiter` | 5 req | 1 hr (per IP) |
+
+### Assistant Fork-on-Edit
+
+Editing an assistant that already has sessions creates a fork (atomic SQLite transaction):
+1. Existing row → `is_archived = 1` (existing sessions keep their reference)
+2. New row inserted with updated fields
+3. Session creation from this point uses the new ID
+
+This preserves the "what assistant was this session started with" audit trail.
 
 ### Code Splitting
 
-All pages are lazy-loaded via `React.lazy()`:
-- Dashboard: ~6 KB
-- Sessions: ~75 KB (with react-virtuoso)
-- Settings: ~21 KB
-- Providers: ~9 KB
-- Chat: ~350 KB (with highlight.js)
-- NewSession: ~5 KB
+All pages lazy-loaded (`React.lazy` + `Suspense` + `PageSkeleton`). Approximate gzipped chunk sizes:
 
-This reduces initial bundle size and speeds up app loading.
+| Chunk | Size (gzip) |
+|---|---|
+| Dashboard | ~6 KB |
+| NewSession | ~8 KB |
+| Assistants | ~9 KB |
+| AssistantEdit | ~9 KB |
+| Providers | ~9 KB |
+| Settings | ~22 KB |
+| Sessions | ~80 KB (react-virtuoso + SessionCard + useSwipe) |
+| Chat | ~350 KB (highlight.js dominates) |
+
+### Mobile Adaptation (v0.5.2+)
+
+Three mechanisms handle the mobile experience:
+
+1. **Tailwind responsive utilities** — `hidden md:flex` (sidebar), `p-3 sm:p-4 md:p-6` (padding), `flex-wrap` (chat header), `flex-col sm:flex-row` (bulk action bar). `MobileNav` is `md:hidden`.
+
+2. **`useSwipe` hook** — native `touchstart/touchmove/touchend` listeners. 6 px movement threshold prevents misclassified taps. `data-swipe-ignore` attribute on nested buttons (pin, archive) lets them receive taps while a swipe gesture is being tracked.
+
+3. **Safe-area insets** — `MobileNav` uses `pb-[env(safe-area-inset-bottom)]`; ChatPage input uses `pb-[calc(0.75rem+env(safe-area-inset-bottom))]`.
+
+Touch targets: `min-h-[44px] min-w-[44px]` on all interactive icon buttons (WCAG / Apple HIG minimum). Fluid font size: `clamp(14px, 0.5vw + 13px, 16px)`.
+
+---
 
 ## Next Steps
 
 - [API Documentation](API.md) — REST API reference
-- [Development Guide](DEVELOPMENT.md) — development setup and guidelines
+- [Development Guide](DEVELOPMENT.md) — development setup and contribution guidelines
+- [Changelog](../CHANGELOG.md) — version history

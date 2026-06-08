@@ -1,23 +1,24 @@
 # 1230-UI — Hermes Web Interface
 
-> **Status:** `v0.5.1` — UX-polish release (Provider Keys page, sidebar quick controls, Hermes status indicator)
+> **Status:** `v0.7.0` — Code quality sprint: recursive XSS sanitization, async Hermes version check, Vitest test suite, CI/CD pipeline, TypeScript middleware, optional geoip-lite.
 
 Modern web interface for managing sessions and interacting with [Hermes Agent](https://github.com/anthropics/hermes-agent) through a browser.
 
 ## Features
 
 - **Dashboard** — quick chat, recent sessions, Hermes API status
-- **Session Management** — create, rename, pin, archive, delete, bulk actions
+- **Session Management** — create, rename, pin, archive, delete, bulk actions, **swipe-to-delete** (mobile), **long-press to enter bulk mode** (mobile)
 - **Real-time Chat** — streaming responses, markdown rendering, syntax highlighting, tool calls visualization
 - **Model Management** — enable/disable models, select default model
 - **Provider Keys** — manage API keys for all bundled `api_key` providers from the UI (no terminal needed)
 - **System Commands** — execute `hermes update` and `hermes doctor --fix`
 - **Hermes API Status** — header indicator (green/red/gray) with live polling every 60s
+- **Assistants** — named bundles (name, description, color, icon, model) that show up as tiles on the New Session page. Create / edit / archive / duplicate / restore from `/assistants`. Tile grid (1/2/3 cols), context menu (MoreVertical), tab filters with counts. Editing a bundle that already has sessions **forks** it (the old version is archived; existing sessions keep the original reference). Duplicating opens the editor prefilled with the source — nothing is written until you click "Create copy"
 - **Keyboard Shortcuts** — Ctrl+K (search), Ctrl+N (new session), Ctrl+Enter (send)
 - **Browser Notifications** — alerts for new messages (toggle in sidebar)
 - **Dark/Light Themes** — with saved preference (toggle in sidebar)
 - **Internationalization** — 4 languages (English, Русский, Español, Deutsch) with auto-detection
-- **Responsive Design** — mobile-friendly with bottom navigation
+- **Mobile-First UX** — 44 × 44 px touch targets, fluid `clamp(14px → 16px)` typography, iOS safe-area insets, icon-only header buttons on `< md`, `flex-wrap` confirm/header rows, no horizontal scroll at 360 px
 - **Security** — rate limiting, XSS protection, CORS, security headers, rate-limited provider-key writes
 
 ## Screenshots
@@ -72,15 +73,19 @@ Application will be available on port 3001.
 
 ## Tech Stack
 
-**Frontend:** React 18, TypeScript, Vite, Tailwind CSS v4, Zustand, React Router v6
+**Frontend:** React 19, TypeScript 6, Vite 8, Tailwind CSS v4, Zustand, React Router v7
 
-**Backend:** Node.js, Express, better-sqlite3
+**Backend:** Node.js, Express 5, better-sqlite3
+
+**Testing:** Vitest — `npm test` (22 tests)
+
+**CI/CD:** GitHub Actions — lint + typecheck + test + build on every push/PR
 
 **Infrastructure:** PM2, Nginx, Authelia, Let's Encrypt
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 22+ (18+ minimum)
 - Python 3.x
 - Hermes Agent (installed and configured)
 

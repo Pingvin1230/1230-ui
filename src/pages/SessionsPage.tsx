@@ -3,13 +3,13 @@ import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
 import { api } from '../lib/api';
-import { RefreshCw, Plus, MessageSquare, Sparkles, Loader2, SearchX, Star, Archive, Trash2, CheckSquare, Square, Eye } from 'lucide-react';
+import { RefreshCw, Plus, MessageSquare, Sparkles, Loader2, SearchX, Star, Archive, Trash2, CheckSquare, Eye } from 'lucide-react';
 import type { Session } from '../types/api';
-import { formatTimeAgo, formatFullDateTime } from '../lib/time';
 import { useSearchStore } from '../store/searchStore';
 import { useSessionsSortStore } from '../store/sessionsSortStore';
 import { NoSessionsIllustration } from '../assets/illustrations';
 import { Modal } from '../components/Modal';
+import { SessionCard } from '../components/SessionCard';
 
 const PAGE_SIZE = 20;
 
@@ -91,6 +91,8 @@ export function SessionsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showArchived, setShowArchived] = useState(false);
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+  const [pendingSwipeDelete, setPendingSwipeDelete] = useState<Session | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const sortMode = useSessionsSortStore((s) => s.sortMode);
   const query = useSearchStore((s) => s.query);
   const setQuery = useSearchStore((s) => s.setQuery);
@@ -110,7 +112,7 @@ export function SessionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [sortMode]);
+  }, [sortMode, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -125,7 +127,7 @@ export function SessionsPage() {
         setError(null);
       } catch (err) {
         if (cancelled) return;
-      setError(t('sessions.failedToLoadSessions'));
+        setError(t('sessions.failedToLoadSessions'));
         console.error(err);
       } finally {
         if (!cancelled) setLoading(false);
@@ -134,7 +136,7 @@ export function SessionsPage() {
     return () => {
       cancelled = true;
     };
-  }, [location.key, showArchived, sortMode]);
+  }, [location.key, showArchived, sortMode, t]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -197,9 +199,38 @@ export function SessionsPage() {
     }
   }
 
+  function handleSwipeDelete(session: Session) {
+    setPendingSwipeDelete(session);
+  }
+
+  function handleLongPress(session: Session) {
+    if (!bulkMode) setBulkMode(true);
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.add(session.id);
+      return next;
+    });
+  }
+
+  async function confirmSwipeDelete() {
+    if (!pendingSwipeDelete) return;
+    const id = pendingSwipeDelete.id;
+    try {
+      setIsDeleting(true);
+      await api.deleteSession(id);
+      setSessions(prev => prev.filter(s => s.id !== id));
+      setTotal(t => t - 1);
+      setPendingSwipeDelete(null);
+    } catch (err) {
+      console.error('Failed to delete session:', err);
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   if (loading) {
     return (
-      <div className="p-6 max-w-5xl mx-auto">
+      <div className="p-3 sm:p-4 md:p-6 max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
@@ -231,7 +262,7 @@ export function SessionsPage() {
 
   if (error) {
     return (
-      <div className="p-6 max-w-5xl mx-auto">
+      <div className="p-3 sm:p-4 md:p-6 max-w-5xl mx-auto">
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
           <p className="text-red-600 dark:text-red-400 font-medium">{error}</p>
           <button
@@ -262,76 +293,80 @@ export function SessionsPage() {
   const isSearching = query.trim().length > 0;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto h-full flex flex-col">
-      <div className="flex items-center justify-between mb-6 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+    <div className="p-3 sm:p-4 md:p-6 max-w-5xl mx-auto h-full flex flex-col">
+      <div className="flex items-center justify-between mb-6 flex-shrink-0 gap-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
             <MessageSquare className="w-5 h-5 text-white" />
           </div>
-          <div>
-            <h1 className="text-2xl font-semibold text-fg-primary">{t('sessions.title')}</h1>
+          <div className="min-w-0">
+            <h1 className="text-xl md:text-2xl font-semibold text-fg-primary truncate">{t('sessions.title')}</h1>
             {hasSessions && (
-              <p className="text-sm text-fg-muted">
+              <p className="text-sm text-fg-muted hidden sm:block truncate">
                 {t('common.showingOfTotal', { showing: sessions.length, total })}
               </p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
           <button
             onClick={() => {
               const next = !showArchived;
               setShowArchived(next);
               loadSessions(next);
             }}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
+            className={`flex items-center gap-1.5 min-h-[44px] min-w-[44px] md:min-w-0 md:px-3 md:py-2 rounded-lg transition-colors text-sm font-medium ${
               showArchived
                 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                 : 'text-fg-secondary hover:bg-bg-secondary'
             }`}
             aria-label={t('sessions.toggleArchived')}
+            title={t('sessions.archived')}
           >
-            <Eye className="w-4 h-4" />
-            {t('sessions.archived')}
+            <Eye className="w-4 h-4 md:w-4 md:h-4" />
+            <span className="hidden md:inline">{t('sessions.archived')}</span>
           </button>
           <button
             onClick={() => { setBulkMode(!bulkMode); setSelectedIds(new Set()); }}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
+            className={`flex items-center gap-1.5 min-h-[44px] min-w-[44px] md:min-w-0 md:px-3 md:py-2 rounded-lg transition-colors text-sm font-medium ${
               bulkMode
                 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                 : 'text-fg-secondary hover:bg-bg-secondary'
             }`}
             aria-label={t('sessions.selectSessions')}
+            title={t('common.select')}
           >
-            <CheckSquare className="w-4 h-4" />
-            {t('common.select')}
+            <CheckSquare className="w-4 h-4 md:w-4 md:h-4" />
+            <span className="hidden md:inline">{t('common.select')}</span>
           </button>
           <button
             onClick={() => loadSessions(showArchived)}
-            className="p-2 hover:bg-bg-secondary rounded-lg transition-colors"
+            className="p-2 min-h-[44px] min-w-[44px] inline-flex items-center justify-center hover:bg-bg-secondary rounded-lg transition-colors"
             aria-label={t('sessions.refreshSessions')}
+            title={t('sessions.refreshSessions')}
           >
             <RefreshCw className="w-5 h-5 text-fg-secondary" />
           </button>
           <Link
             to="/new"
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+            className="flex items-center gap-2 min-h-[44px] px-3 md:px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+            aria-label={t('common.newSession')}
           >
             <Plus className="w-4 h-4" />
-            {t('common.newSession')}
+            <span className="hidden sm:inline">{t('common.newSession')}</span>
           </Link>
         </div>
       </div>
 
       {bulkMode && selectedIds.size > 0 && (
-        <div className="flex items-center justify-between mb-4 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
           <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
             {t('common.selected', { count: selectedIds.size })}
           </span>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => { setSelectedIds(new Set()); setBulkMode(false); }}
-              className="px-3 py-1.5 text-sm text-fg-secondary hover:bg-bg-secondary rounded-lg transition-colors"
+              className="px-3 py-2 min-h-[44px] text-sm text-fg-secondary hover:bg-bg-secondary rounded-lg transition-colors"
             >
               {t('common.cancel')}
             </button>
@@ -349,14 +384,14 @@ export function SessionsPage() {
                   console.error('Failed to bulk archive:', err);
                 }
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] text-sm bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 rounded-lg transition-colors"
             >
               <Archive className="w-3.5 h-3.5" />
               {t('common.archive')}
             </button>
             <button
               onClick={() => setShowBulkConfirm(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
               {t('common.delete')}
@@ -439,99 +474,19 @@ export function SessionsPage() {
                 );
               }
               const session = item.session;
-              const title =
-                session.title ||
-                (session.preview
-                  ? session.preview.length > 70
-                    ? session.preview.slice(0, 70) + '...'
-                    : session.preview
-                  : t('common.untitledSession'));
               const isSelected = selectedIds.has(session.id);
 
               return (
-                <div className="mb-2 group relative">
-                  {bulkMode && (
-                    <button
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleSelect(session.id); }}
-                      className="absolute z-10 left-3 top-1/2 -translate-y-1/2 p-1"
-                    >
-                      {isSelected ? <CheckSquare className="w-5 h-5 text-blue-500" /> : <Square className="w-5 h-5 text-gray-400" />}
-                    </button>
-                  )}
-                  <Link
-                    to={`/chat/${session.id}`}
-                    className={`block bg-bg-primary border rounded-lg p-4 transition-all hover:shadow-sm ${
-                      bulkMode ? 'pl-10' : ''
-                    } ${
-                      session.pinned === 1
-                        ? 'border-yellow-300 dark:border-yellow-700 hover:border-yellow-400 dark:hover:border-yellow-600'
-                        : 'border-border-default hover:border-blue-300 dark:hover:border-blue-600'
-                    }`}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-4 mb-2">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          {session.pinned === 1 && (
-                            <Star className="w-4 h-4 text-yellow-500 fill-yellow-500 flex-shrink-0" />
-                          )}
-                          <h3 className="font-semibold text-fg-primary truncate">
-                            {title}
-                          </h3>
-                        </div>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          {!bulkMode && (
-                            <>
-                              {session.archived !== 1 && (
-                                <button
-                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleTogglePin(session); }}
-                                  className="p-1 rounded text-fg-muted hover:text-yellow-500 dark:hover:text-yellow-400 hover:bg-bg-secondary transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                                  aria-label={session.pinned === 1 ? t('chat.unpinSession') : t('chat.pinSession')}
-                                >
-                                  <Star className={`w-4 h-4 ${session.pinned === 1 ? 'fill-yellow-500 text-yellow-500' : ''}`} />
-                                </button>
-                              )}
-                              <button
-                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleToggleArchive(session); }}
-                                className="p-1 rounded text-fg-muted hover:text-fg-secondary hover:bg-bg-secondary transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                                aria-label={session.archived === 1 ? t('chat.unarchiveSession') : t('chat.archiveSession')}
-                              >
-                                <Archive className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
-                          <span
-                            className="text-xs text-fg-muted whitespace-nowrap"
-                            title={formatFullDateTime(getActivityAt(session))}
-                          >
-                            {formatTimeAgo(getActivityAt(session))}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        {session.model && (
-                          <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                            {session.model}
-                          </span>
-                        )}
-                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                          {session.source}
-                        </span>
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                          <MessageSquare className="w-3 h-3" />
-                          {session.messageCount}
-                        </span>
-                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-mono text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800">
-                          #{session.id.slice(0, 8)}
-                        </span>
-                      </div>
-                      {session.preview && (
-                        <p className="text-sm text-fg-secondary line-clamp-2">
-                          {session.preview}
-                        </p>
-                      )}
-                    </div>
-                  </Link>
-                </div>
+                <SessionCard
+                  session={session}
+                  bulkMode={bulkMode}
+                  isSelected={isSelected}
+                  onToggleSelect={toggleSelect}
+                  onTogglePin={handleTogglePin}
+                  onToggleArchive={handleToggleArchive}
+                  onSwipeDelete={handleSwipeDelete}
+                  onLongPress={handleLongPress}
+                />
               );
             }}
             components={{
@@ -569,6 +524,43 @@ export function SessionsPage() {
               onClick={handleBulkDelete}
               className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors text-sm font-medium"
             >
+              {t('common.delete')}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={pendingSwipeDelete !== null}
+        onClose={() => { if (!isDeleting) setPendingSwipeDelete(null); }}
+        title={t('sessions.deleteSessionTitle')}
+        size="sm"
+      >
+        <div className="p-4 space-y-4">
+          <p className="text-sm text-fg-secondary">
+            {t('sessions.deleteSessionConfirm')}
+          </p>
+          {pendingSwipeDelete && (
+            <p className="text-sm font-medium text-fg-primary truncate">
+              {pendingSwipeDelete.title || t('common.untitledSession')}
+            </p>
+          )}
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => setPendingSwipeDelete(null)}
+              disabled={isDeleting}
+              className="px-4 py-2 min-h-[44px] bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-fg-primary rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={confirmSwipeDelete}
+              disabled={isDeleting}
+              className="px-4 py-2 min-h-[44px] bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
+            >
+              {isDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               {t('common.delete')}
             </button>
           </div>

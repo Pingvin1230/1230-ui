@@ -26,7 +26,7 @@ export function Sidebar({ isSidebarOpen }: SidebarProps) {
   if (!isSidebarOpen) return null;
 
   return (
-    <aside className="fixed left-0 top-16 bottom-0 w-72 bg-bg-primary border-r border-border-default flex flex-col transition-all duration-300 ease-in-out z-40">
+    <aside className="hidden md:flex fixed left-0 top-16 bottom-0 w-72 bg-bg-primary border-r border-border-default flex-col transition-all duration-300 ease-in-out z-40">
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
         <NavLink
           to="/"

@@ -29,10 +29,10 @@ Feature suggestions are welcome! Please:
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes
-4. Test your changes (`npm run build`, `npm run lint`)
+4. Verify the full CI pipeline passes locally (see below)
 5. Commit with clear messages following [Conventional Commits](https://www.conventionalcommits.org/)
 6. Push to your fork (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
+7. Open a Pull Request — CI will run automatically on GitHub
 
 ## Development Setup
 
@@ -48,11 +48,13 @@ npm run dev
 
 ## Code Style
 
-- **TypeScript** — all new code should be in TypeScript
-- **ESLint** — follow the configured rules
-- **Prettier** — code formatting (optional but recommended)
-- **React** — functional components with hooks
-- **CSS** — Tailwind CSS with design tokens
+- **TypeScript** — all new frontend code must be TypeScript. New backend middleware should be written in `middleware/*.ts`.
+- **ESLint** — follow the configured rules; `npm run lint` must produce zero output.
+- **React** — functional components with hooks; `useCallback` with complete deps for functions used in `useEffect`.
+- **CSS** — Tailwind CSS utility classes; use design tokens (`text-fg-primary`, `bg-bg-secondary`, etc.) for colors.
+- **Touch targets** — all interactive icon buttons must have `min-h-[44px] min-w-[44px]`.
+
+See [docs/DEVELOPMENT.md § Code Style](docs/DEVELOPMENT.md#code-style) for the full guidelines.
 
 ## Commit Message Format
 
@@ -84,11 +86,20 @@ docs(readme): update installation instructions
 
 ## Testing
 
-Before submitting a PR:
+Before submitting a PR, run the full CI pipeline locally:
+
 ```bash
-npm run build    # Ensure build succeeds
-npm run lint     # Check for lint errors
+npm run lint        # ESLint — zero warnings required
+npm run typecheck   # TypeScript — zero errors required
+npm test            # Vitest — all tests must pass
+npm run build       # Production build — must succeed
 ```
+
+When adding new functionality, include tests:
+- Backend utilities / middleware → `tests/*.test.js`
+- Frontend utilities → `src/**/*.test.ts`
+
+See [docs/DEVELOPMENT.md § Testing](docs/DEVELOPMENT.md#testing) for details.
 
 ## Documentation
 

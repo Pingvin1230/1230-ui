@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
@@ -24,11 +24,7 @@ export function DashboardPage() {
   const [models, setModels] = useState<ModelOption[]>([]);
   const [sending, setSending] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [sessionsData, modelsData] = await Promise.all([
@@ -61,7 +57,12 @@ export function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [t]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data-fetch on mount; setState inside async callback, not directly in effect body
+    loadData();
+  }, [loadData]);
 
   async function handleSend() {
     if (!input.trim() || !model || sending) return;
@@ -85,7 +86,7 @@ export function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="p-6 max-w-6xl mx-auto">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto">
         <div className="mb-6">
         <h1 className="text-2xl font-semibold text-fg-primary">{t('dashboard.welcome')}</h1>
         </div>
@@ -106,7 +107,7 @@ export function DashboardPage() {
 
   if (error) {
     return (
-      <div className="p-6 max-w-6xl mx-auto">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto">
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
           <p className="text-red-600 dark:text-red-400 font-medium">{error}</p>
           <button
@@ -121,7 +122,7 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-fg-primary">{t('dashboard.welcome')}</h1>
       </div>

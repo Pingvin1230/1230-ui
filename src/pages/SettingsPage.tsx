@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import i18n from '../i18n';
 import { api } from '../lib/api';
+import { formatRelativeTimestamp } from '../lib/time';
 import { Download, Wrench, Loader2, CheckCircle, XCircle, AlertTriangle, Sun, Moon, Bell, BellOff, Calendar, MessageCircle, Heart, ArrowRight } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { useThemeStore } from '../store/themeStore';
@@ -75,21 +76,31 @@ export function SettingsPage() {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
     typeof Notification !== 'undefined' ? Notification.permission : 'denied'
   );
-  const initialLike = (() => {
+  // Computed once at mount via useState lazy-initialiser to avoid calling Date.now()
+  // directly in the render body (which would be flagged as impure by react-hooks/purity).
+  const [likeState, setLikeState] = useState<LikeState>(() => {
     try {
       const raw = localStorage.getItem(LIKE_STORAGE_KEY);
       const last = raw ? Number(raw) : 0;
-      if (!last) return { state: 'idle' as LikeState, remaining: 0 };
+      if (!last) return 'idle';
       const remainingMs = last + LIKE_DEFAULT_COOLDOWN_SEC * 1000 - Date.now();
-      if (remainingMs <= 0) return { state: 'idle' as LikeState, remaining: 0 };
-      return { state: 'cooldown' as LikeState, remaining: Math.ceil(remainingMs / 1000) };
+      return remainingMs > 0 ? 'cooldown' : 'idle';
     } catch {
-      return { state: 'idle' as LikeState, remaining: 0 };
+      return 'idle';
     }
-  })();
-  const [likeState, setLikeState] = useState<LikeState>(initialLike.state);
+  });
   const [likeError, setLikeError] = useState<string | null>(null);
-  const [cooldownRemaining, setCooldownRemaining] = useState<number>(initialLike.remaining);
+  const [cooldownRemaining, setCooldownRemaining] = useState<number>(() => {
+    try {
+      const raw = localStorage.getItem(LIKE_STORAGE_KEY);
+      const last = raw ? Number(raw) : 0;
+      if (!last) return 0;
+      const remainingMs = last + LIKE_DEFAULT_COOLDOWN_SEC * 1000 - Date.now();
+      return remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0;
+    } catch {
+      return 0;
+    }
+  });
 
   useEffect(() => {
     if (likeState !== 'cooldown') return;
@@ -150,12 +161,7 @@ export function SettingsPage() {
     }
   };
 
-  useEffect(() => {
-    loadProviders();
-    loadModels();
-  }, []);
-
-  async function loadModels() {
+  const loadModels = useCallback(async () => {
     try {
       const data = await api.getModels();
       setModelsData(data);
@@ -168,9 +174,9 @@ export function SettingsPage() {
     } catch (err) {
       console.error('Failed to load models:', err);
     }
-  }
+  }, []);
 
-  async function loadProviders() {
+  const loadProviders = useCallback(async () => {
     try {
       setLoading(true);
       const data = await api.getModelProviders();
@@ -182,7 +188,13 @@ export function SettingsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [t]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data-fetch on mount; setState inside async callback, not directly in effect body
+    loadProviders();
+    loadModels();
+  }, [loadProviders, loadModels]);
 
   async function handleSync() {
     try {
@@ -233,21 +245,6 @@ export function SettingsPage() {
     } finally {
       setExecuting(null);
     }
-  }
-
-  function formatTimestamp(ts: string | null): string {
-    if (!ts) return t('settings.never');
-    const date = new Date(ts);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    
-    if (diffMins < 1) return t('settings.justNow');
-    if (diffMins < 60) return t('settings.minutesAgo', { count: diffMins });
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return t('settings.hoursAgo', { count: diffHours });
-    const diffDays = Math.floor(diffHours / 24);
-    return t('settings.daysAgo', { count: diffDays });
   }
 
   return (
@@ -408,6 +405,25 @@ export function SettingsPage() {
             )}
           </div>
 
+          {/* Assistants Section */}
+          <div className="bg-bg-primary border border-border-default rounded-lg">
+            <div className="px-4 py-3 border-b border-border-default flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-fg-primary">{t('assistants.title')}</h3>
+                <p className="text-xs text-fg-muted mt-0.5">
+                  {t('assistants.subtitle')}
+                </p>
+              </div>
+              <Link
+                to="/assistants"
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-border-default bg-bg-primary hover:bg-bg-secondary text-fg-secondary rounded-lg transition-colors min-h-[44px]"
+              >
+                {t('assistants.manage')}
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          </div>
+
           {/* Model Providers Section */}
           <div className="bg-bg-primary border border-border-default rounded-lg">
             <div className="px-4 py-3 border-b border-border-default flex items-center justify-between">
@@ -482,7 +498,7 @@ export function SettingsPage() {
                         <div className="flex items-center gap-3 mt-1 text-xs text-fg-muted">
                           <span>{t('settings.modelsEnabled', { enabled: provider.enabledCount, total: provider.totalCount })}</span>
                           <span>•</span>
-                          <span>{t('settings.syncedAt', { timestamp: formatTimestamp(provider.last_synced_at) })}</span>
+                          <span>{t('settings.syncedAt', { timestamp: formatRelativeTimestamp(provider.last_synced_at, t) })}</span>
                         </div>
                       </div>
                         <svg

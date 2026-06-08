@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
@@ -14,5 +14,10 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+  },
+  test: {
+    // Run both frontend (src/) and backend (middleware/, tests/) tests
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'tests/**/*.test.{js,ts}'],
+    environment: 'node',
   },
 })

@@ -1,5 +1,5 @@
 import i18n from '../i18n';
-import type { Session, Message } from '../types/api';
+import type { Assistant, Session, Message } from '../types/api';
 
 const API_BASE = '';
 
@@ -18,6 +18,16 @@ export interface ChatError {
   retryable?: boolean;
   suggestion?: string;
 }
+
+export interface CreateAssistantInput {
+  name: string;
+  description?: string | null;
+  color?: string | null;
+  icon?: string | null;
+  modelId?: string | null;
+}
+
+export type UpdateAssistantInput = Partial<CreateAssistantInput>;
 
 export const api = {
   async getSessions(limit = 20, offset = 0, includeArchived = false, sort: 'created' | 'lastMessage' = 'created'): Promise<{ sessions: Session[]; total: number; limit: number; offset: number }> {
@@ -51,11 +61,14 @@ export const api = {
     return res.json();
   },
 
-  async createSession(model: string, title?: string): Promise<string> {
+  async createSession(model: string, title?: string, assistantId?: number | null): Promise<string> {
+    const body: { model: string; title?: string; assistantId?: number | null } = { model };
+    if (title) body.title = title;
+    if (assistantId != null) body.assistantId = assistantId;
     const res = await fetch(`${API_BASE}/api/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, title }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error(i18n.t('api.failedToCreateSession'));
     const data = await res.json();
@@ -471,6 +484,73 @@ export const api = {
     );
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || i18n.t('api.failedToRemoveProviderKey'));
+    return data;
+  },
+
+  async getAssistants(includeArchived = false): Promise<{ assistants: Assistant[] }> {
+    const res = await fetch(`${API_BASE}/api/assistants?include_archived=${includeArchived ? 1 : 0}`);
+    if (!res.ok) throw new Error(i18n.t('api.failedToFetchAssistants'));
+    return res.json();
+  },
+
+  async getAssistant(id: number): Promise<Assistant> {
+    const res = await fetch(`${API_BASE}/api/assistants/${id}`);
+    if (!res.ok) throw new Error(i18n.t('api.failedToFetchAssistant'));
+    return res.json();
+  },
+
+  async createAssistant(input: CreateAssistantInput): Promise<{ assistant: Assistant; forked: false }> {
+    const res = await fetch(`${API_BASE}/api/assistants`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: input.name,
+        description: input.description ?? null,
+        color: input.color ?? null,
+        icon: input.icon ?? null,
+        model_id: input.modelId ?? null,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || i18n.t('api.failedToCreateAssistant'));
+    return data;
+  },
+
+  async updateAssistant(id: number, input: UpdateAssistantInput): Promise<{ assistant: Assistant; forked: boolean; previousId?: number }> {
+    const body: Record<string, unknown> = {};
+    if (input.name !== undefined) body.name = input.name;
+    if (input.description !== undefined) body.description = input.description;
+    if (input.color !== undefined) body.color = input.color;
+    if (input.icon !== undefined) body.icon = input.icon;
+    if (input.modelId !== undefined) body.model_id = input.modelId;
+    const res = await fetch(`${API_BASE}/api/assistants/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || i18n.t('api.failedToUpdateAssistant'));
+    return data;
+  },
+
+  async archiveAssistant(id: number): Promise<{ assistant: Assistant }> {
+    const res = await fetch(`${API_BASE}/api/assistants/${id}/archive`, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || i18n.t('api.failedToArchiveAssistant'));
+    return data;
+  },
+
+  async restoreAssistant(id: number): Promise<{ assistant: Assistant }> {
+    const res = await fetch(`${API_BASE}/api/assistants/${id}/restore`, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || i18n.t('api.failedToRestoreAssistant'));
+    return data;
+  },
+
+  async duplicateAssistant(id: number): Promise<{ assistant: Assistant }> {
+    const res = await fetch(`${API_BASE}/api/assistants/${id}/duplicate`, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || i18n.t('api.failedToDuplicateAssistant'));
     return data;
   },
 };

@@ -67,7 +67,7 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
         >
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className={`flex items-center text-fg-muted ${isSidebarOpen ? 'sm:absolute sm:left-4' : 'sm:relative'}`}
+            className={`hidden md:flex items-center text-fg-muted ${isSidebarOpen ? 'sm:absolute sm:left-4' : 'sm:relative'}`}
               aria-label={isSidebarOpen ? t('nav.collapseSidebar') : t('nav.expandSidebar')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
