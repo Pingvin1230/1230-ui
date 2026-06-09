@@ -18,5 +18,10 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // Allow setState in useEffect for "reset on key change" pattern
+      // (session id change resets local UI state — not external system sync)
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
 ])

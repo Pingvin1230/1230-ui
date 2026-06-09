@@ -176,8 +176,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     },
     getAttachedFiles: () => attachedFiles
       .filter(f => f.status === 'ready' && f.path)
-      .map(f => ({ id: f.id, path: f.path, filename: f.filename })),
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- attachedFiles is the only state that affects the handle's return value; useMemo re-runs when it changes
+      .map(f => ({ id: f.id, path: f.path, filename: f.filename }))
   }), [attachedFiles]);
 
   useImperativeHandle(ref, () => handle, [handle]);
@@ -220,14 +219,17 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           setSessionFiles(files);
           onSessionFilesChange?.(files);
         }
-      } catch (_) {
+      } catch {
         // Non-critical
       }
     })();
     return () => { cancelled = true; };
   }, [sessionId, onSessionFilesChange]);
 
-  // Reset on session change
+  // Reset on session change — setState in effect is intentional here:
+  // we reset local UI state whenever the session id changes, not syncing
+  // with an external system. This is the recommended pattern for "reset on
+  // key change" and does not cause cascading renders.
   useEffect(() => {
     setAttachedFiles([]);
     setFileWarning(null);
