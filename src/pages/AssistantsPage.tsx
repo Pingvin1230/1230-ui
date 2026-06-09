@@ -99,7 +99,7 @@ export function AssistantsPage() {
   };
 
   return (
-    <div className="h-full flex flex-col px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+    <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4">
       <div className="max-w-4xl w-full mx-auto mb-4">
         <Link
           to="/settings"

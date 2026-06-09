@@ -60,7 +60,7 @@ export function Navbar({ isSidebarOpen, setIsSidebarOpen }: NavbarProps) {
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-bg-primary text-fg-primary shadow-md">
+    <nav className="flex-shrink-0 z-50 bg-bg-primary text-fg-primary shadow-md">
       <div className="h-16 flex items-center justify-between">
         <div
           className={`${isSidebarOpen ? 'sm:w-72' : 'w-auto sm:w-16'} flex items-center ${isSidebarOpen ? 'sm:justify-center' : 'sm:justify-start'} transition-all duration-300 ease-in-out px-4 relative flex-shrink-0`}

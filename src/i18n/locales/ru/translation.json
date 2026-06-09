@@ -33,7 +33,6 @@
     "selected_few": "{{count}} выбраны",
     "selected_many": "{{count}} выбрано"
   },
-
   "nav": {
     "home": "Главная",
     "sessions": "Сессии",
@@ -56,7 +55,6 @@
     "hermesApiDisconnected": "Hermes API: отключено",
     "hermesApiChecking": "Hermes API: проверка…"
   },
-
   "chat": {
     "sessionNotFound": "Сессия не найдена",
     "sessionTitlePlaceholder": "Название сессии",
@@ -98,9 +96,36 @@
     "breadcrumbsSessions": "Сессии",
     "leavePageTitle": "Покинуть страницу?",
     "leavePageDesc": "У вас есть неотправленный текст. Если вы уйдёте, он будет потерян.",
-    "leavePageConfirm": "Уйти"
+    "leavePageConfirm": "Уйти",
+    "attachFile": "Прикрепить файл",
+    "dropFilesHere": "Перетащите файл сюда",
+    "fileUploading": "Загрузка…",
+    "fileError": "Ошибка загрузки",
+    "fileRetry": "Повторить",
+    "fileTooLarge": "Файл превышает лимит 50 МБ",
+    "fileTypeNotAllowed": "Тип файла не поддерживается",
+    "tooManyFiles": "Максимум 5 файлов",
+    "agentFilesLabel_one": "Создан файл",
+    "agentFilesLabel_few": "Создано файла",
+    "agentFilesLabel_many": "Создано файлов",
+    "downloadFile": "Скачать",
+    "fileNotFound": "Файл больше не доступен",
+    "expandFile": "Развернуть файл",
+    "collapseFile": "Свернуть файл",
+    "sessionFilesBar_one": "{{count}} файл в сессии",
+    "sessionFilesBar_few": "{{count}} файла в сессии",
+    "sessionFilesBar_many": "{{count}} файлов в сессии",
+    "sessionFilesUser_one": "{{count}} ваш",
+    "sessionFilesUser_few": "{{count}} ваших",
+    "sessionFilesUser_many": "{{count}} ваших",
+    "sessionFilesAgent_one": "{{count}} от агента",
+    "sessionFilesAgent_few": "{{count}} от агента",
+    "sessionFilesAgent_many": "{{count}} от агента",
+    "sessionFilesInSession": "файлов в сессии",
+    "sessionFilesCount_one": "{{count}} файл",
+    "sessionFilesCount_few": "{{count}} файла",
+    "sessionFilesCount_many": "{{count}} файлов"
   },
-
   "sessions": {
     "title": "Сессии",
     "pinned": "Закреплённые",
@@ -127,17 +152,30 @@
     "failedToLoadSessions": "Не удалось загрузить сессии",
     "holdToSelect": "Удержите для выбора"
   },
-
   "dashboard": {
     "welcome": "Добро пожаловать",
-    "startNewConversation": "Начать новый разговор",
+    "greetingMorning": "Доброе утро",
+    "greetingAfternoon": "Добрый день",
+    "greetingEvening": "Добрый вечер",
+    "startNewConversation": "Напишите сообщение...",
+    "selectModel": "Выбрать модель",
+    "assistants": "Ассистенты",
     "connected": "Подключено",
     "disconnected": "Отключено",
     "totalSessions": "Всего сессий",
     "recentSessions": "Последние сессии",
-    "failedToLoadDashboard": "Не удалось загрузить данные панели"
+    "failedToLoadDashboard": "Не удалось загрузить данные панели",
+    "onboardingTitle": "Добро пожаловать в 1230.UI",
+    "onboardingDesc": "Чтобы начать чат, подключите хотя бы один сервис ИИ и включите модель.",
+    "onboardingStep1": "Добавьте ключ сервиса",
+    "onboardingStep1Desc": "Подключите OpenAI, Anthropic или другого провайдера.",
+    "onboardingStep2": "Включите модель",
+    "onboardingStep2Desc": "Выберите модели в Настройки → Сервисы ИИ.",
+    "onboardingStep3": "Начните общение",
+    "onboardingStep3Desc": "Вернитесь сюда и напишите первое сообщение.",
+    "onboardingDismiss": "Понятно",
+    "onboardingGoToKeys": "Добавить ключ сервиса →"
   },
-
   "newSession": {
     "title": "Новая сессия",
     "description": "Создайте новый разговор с Hermes",
@@ -151,7 +189,6 @@
     "sectionAssistants": "Ассистенты",
     "manageAssistants": "Управлять"
   },
-
   "settings": {
     "title": "Настройки",
     "description": "Настройка веб-интерфейса",
@@ -175,8 +212,8 @@
     "sortLastMessageBtn": "Последнее сообщение",
     "defaultModelDesc": "Модель по умолчанию при создании новых сессий",
     "defaultModel": "Модель по умолчанию",
-    "modelProviders": "Провайдеры моделей",
-    "modelProvidersDesc": "Управление доступными моделями для чата",
+    "modelProviders": "Сервисы ИИ",
+    "modelProvidersDesc": "Включение и отключение доступных моделей",
     "syncing": "Синхронизация...",
     "syncAll": "Синхронизировать все",
     "synced": "Синхронизировано",
@@ -230,7 +267,6 @@
     "timeFormatMs": "{{m}} мин. {{s}} с.",
     "timeFormatS": "{{s}} с."
   },
-
   "errors": {
     "content_moderation": "Запрос заблокирован",
     "rate_limit": "Превышен лимит запросов",
@@ -243,7 +279,6 @@
     "fallback": "Ошибка",
     "details": "Подробнее"
   },
-
   "api": {
     "failedToFetchSessions": "Не удалось загрузить сессии",
     "failedToFetchSession": "Не удалось загрузить сессию",
@@ -285,38 +320,36 @@
     "failedToUpdateAssistant": "Не удалось обновить помощника",
     "failedToArchiveAssistant": "Не удалось перенести помощника в архив",
     "failedToDuplicateAssistant": "Не удалось скопировать помощника",
-    "failedToRestoreAssistant": "Не удалось восстановить помощника"
+    "failedToRestoreAssistant": "Не удалось восстановить помощника",
+    "failedToUploadFile": "Не удалось загрузить файл",
+    "failedToDeleteFile": "Не удалось удалить файл",
+    "failedToListFiles": "Не удалось получить список файлов"
   },
-
   "errorBoundary": {
     "title": "Произошла ошибка",
     "unknownError": "Неизвестная ошибка приложения",
     "showDetails": "Показать детали",
     "reloadPage": "Перезагрузить страницу"
   },
-
   "toolCall": {
     "label": "Вызов инструмента"
   },
-
   "modal": {
     "closeDialog": "Закрыть диалог"
   },
-
   "toast": {
     "dismiss": "Закрыть уведомление"
   },
-
   "providers": {
-    "title": "Ключи провайдеров",
-    "description": "Добавление и удаление API-ключей. Ключи хранятся в ~/.hermes/.env (права 600) и не сохраняются в 1230-UI.",
+    "title": "Ключи сервисов",
+    "description": "Добавьте или удалите ключи доступа к сервисам ИИ. Ключи хранятся в ~/.hermes/.env (права 600) и не сохраняются в 1230-UI.",
     "backToSettings": "Назад к настройкам",
     "noProviders": "Нет доступных провайдеров",
     "addKey": "Добавить ключ",
     "keyConfigured": "Ключ настроен",
     "envVarLabel": "Переменная окружения",
-    "apiKeyLabel": "API-ключ",
-    "apiKeyPlaceholder": "Вставьте API-ключ",
+    "apiKeyLabel": "Ключ доступа",
+    "apiKeyPlaceholder": "Вставьте ключ доступа",
     "storedInEnv": "Сохраняется в ~/.hermes/.env. В 1230-UI не хранится.",
     "saving": "Сохранение...",
     "saveKey": "Сохранить ключ",
@@ -325,13 +358,12 @@
     "confirmRemoveDesc": "Строка {{envVar}} будет удалена из ~/.hermes/.env. Модели {{name}} перестанут работать, пока вы не добавите новый ключ и не перезапустите Hermes.",
     "showKey": "Показать ключ",
     "hideKey": "Скрыть ключ",
-    "errorKeyEmpty": "Введите API-ключ",
+    "errorKeyEmpty": "Введите ключ доступа",
     "errorAddFailed": "Не удалось сохранить ключ",
     "errorRemoveFailed": "Не удалось удалить ключ",
     "errorLoadFailed": "Не удалось загрузить провайдеров",
-    "manageKeys": "Управление ключами провайдеров"
+    "manageKeys": "Управление ключами сервисов"
   },
-
   "assistants": {
     "title": "Помощники",
     "subtitle": "Именованные связки модели и настроек, которые появляются на странице новой сессии.",

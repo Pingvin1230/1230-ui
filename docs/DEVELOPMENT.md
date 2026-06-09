@@ -55,7 +55,7 @@ npm run preview      # Preview production build locally
 │   │   ├── Navbar.tsx            # Top bar (search + Hermes status + user menu)
 │   │   ├── PageSkeleton.tsx      # Skeleton for lazy-loaded pages
 │   │   ├── ProviderCard.tsx      # Single provider row in Providers page
-│   │   ├── SessionCard.tsx       # Session card: swipe-to-delete, long-press bulk mode
+│   │   ├── SessionCard.tsx       # Session card: 3-row layout, right-side checkbox (zero layout shift), swipe-to-delete, long-press bulk
 │   │   ├── Sidebar.tsx           # Left rail nav — desktop only (hidden md:flex)
 │   │   ├── Toast.tsx             # Toast notifications with queue and auto-dismiss
 │   │   └── ToolCall.tsx          # Collapsible tool-call visualization
@@ -63,7 +63,7 @@ npm run preview      # Preview production build locally
 │   │   ├── AssistantEditPage.tsx # Create/edit assistant (sticky action bar)
 │   │   ├── AssistantsPage.tsx    # /assistants — tile grid, tab filters, context menus
 │   │   ├── ChatPage.tsx          # Chat interface (streaming SSE, markdown, tool calls)
-│   │   ├── DashboardPage.tsx     # Home (Quick Chat + Recent Sessions)
+│   │   ├── DashboardPage.tsx     # Home: greeting, Quick Chat (pill model picker), Assistants tiles, Recent Sessions
 │   │   ├── NewSessionPage.tsx    # /new — assistant tiles + standard model tile
 │   │   ├── ProvidersPage.tsx     # /settings/providers — API key management
 │   │   ├── SessionsPage.tsx      # Session list (react-virtuoso, date grouping)

@@ -17,6 +17,7 @@ import { sanitizeMiddleware, apiLimiter } from './middleware/security.js';
 
 import systemRouter, { getHealthHandler }       from './routes/system.js';
 import sessionsRouter, { postMessageHandler }   from './routes/sessions.js';
+import filesRouter       from './routes/files.js';
 import chatRouter       from './routes/chat.js';
 import modelsRouter     from './routes/models.js';
 import assistantsRouter from './routes/assistants.js';
@@ -40,6 +41,18 @@ app.use(cors({
 
 app.use(express.json());
 app.use(sanitizeMiddleware);
+app.use((req, res, next) => {
+  if (req.path === '/' || req.path.endsWith('.html')) {
+    // Never cache HTML — browser must always fetch fresh index.html so it
+    // picks up new content-hashed asset filenames after a deploy.
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  } else if (req.path.startsWith('/assets/')) {
+    // Vite emits content-hashed filenames (e.g. index-AbCdEf12.js).
+    // These are immutable — safe to cache for a very long time.
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  }
+  next();
+});
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // ── Request logging middleware ─────────────────────────────────────────────
@@ -74,6 +87,7 @@ app.post('/api/messages', apiLimiter, postMessageHandler);
 // Routers mounted at their prefix
 app.use('/api/system',      systemRouter);
 app.use('/api/sessions',    sessionsRouter);
+app.use('/api/sessions',    filesRouter);
 app.use('/api/chat',        chatRouter);
 app.use('/api/models',      modelsRouter);
 app.use('/api/assistants',  assistantsRouter);

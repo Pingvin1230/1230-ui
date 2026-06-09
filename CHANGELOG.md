@@ -2,6 +2,403 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - 2026-06-09 (v0.9.0 release — Tasks #23 and #24 + code audit + UX sprint + mobile layout overhaul + chat UX improvements)
+
+### UX sprint — Dashboard and Sessions redesign
+
+#### Dashboard
+
+- **Time-based greeting** — static «Welcome» replaced with a dynamic greeting based on time of day: «Good morning» (05:00–12:00), «Good afternoon» (12:00–18:00), «Good evening» (18:00+). Translated into all 4 locales (en, ru, es, de). New i18n keys: `dashboard.greetingMorning`, `dashboard.greetingAfternoon`, `dashboard.greetingEvening`.
+- **Quick Chat redesign** — the full-width `<select>` above the textarea is replaced with a pill button in the footer row of the chat box. Clicking it opens a grouped dropdown (providers as section headers, models as rows) that pops upward. The textarea is now the first element and receives `autoFocus` on mount.
+- **Send button fixed height** — `self-end h-[44px]` replaces `self-stretch`; the button no longer grows with the textarea.
+- **Spinner on Send** — `Loader2` replaces the `Send` icon while a session is being created.
+- **Preview in Recent Sessions** — each session row now shows `session.preview` as a second line (`text-xs text-fg-muted truncate`) when it differs from the title. Provides context without opening the session.
+- **Assistants quick-start block** — when at least one active assistant exists, a grid of up to 3 `AssistantTile` cards is shown between the chat box and Recent Sessions. Clicking a tile creates a session immediately. «View all» links to `/new`.
+- **Recent Sessions visual refresh** — card list uses `divide-y` instead of individual spacing; hover uses `−mx-2 px-2` to span the full card width cleanly.
+- **Layout narrowed** — `max-w-6xl → max-w-3xl` and two-column grid removed; single-column flow with `space-y-6` is cleaner and focused.
+
+#### Sessions page
+
+- **Group headers redesigned** — TODAY / YESTERDAY / THIS WEEK headers: removed `uppercase tracking-wide`, added a `<hr className="flex-1 border-border-default">` line that stretches to the right edge. Cleaner visual separation between date groups.
+- **Page title decluttered** — decorative blue icon-square removed from the `Sessions` heading. Plain `h1` + session count below.
+- **Refresh button removed** — redundant; the list already reloads on navigation via `location.key`. Reduces header clutter.
+- **Session count always visible** — `hidden sm:block` removed from the «24 of 24 sessions» subtitle so it shows on all screen sizes.
+
+#### SessionCard — full rebuild
+
+Previous layout had the checkbox overlapping the title text in bulk mode. The card is now rebuilt from scratch:
+
+**New layout (3 rows):**
+```
+Row 1  ★ Title (truncate)
+Row 2  Preview text (truncate, 1 line, text-fg-muted)
+Row 3  [Assistant][Model][⬜ N]      [★pin][⬛archive]  5m ago
+```
+
+**Checkbox column (right side, always in DOM):**
+- Separate `w-12` column with `border-l`, rendered as a sibling to the content `<Link>` inside a `flex items-stretch` wrapper.
+- `opacity-0 pointer-events-none` in normal mode → `opacity-100` in bulk mode (150 ms transition). Zero layout shift — card dimensions never change.
+- `tabIndex={-1}` when hidden so keyboard navigation is unaffected.
+
+**Other changes:**
+- Pin icon moved into row 1 next to the title (only shown when pinned).
+- Message count displayed as icon + number (`text-xs text-fg-muted`) without a badge — less visual noise.
+- «Hold to select» hint removed entirely.
+- `preview`: `line-clamp-2` → `line-clamp-1` (one clean line).
+- Time label: `text-xs` → `text-sm`, moved into row 3 right block alongside pin/archive actions.
+- Pin and archive buttons: `min-h-[44px] min-w-[44px]` → `min-h-[36px] min-w-[36px]` (row 3 is compact).
+
+#### Files changed
+
+`src/pages/DashboardPage.tsx`, `src/components/SessionCard.tsx`, `src/pages/SessionsPage.tsx`, `src/i18n/locales/{en,ru,es,de}/translation.json`.
+
+#### Verification
+
+`npm run lint` clean, `npm run typecheck` clean, `npm test` 22/22 pass, `npm run build` OK.
+
+---
+
+### Mobile layout overhaul — fixed scroll, sidebar overlay, MobileNav
+
+Complete rewrite of the layout architecture to fix systematic UX breakage on mobile browsers (Firefox mobile, Galaxy Fold, touch devices in general).
+
+#### Root cause
+
+The previous layout used `h-screen overflow-hidden` on the root div with nested flexbox. Mobile browsers (especially Firefox) treat `100vh` inconsistently — it does not account for the dynamic browser chrome (address bar showing/hiding on scroll), causing the layout to "fall off" the screen and all fixed-positioned elements to scroll with the page.
+
+#### Changes
+
+**`src/components/Layout.tsx` — full rewrite**
+
+- Root uses `h-dvh` (`100dvh`) instead of `h-screen` — `dvh` tracks the actual visible viewport including browser chrome changes. Falls back correctly in older browsers.
+- `<main>` is `overflow-hidden flex flex-col`; each page component owns its own scroll via `overflow-y-auto` on its root div. This makes scroll containment explicit and predictable.
+- **Mobile ChatInput** is `position: fixed` at the bottom of the viewport (`z-[55]`), positioned above MobileNav. No longer participates in page scroll.
+- **Desktop ChatInput** stays in normal flex flow as before — no change for desktop users.
+- Sidebar on mobile: renders as `fixed` overlay with a semi-transparent backdrop (`z-[45]`). Tap backdrop to close. Does not shift the content area.
+- Sidebar on desktop: part of the flex row — naturally pushes content to the right.
+- `paddingBottom` on `<main>` compensates for fixed MobileNav + ChatInput height so last content item is never obscured.
+
+**`src/components/Sidebar.tsx` — removed `fixed`, overlay model**
+
+- Desktop: plain `<aside>` in flex flow (width 288 px), pushes content naturally. No more `fixed left-0 top-16` with manual `ml-72` margin compensation.
+- Mobile: `fixed` overlay with `paddingTop: 64px` to clear the Navbar.
+- `isMobile` prop passed from Layout; no internal `useMobile()` call.
+- `hidden md:flex` removed — visibility controlled by `isSidebarOpen` state, not CSS breakpoint. Works correctly on Galaxy Fold inner screen (≥768px but touch device).
+
+**`src/components/MobileNav.tsx`**
+
+- `md:hidden` removed — visibility controlled exclusively by `useMobile()` hook (which uses `(pointer: coarse) and (hover: none)` media query). Previously `md:hidden` was hiding MobileNav on Galaxy Fold inner screen (≥768px wide but a touch device).
+- `position: fixed bottom-0 inset-x-0 z-[50]` — always pinned to viewport bottom regardless of scroll position.
+- `pb-[env(safe-area-inset-bottom,0px)]` for iPhone home indicator.
+
+**`src/store/sidebarStore.ts`**
+
+- Default open state now checks `(pointer: coarse) and (hover: none)` in addition to `window.innerWidth >= 768`. Touch devices (including wide-screen foldables) default to sidebar closed so it does not overlay content on first visit.
+
+**All page components** — added `overflow-y-auto` scroll wrapper on root divs:
+
+- `DashboardPage` — `flex-1 min-h-0 overflow-y-auto` wrapper; `autoFocus` removed from textarea (caused viewport jump and zoom on mobile).
+- `SessionsPage` — same wrapper; `Virtuoso` replaced with plain `map()` + `IntersectionObserver` for infinite scroll (see below).
+- `SettingsPage`, `AssistantsPage`, `AssistantEditPage` — `h-full flex flex-col` → `flex-1 min-h-0 overflow-y-auto`.
+- `NewSessionPage` — `overflow-y-auto` scroll wrapper + `max-w-4xl mx-auto` inner container.
+- `ChatPage` — unchanged; already had `flex-1 min-h-0 overflow-y-auto` with `scrollContainerRef`.
+
+#### Files changed
+
+`src/components/Layout.tsx`, `src/components/Sidebar.tsx`, `src/components/MobileNav.tsx`, `src/store/sidebarStore.ts`, `src/pages/DashboardPage.tsx`, `src/pages/SessionsPage.tsx`, `src/pages/SettingsPage.tsx`, `src/pages/AssistantsPage.tsx`, `src/pages/AssistantEditPage.tsx`, `src/pages/NewSessionPage.tsx`.
+
+---
+
+### SessionsPage — Virtuoso replaced with native scroll
+
+**Problem:** `react-virtuoso` with `useWindowScroll={false}` requires an explicit height on its container. The container's height was computed via `h-full` in a flex chain where no ancestor had a fixed height, causing Virtuoso to collapse to 0 px. Session cards rendered at incorrect (near-zero) widths.
+
+**Solution:** Removed `react-virtuoso` entirely. Sessions list is now a plain `Array.map()` render with an `IntersectionObserver` sentinel div at the bottom for infinite scroll (loads next page when the sentinel enters the viewport with `rootMargin: 400px`).
+
+- `SessionsPage` bundle: **79 KB → 20 KB** gzip (Virtuoso dependency removed).
+- Infinite scroll behavior preserved: `loadMore()` called when sentinel is visible; `Loader2` spinner shown while loading.
+- Sticky group headers (`top-0 bg-bg-secondary z-10`) work correctly without virtualization.
+- `useRef` / `useEffect` for sentinel moved before any early `return` to comply with React hooks rules.
+
+#### Files changed
+
+`src/pages/SessionsPage.tsx`.
+
+---
+
+### Chat UX improvements
+
+A comprehensive pass over the chat experience focused on non-technical users.
+
+#### MarkdownRenderer — full overhaul (`src/components/MarkdownRenderer.tsx`)
+
+**Links**
+- All links now open in a new tab (`target="_blank" rel="noopener noreferrer"`).
+- External link icon (`ExternalLink`, 12 px) appended inline after link text.
+- **Bare URL auto-linking** — new `preprocessLinks()` function converts domain-only URLs written without a protocol (`drive2.ru/path`, `t.me/channel`, `aliexpress.com/...`) to `https://` prefixed URLs before passing content to ReactMarkdown. remark-gfm then autolinks them normally. Code blocks and inline code are excluded from processing. Covers ~50 TLDs.
+
+**Code blocks**
+- Dark header bar shows language label (`Python`, `TypeScript`, `JSON`, `Bash`, etc.) derived from the highlight.js `language-*` className. Falls back to `"code"` when language is unknown.
+- Copy button always visible on mobile; hover-only on desktop (`md:opacity-0 md:group-hover:opacity-100`). Shows `"Копировать"` / `"Скопировано"` text label alongside the icon.
+- Copy confirmation timeout: **200 ms → 1500 ms**.
+- Long code blocks (scroll height > 320 px) collapse with a fade gradient. A `"Показать полностью"` / `"Свернуть"` toggle expands/collapses. Detected after first render via `useEffect` measuring `scrollHeight`.
+- Code block background: `#0d1117` (GitHub dark). Header: `#1e2736`.
+
+**Tables**
+- Wrapped in `rounded-lg border` container with `overflow-x-auto`.
+- Row hover effect (`hover:bg-bg-secondary/50`).
+- Border colors use `var(--color-border-default)` (design system tokens, not hardcoded hex).
+
+**Images**
+- New `img` component: `max-w-full rounded-lg border shadow-sm`, `loading="lazy"`. Alt text rendered as italic caption below.
+
+**Blockquote**
+- Left border + accent background fill (`bg-accent-soft/30`) instead of plain border.
+
+**Typography**
+- `p` gains `last:mb-0` to remove trailing margin on the last paragraph.
+- `h1` gets a bottom border separator (`border-b border-border-default pb-2`).
+
+**CSS (`src/styles/markdown.css`)**
+- All hardcoded hex colors (`#e5e7eb`, `#4b5563`, `#d1d5db`) replaced with `var(--color-border-default)`. Dark mode table/blockquote borders now correctly track the design system.
+- Removed redundant `.markdown-content pre` margin (CodeBlock component handles this).
+
+#### ChatPage improvements (`src/pages/ChatPage.tsx`)
+
+**Header**
+- Cancel title-editing button: `AlertCircle` icon → `X` (correct semantic).
+- **Stop button in header** — appears during generation (`sending === true`) as a compact red pill (`Square` icon + "Stop" label). Allows stopping generation without scrolling to the bottom input area.
+
+**Message actions**
+- Copy/Regenerate buttons: `opacity-0 md:group-hover:opacity-100` → always visible on mobile (`opacity-100`), hover-only on desktop (`md:opacity-0`). No more invisible buttons on touch screens.
+- `aria-label` for assistant copy button was hardcoded English (`'Copy message'`) — fixed to use `t('chat.copyMessage')`.
+- `title` tooltip added to all action buttons.
+- **Latency / token count** hidden behind group hover: `opacity-0 group-hover:opacity-100`. Previously always visible, adding visual noise. Token count abbreviated: `tokens` → `tok`.
+
+**Streaming message**
+- Now renders with the same layout as a finished assistant message: Bot avatar + card border + `bg-bg-primary`.
+- **Blinking cursor** `▌` (`w-0.5 h-4 bg-fg-primary animate-[blink_1s_step-end_infinite]`) appended at end of streaming content.
+- `@keyframes blink` added to `src/index.css`.
+
+**Scroll-to-bottom button**
+- Previously shown only when `!isAtBottom && unreadCount > 0`. Now shows whenever `!isAtBottom` (user scrolled up even without new messages).
+- Redesigned: white pill with border + `ChevronDown` icon, replaces the blue capsule. Less intrusive.
+
+**Empty state — prompt suggestions**
+- 4 clickable suggestion chips below the empty-state illustration: "Объясни простыми словами", "Помоги составить план", "Исправь ошибки в тексте", "Переведи на русский".
+- Clicking fires `window.dispatchEvent(new CustomEvent('chat:prefill', { detail: { text } }))`.
+- `ChatInput` listens for `chat:prefill` and inserts the text + focuses the textarea.
+
+#### ChatInput — SessionFilesBar redesign (`src/components/ChatInput.tsx`)
+
+**Before:** A plain text link ("3 files in session") with an upward-opening dropdown showing filename + colored dot.
+
+**After:** A pill button with:
+- `FileStack` icon + file count label (e.g. "3 файлов в сессии").
+- Source badges: blue `User` icon + count for user-uploaded files; green `Bot` icon + count for agent-created files.
+- `ChevronDown` arrow rotates on open.
+- Dropdown opens **above** the input (unchanged) but now has a proper header row ("Файлы сессии" + ✕ close button) and a structured file list: file type icon (`FileText`/`ImageIcon`) + truncated filename + file size + source badge ("вы" / "агент").
+- Border color changes to blue when open.
+- `aria-expanded` attribute for accessibility.
+
+#### Files changed
+
+`src/components/MarkdownRenderer.tsx`, `src/styles/markdown.css`, `src/pages/ChatPage.tsx`, `src/components/ChatInput.tsx`, `src/index.css`.
+
+---
+
+### Task #35 — Session-level file indicators
+
+**Problem (follow-up to Task #23):** after a user uploads a file and sends the message, the chip disappears. There is no persistent record that the session contains uploaded or agent-created files.
+
+**Solution:**
+
+- **ChatPage header** — a `Paperclip` icon + count badge (`📎 3`) appears next to the model name whenever `sessionFiles.length > 0`. Uses the existing `sessionFiles` array already published to `chatInputStore` by `ChatInput`. No extra API calls.
+- **SessionCard** (Sessions list) — same `Paperclip` + count badge in row 3 alongside the message count. Backend `GET /api/sessions` now returns `fileCount` via a single extra GROUP BY query against `session_files` (`fileCountMap` built in one pass, O(1) per session). Frontend `Session` type gains optional `fileCount?: number`.
+- **i18n** — new `chat.sessionFilesCount` key (with `_one`/`_few`/`_many` variants) × 4 languages.
+
+**Files changed:** `routes/sessions.js`, `src/types/api.ts`, `src/pages/ChatPage.tsx`, `src/components/SessionCard.tsx`, i18n locales.
+
+---
+
+### Task #28 — UX-3: jargon-free terminology
+
+Renamed technical terms visible to non-technical users:
+
+| Before | After (EN) | After (RU) |
+|---|---|---|
+| Model Providers | AI Services | Сервисы ИИ |
+| API key | Access key | Ключ доступа |
+| Provider Keys (page title) | Service Keys | Ключи сервисов |
+| Manage provider keys | Manage service keys | Управление ключами сервисов |
+| Model Providers section desc | Enable or disable available AI models | Включение и отключение доступных моделей |
+| Providers page desc | Add or remove access keys for AI services | Добавьте или удалите ключи доступа к сервисам ИИ |
+
+Updated i18n keys: `settings.modelProviders`, `settings.modelProvidersDesc`, `providers.title`, `providers.description`, `providers.apiKeyLabel`, `providers.apiKeyPlaceholder`, `providers.errorKeyEmpty`, `providers.manageKeys` — all 4 languages (en, ru, es, de). No component changes required.
+
+**Files changed:** `src/i18n/locales/{en,ru,es,de}/translation.json`.
+
+---
+
+### Task #29 — UX-7: onboarding banner
+
+A dismissable onboarding banner is shown on the Dashboard when a new user has **no models available** and **no sessions yet**. Guides them through three steps: add a service key → enable a model → start chatting.
+
+**Implementation:**
+
+- Detected in `DashboardPage.loadData()`: after loading models, checks `allModels.length === 0 && sessions.length === 0 && !localStorage.onboarding_dismissed`.
+- Banner renders below the greeting, above the Quick Chat box.
+- Three numbered steps with icons (`Key`, `Zap`, `MessageCircle`) and brief descriptions.
+- "Add service key →" button links to `/settings/providers`.
+- ✕ dismiss button sets `localStorage.onboarding_dismissed = '1'` and hides the banner immediately. Not shown again.
+- Styled with blue accent border (`border-blue-200 dark:border-blue-800`) — visible but non-intrusive.
+- Does not appear once the user has sessions or models configured (not just dismissed — actually set up).
+
+**i18n:** 10 new keys in `dashboard.*` × 4 languages: `onboardingTitle`, `onboardingDesc`, `onboardingStep1`, `onboardingStep1Desc`, `onboardingStep2`, `onboardingStep2Desc`, `onboardingStep3`, `onboardingStep3Desc`, `onboardingDismiss`, `onboardingGoToKeys`.
+
+**Files changed:** `src/pages/DashboardPage.tsx`, i18n locales.
+
+---
+
+### Task #17 — CI: README badge + release workflow
+
+- **README badge** — `[![CI](…/ci.yml/badge.svg)](…)` added at the top of `README.md`. Status line updated to reflect current v0.9.0 features.
+- **`release.yml`** (new) — GitHub Actions workflow triggered on `v*.*.*` tag push:
+  1. Full CI pass (lint → typecheck → test → build)
+  2. Creates `1230-ui-vX.Y.Z.tar.gz` containing `dist/`, `routes/`, `middleware/`, `db/`, `scripts/`, `app.js`, `server.js`, `config.js`, `ecosystem.config.json`, `install.sh`, `.env.example`, `package.json`, `package-lock.json`, `CHANGELOG.md`, `README.md`
+  3. Extracts the relevant section from `CHANGELOG.md` as release notes
+  4. Creates a GitHub Release via `softprops/action-gh-release@v2` with the archive attached
+
+**Files changed:** `README.md`, `.github/workflows/release.yml`.
+
+---
+
+### Agent File Download (Task #24)
+
+When the agent creates or writes a file (code, report, exported data), it
+mentions the path in plain text — e.g. "I saved it to `/tmp/report.md`".
+Task #24 turns that bare path into a real download button inside the
+chat message: no terminal, no copy-paste of `/tmp/...`.
+
+#### How it works
+
+- **Detection signal** — the assistant's response text is parsed for
+  backtick-wrapped absolute paths (`` `(/[^\s`]{1,500})` ``). Each
+  candidate is verified with `fs.statSync`; missing files / non-files
+  are silently dropped.
+- **Storage** — detected files are recorded in `session_files` with
+  `source = 'agent'`, reusing the table from Task #23. The
+  `stored_name` column carries the **full absolute path** the agent
+  wrote to (we don't copy the file; we serve it from where the agent
+  placed it).
+- **Wire format** — a new `agent_files` SSE event is emitted before
+  `res.end()`, carrying `{ id, filename, size, mimeType }` for each
+  detected file. The frontend uses these ids to build the download URL.
+- **Deduplication** — `(session_id, stored_name, source = 'agent')`
+  unique. Re-mentioning the same path in another message is a no-op.
+
+#### Backend
+
+- **`db/migrate.js`** — idempotent `ALTER TABLE session_files ADD COLUMN source TEXT NOT NULL DEFAULT 'user'`. Existing user-uploaded rows from Task #23 automatically get `source = 'user'`.
+- **`routes/chat.js`** — module-level `PATH_PATTERN` and `MIME_MAP`; new `detectAgentFiles(sessionId, responseText)`. The SSE handler accumulates `choices[0].delta.content` from every chunk into a local `responseText` string; detection runs in `finally {}` and the `agent_files` event is written before `res.end()`. No changes to the existing `status` / `tool_call_*` / error envelopes.
+- **`routes/files.js`** —
+  - `MIME_MAP` covering 22 extensions (kept identical to `routes/chat.js`).
+  - `GET /api/sessions/:id/files/:fileId/download` — new endpoint. For `source = 'agent'` serves from `row.stored_name` (the agent's absolute path); for `source = 'user'` builds the path under `data/uploads/<session>/`. `fs.existsSync` check returns `404 {"error":"File no longer available"}` if the on-disk file is gone. `res.download(absolutePath, row.filename)` for the actual stream.
+  - `POST /:id/files` now writes `source = 'user'` explicitly.
+  - `DELETE /:id/files/:fileId` skips `fs.unlinkSync` for `source = 'agent'` (the file isn't ours to delete — only the DB row is removed).
+- **`routes/sessions.js`** — `cleanupSessionUploads()` reads the new `source` column and skips the `fs.unlinkSync` call for agent rows. The `DELETE FROM session_files` still runs, so agent rows are removed in bulk delete as required by the brief.
+
+#### Frontend
+
+- **`src/types/api.ts`** — new `AgentFile` interface (`id`, `filename`, `size`, `mimeType`) and optional `agentFiles?: AgentFile[]` on `Message`.
+- **`src/lib/api.ts`** — `sendMessage` options gained `onAgentFiles?`; new parser branch handles `parsed.type === 'agent_files'`.
+- **`src/components/AgentFileCard.tsx`** (new) —
+  - `AgentFileCard` — single-file row. Type-aware icon (`ImageIcon` for `image/*`, `FileDown` for `application/pdf`, `FileText` otherwise) · filename (truncate) · `·` · `formatFileSize` · chevron toggle (`useState(false)` — collapsed by default, expanded state is visually identical in v1 per brief, structural slot for Task #34) · plain `<a href="/api/sessions/:id/files/:fileId/download" download>` button.
+  - `AgentFileGroup` — wraps multiple cards. `files.length === 1` returns a single `AgentFileCard` directly (no extra box); `length > 1` renders an outer collapsible container with label "Files created (N)" and the individual cards inside.
+  - Visual language matches the existing `ToolCall` block (same border, same `bg-bg-secondary`, same chevron animation) for chat consistency.
+- **`src/pages/ChatPage.tsx`** —
+  - `currentAssistantIdRef` (`useRef<number | null>`) tracks the message being streamed.
+  - `doSend` pre-allocates the assistant message id and appends an empty placeholder **before** the fetch, so the `agent_files` SSE event (which arrives before `[DONE]`) can attach cards to it.
+  - `onAgentFiles` callback merges new files into `message.agentFiles`.
+  - `onDone` updates the pre-allocated message in place (preserves `agentFiles`).
+  - `handleStop` and `onError` updated to operate on the pre-allocated id so cards aren't orphaned.
+  - The empty-content filter was loosened to keep messages that have at least one `agentFile` (otherwise the placeholder would disappear if `agent_files` arrived before any text chunk).
+  - `AgentFileGroup` rendered below `MarkdownRenderer` in the assistant bubble.
+
+#### i18n — 5 keys × 4 locales
+
+`chat.agentFilesLabel` (with `_one` / `_other` plurals, plus `_few` / `_many` for ru), `chat.downloadFile`, `chat.fileNotFound`, `chat.expandFile`, `chat.collapseFile`. All four locales: en, ru, es, de.
+
+#### Files changed
+
+`db/migrate.js`, `routes/chat.js`, `routes/files.js`, `routes/sessions.js`, `src/types/api.ts`, `src/lib/api.ts`, `src/components/AgentFileCard.tsx`, `src/pages/ChatPage.tsx`, `src/i18n/locales/{en,ru,es,de}/translation.json`.
+
+No new npm dependencies.
+
+#### Verification
+
+`npm run typecheck` clean, `npm run lint` clean, `npm test` 22/22 pass, `npm run build` OK, `node --check` clean on all modified backend files.
+
+#### Known follow-up
+
+Inline preview, syntax highlighting, bulk zip download, "Open in new tab", global Files view, and version-overwrite handling are all out of scope for Task #24 and tracked in **Task #34 (Extended file functionality)**. The `useState(false)` toggle in `AgentFileCard` and the outer `AgentFileGroup` button are the structural slots Task #34 will fill without changing the surrounding component shape.
+
+### File Upload to Session (Task #23)
+
+### File Upload to Session (Task #23)
+
+Users can now attach files to a chat message. The agent reads them autonomously by path
+(no multipart / base64 needed on the Hermes side — verified experimentally).
+
+#### Backend
+
+- **`session_files` table** — new table in the UI DB. Schema:
+  ```sql
+  CREATE TABLE session_files (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id  TEXT    NOT NULL,
+    filename    TEXT    NOT NULL,  -- original filename shown to the user
+    stored_name TEXT    NOT NULL,  -- UUID + lowercased extension on disk
+    mime_type   TEXT,
+    size        INTEGER NOT NULL,
+    uploaded_at INTEGER NOT NULL
+  );
+  CREATE INDEX idx_session_files_session ON session_files(session_id);
+  ```
+  Idempotent migration added to `db/migrate.js`.
+- **`routes/files.js` (new)** — three endpoints mounted at `/api/sessions`:
+  - `POST /api/sessions/:id/files` — `multipart/form-data` (field `file`); multer with 50 MB cap, extension **and** MIME whitelist (`multer.fileFilter`); `apiLimiter` (100 req/min) on POST only; stored as `data/uploads/<session_id>/<uuid>.<ext>`. Returns `201` with `{ id, sessionId, filename, storedName, mimeType, size, uploadedAt, path }`.
+  - `GET /api/sessions/:id/files` — list files for a session. Always verifies the session exists in Hermes.
+  - `DELETE /api/sessions/:id/files/:fileId` — remove a single file. Verifies `session_id` matches the URL param before touching the disk; `fs.unlinkSync` swallows `ENOENT`.
+- **EXDEV-safe move** — multer writes to `os.tmpdir()/1230-ui-uploads`, which on this host lives on a different filesystem from `/opt/1230-ui/data/uploads`. `fs.renameSync` throws `EXDEV: cross-device link not permitted`; the route falls back to `fs.copyFileSync` + `fs.unlinkSync` on that error.
+- **`routes/sessions.js` cleanup** — new `cleanupSessionUploads(sessionId)` helper: deletes every file in `data/uploads/<id>/`, then `rmdirSync` (swallow `ENOENT`), then `DELETE FROM session_files WHERE session_id = ?`. Called in `DELETE /:id` and inside the `DELETE /bulk` transaction after the session is removed.
+- **`multer ^2.1.1`** — new dependency.
+
+#### Frontend
+
+- **`src/lib/api.ts`** — new `SessionFile` type and three methods: `api.uploadFile`, `api.listSessionFiles`, `api.deleteSessionFile`. Upload uses `FormData`; error messages come from the server's `error` field when present, i18n fallback otherwise.
+- **`src/pages/ChatPage.tsx`** — local `AttachedFile[]` state (no global store, per brief §2.3):
+  - **Paperclip button** (`lucide-react` `Paperclip`) — placed to the left of Send. `min-h-[44px] min-w-[44px]` for the 44×44 touch target. Triggers a hidden `<input type="file" multiple accept="…">`.
+  - **Drag-and-drop** — handlers attached to the page root. Uses a `dragCounterRef` to avoid the `dragleave` flicker for child elements. Overlay: full-area semi-transparent blue + dashed border + centered "Drop to attach" label. Desktop-only; on touch devices only the paperclip is available.
+  - **File chips** — rendered between the message history and the input. States: `uploading` (spinner, neutral), `ready` (FileText/Image icon + blue tint), `error` (AlertCircle + red tint + inline Retry). × button on every chip. List resets when the session `:id` changes.
+  - **Send flow** — handler prepends `[Attached file: <path>]` for every `ready` attachment, separated by newlines, then a blank line, then the user text. On `onDone` the chip list is cleared. On `onError` chips are kept so the user can retry without re-uploading.
+  - **Client-side limits** — size > 50 MB and unsupported extension both produce an `error` chip **without** hitting the server. The 5-files cap shows an inline warning and drops the overflow.
+  - **Navigation guard** — `inputHasText` returns `true` while there are attached files, and `handleLeaveConfirm` clears them on leave.
+  - **Send button** — enabled when there is text **or** at least one `ready` attachment.
+- **i18n** — 8 new `chat.*` keys (`attachFile`, `dropFilesHere`, `fileUploading`, `fileError`, `fileRetry`, `fileTooLarge`, `fileTypeNotAllowed`, `tooManyFiles`) + 3 new `api.*` keys (`failedToUploadFile`, `failedToDeleteFile`, `failedToListFiles`), all four locales (en, ru, es, de).
+
+#### Files changed
+
+`package.json`, `package-lock.json`, `db/migrate.js`, `routes/files.js`, `routes/sessions.js`, `app.js`, `src/lib/api.ts`, `src/pages/ChatPage.tsx`, `src/i18n/locales/{en,ru,es,de}/translation.json`.
+
+#### Verification
+
+`npm run lint` clean, `npm run typecheck` clean, `npm test` 22/22 pass, `npm run build` OK (`ChatPage` chunk 183 KB → 190 KB gzip, +7 KB).
+
+#### Known follow-up
+
+Once a message is sent, the chips disappear and the session has no persistent "this session has N files" indicator. This is tracked as **Task #35 (Session-level file visualisation)** in `TODO.md` and discussed in `docs/BRIEF-23-file-upload.md` § 8 — it should land before tagging v1.0.0.
+
 ## [0.8.0] - 2026-06-08
 
 Backend refactoring sprint + UX improvements + **Assistants Phase 2** (style, depth, system prompt). `server.js` (1911 lines) split into a modular directory structure. 5 open items from the UX/UI audit closed. Task #25 Phase 2 partially shipped.
@@ -215,6 +612,32 @@ routes/assistants.js  235 lines  /api/assistants/*
 routes/providers.js   154 lines  /api/providers/*
 routes/likes.js       100 lines  /api/like
 ```
+
+### v0.9.0 — Code audit (Tasks #23 / #24 cleanup)
+
+Post-implementation audit of the file upload and agent file download code.
+
+**Removed duplicate code:**
+- `db/fileTypes.js` — new shared module: `MIME_MAP`, `ALLOWED_EXTENSIONS`, `getMimeTypeForPath`, `hasAllowedExtension`. Previously these were copy-pasted independently in `routes/files.js` and `routes/chat.js`.
+
+**Removed debug logs:**
+- All `[Task24]` `console.log` calls removed from `routes/chat.js` (10 lines, including one that dumped 300 chars of the agent's response text on every request).
+- Stray `console.log` calls removed from `src/lib/api.ts` (stream state logging).
+- `console.log('[ChatPage] onDone …')` removed from `ChatPage.tsx`.
+
+**Removed dead code:**
+- `hermes_message_id` column migration removed from `db/migrate.js` — the column was added but never written or read anywhere; attachment of files to messages is resolved via `content.includes(storedName)` at query time.
+- Nonfunctional expand/collapse toggle removed from `AgentFileCard` — the chevron button rotated but showed no content, confusing users. The slot will return in Task #34 when inline preview is implemented.
+
+**Fixed bug — session reload losing download cards:**
+- `GET /api/sessions/:id/messages` now loads all `source='agent'` files for the session and attaches each to every assistant message whose `content` contains the file's path. This restores download cards when the user re-opens a session after a page reload.
+
+**Fixed bug — deduplication swallowing re-referenced files:**
+- `detectAgentFiles` previously skipped files that already existed in `session_files` (correct for storage), but also omitted them from the returned `detected` array (wrong). Re-referencing the same path in a later message now correctly surfaces the download card on that message too.
+
+**Fixed race condition — `[DONE]` before `agent_files`:**
+- Hermes sends `[DONE]` as part of the proxied SSE stream; the backend emits `agent_files` in its `finally` block after `[DONE]`. The frontend's SSE parser previously did `return` on `[DONE]`, discarding the following event. Now it fires `onDone` on `[DONE]` but continues reading until the stream physically closes.
+- `currentAssistantIdRef` in `ChatPage` was cleared synchronously in `onDone`, making `onAgentFiles` (which arrives after `onDone`) unable to find the target message. Fixed with a 2 s deferred clear + a fallback that searches `messages` by role when the ref is already null.
 
 ## [0.7.0] - 2026-06-08
 

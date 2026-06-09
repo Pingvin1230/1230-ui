@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Virtuoso } from 'react-virtuoso';
 import { api } from '../lib/api';
-import { RefreshCw, Plus, MessageSquare, Sparkles, Loader2, SearchX, Star, Archive, Trash2, CheckSquare, Eye } from 'lucide-react';
+import { Plus, MessageSquare, Sparkles, Loader2, SearchX, Star, Archive, Trash2, CheckSquare, Eye } from 'lucide-react';
 import type { Session } from '../types/api';
 import { useSearchStore } from '../store/searchStore';
 import { useSessionsSortStore } from '../store/sessionsSortStore';
@@ -98,6 +97,9 @@ export function SessionsPage() {
   const setQuery = useSearchStore((s) => s.setQuery);
   const location = useLocation();
 
+  // Infinite scroll sentinel — must be declared before any early returns
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
   const loadSessions = useCallback(async (includeArchived = false) => {
     try {
       setLoading(true);
@@ -151,6 +153,18 @@ export function SessionsPage() {
       setLoadingMore(false);
     }
   }, [loadingMore, hasMore, sessions.length, showArchived, sortMode]);
+
+  // Trigger loadMore when sentinel enters viewport
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) loadMore(); },
+      { rootMargin: '400px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loadMore]);
 
   async function handleTogglePin(session: Session) {
     try {
@@ -230,7 +244,7 @@ export function SessionsPage() {
 
   if (loading) {
     return (
-      <div className="p-3 sm:p-4 md:p-6 max-w-5xl mx-auto">
+      <div className="p-3 sm:p-4 md:p-6 max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
@@ -262,7 +276,7 @@ export function SessionsPage() {
 
   if (error) {
     return (
-      <div className="p-3 sm:p-4 md:p-6 max-w-5xl mx-auto">
+      <div className="p-3 sm:p-4 md:p-6 max-w-4xl mx-auto">
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
           <p className="text-red-600 dark:text-red-400 font-medium">{error}</p>
           <button
@@ -293,21 +307,19 @@ export function SessionsPage() {
   const isSearching = query.trim().length > 0;
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 max-w-5xl mx-auto h-full flex flex-col">
+    <div className="flex-1 min-h-0 overflow-y-auto">
+    <div className="p-3 sm:p-4 md:p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6 flex-shrink-0 gap-2">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
-            <MessageSquare className="w-5 h-5 text-white" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-xl md:text-2xl font-semibold text-fg-primary truncate">{t('sessions.title')}</h1>
-            {hasSessions && (
-              <p className="text-sm text-fg-muted hidden sm:block truncate">
-                {t('common.showingOfTotal', { showing: sessions.length, total })}
-              </p>
-            )}
-          </div>
+        {/* Title */}
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-semibold text-fg-primary truncate">{t('sessions.title')}</h1>
+          {hasSessions && (
+            <p className="text-sm text-fg-muted truncate">
+              {t('common.showingOfTotal', { showing: sessions.length, total })}
+            </p>
+          )}
         </div>
+        {/* Actions */}
         <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
           <button
             onClick={() => {
@@ -323,7 +335,7 @@ export function SessionsPage() {
             aria-label={t('sessions.toggleArchived')}
             title={t('sessions.archived')}
           >
-            <Eye className="w-4 h-4 md:w-4 md:h-4" />
+            <Eye className="w-4 h-4" />
             <span className="hidden md:inline">{t('sessions.archived')}</span>
           </button>
           <button
@@ -336,16 +348,8 @@ export function SessionsPage() {
             aria-label={t('sessions.selectSessions')}
             title={t('common.select')}
           >
-            <CheckSquare className="w-4 h-4 md:w-4 md:h-4" />
+            <CheckSquare className="w-4 h-4" />
             <span className="hidden md:inline">{t('common.select')}</span>
-          </button>
-          <button
-            onClick={() => loadSessions(showArchived)}
-            className="p-2 min-h-[44px] min-w-[44px] inline-flex items-center justify-center hover:bg-bg-secondary rounded-lg transition-colors"
-            aria-label={t('sessions.refreshSessions')}
-            title={t('sessions.refreshSessions')}
-          >
-            <RefreshCw className="w-5 h-5 text-fg-secondary" />
           </button>
           <Link
             to="/new"
@@ -439,16 +443,12 @@ export function SessionsPage() {
       ) : (
         <>
           {isSearching && (
-            <p className="text-xs text-fg-muted flex-shrink-0">
+            <p className="text-xs text-fg-muted mb-3">
               {t('sessions.searchInfo', { filtered: filteredSessions.length, total: sessions.length })}
             </p>
           )}
-          <Virtuoso
-            data={flatItems}
-            useWindowScroll={false}
-            endReached={loadMore}
-            increaseViewportBy={400}
-            itemContent={(_, item) => {
+          <div>
+            {flatItems.map((item) => {
               if (item.type === 'header') {
                 const isPinned = item.name === 'Pinned';
                 const isArchived = item.name === 'Archived';
@@ -464,20 +464,21 @@ export function SessionsPage() {
                           ? t('sessions.thisWeek')
                           : t('sessions.older');
                 return (
-                  <div className="flex items-center gap-2 py-3 sticky top-0 bg-bg-secondary">
-                    {isPinned && <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />}
-                    <h2 className="text-sm font-semibold text-fg-muted uppercase tracking-wide">
+                  <div key={item.key} className="flex items-center gap-3 py-3 sticky top-0 bg-bg-secondary z-10">
+                    {isPinned && <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />}
+                    {isArchived && <Archive className="w-3.5 h-3.5 text-fg-muted flex-shrink-0" />}
+                    <h2 className="text-xs font-medium text-fg-muted whitespace-nowrap flex-shrink-0">
                       {groupName}
                     </h2>
-                    {isArchived && <Archive className="w-4 h-4 text-gray-400" />}
+                    <hr className="flex-1 border-border-default" />
                   </div>
                 );
               }
               const session = item.session;
               const isSelected = selectedIds.has(session.id);
-
               return (
                 <SessionCard
+                  key={item.key}
                   session={session}
                   bulkMode={bulkMode}
                   isSelected={isSelected}
@@ -488,16 +489,15 @@ export function SessionsPage() {
                   onLongPress={handleLongPress}
                 />
               );
-            }}
-            components={{
-              Footer: () =>
-                loadingMore || (hasMore && !isSearching) ? (
-                  <div className="flex justify-center py-6">
-                    <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-                  </div>
-                ) : null,
-            }}
-          />
+            })}
+          </div>
+          {/* Infinite scroll sentinel */}
+          <div ref={sentinelRef} className="h-1" />
+          {(loadingMore || (hasMore && !isSearching)) && (
+            <div className="flex justify-center py-6">
+              <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+            </div>
+          )}
         </>
       )}
 
@@ -566,6 +566,7 @@ export function SessionsPage() {
           </div>
         </div>
       </Modal>
+    </div>
     </div>
   );
 }

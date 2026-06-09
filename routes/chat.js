@@ -3,17 +3,129 @@
  *
  * Endpoints:
  *   POST /api/chat  — Proxy to Hermes API with SSE streaming + tool-call events
+ *
+ * Task #24: after the SSE stream from Hermes ends, the buffered assistant
+ * response text is scanned for backtick-wrapped absolute paths. Each path
+ * that actually exists on disk is recorded in `session_files` (with
+ * `source = 'agent'`) and surfaced to the frontend via an `agent_files`
+ * SSE event so a download card can be rendered inside the message.
  */
 
 import { Router } from 'express';
+import fs from 'fs';
+import path from 'path';
 import { chatLimiter } from '../middleware/security.js';
 import { getProviderFromModel } from '../db/helpers.js';
+import { getMimeTypeForPath, hasAllowedExtension } from '../db/fileTypes.js';
+import { uiDb } from '../db/connections.js';
 import config from '../config.js';
 
 const router = Router();
 
 const HERMES_API_URL = config.hermesApiUrl;
 const HERMES_API_KEY = config.hermesApiKey;
+
+// Backtick-wrapped absolute path, used to detect files the agent created.
+const PATH_PATTERN = /`(\/[^\s`]{1,500})`/g;
+
+// Fallback: any absolute path that "looks like" a file (has a known extension
+// from the whitelist) and is not wrapped in backticks. Hermes does not always
+// wrap paths in backticks; sometimes it just writes "создан: /root/weather.md".
+// Without this fallback, those messages get no download card.
+const BARE_PATH_PATTERN = /(\/[A-Za-z0-9_./-]{2,500})/g;
+
+// Shared MIME/extension helpers are imported from db/fileTypes.js.
+
+function detectAgentFiles(sessionId, responseText) {
+  if (!sessionId || !responseText) return [];
+  const seen = new Set();
+  const candidates = [];
+
+  // 1) Preferred: backtick-wrapped paths. High signal — these are paths
+  //    the agent explicitly meant to point at.
+  for (const match of responseText.matchAll(PATH_PATTERN)) {
+    const candidate = match[1];
+    if (seen.has(candidate)) continue;
+    seen.add(candidate);
+    candidates.push(candidate);
+  }
+  // 2) Fallback: bare absolute paths with a whitelisted extension. Hermes
+  //    sometimes writes paths without backticks; without this fallback the
+  //    user gets no card at all (Task #24 follow-up: real-world Hermes does
+  //    not always follow the backtick convention described in the brief).
+  const bareCandidates = [];
+  for (const match of responseText.matchAll(BARE_PATH_PATTERN)) {
+    const candidate = match[1];
+    if (seen.has(candidate)) continue;
+    // Trim trailing punctuation that often clings to inline paths in prose
+    // (e.g. "file at /tmp/x.md." or "/tmp/x.md,"). The trim is conservative:
+    // only single trailing punctuation chars that don't appear in real paths.
+    const trimmed = candidate.replace(/[.,;:!?)]+$/, '');
+    if (trimmed !== candidate) {
+      if (seen.has(trimmed)) continue;
+      seen.add(trimmed);
+    }
+    if (!hasAllowedExtension(trimmed)) continue;
+    bareCandidates.push(trimmed);
+    seen.add(trimmed);
+    candidates.push(trimmed);
+  }
+  const detected = [];
+  for (const candidate of candidates) {
+    let stat;
+    try {
+      stat = fs.statSync(candidate);
+    } catch (_) {
+      continue;
+    }
+    if (!stat.isFile()) continue;
+
+    // Dedupe: if a row with this session+path already exists, reuse it so the
+    // frontend still gets a download card (the agent may reference the same
+    // file in multiple messages — each mention should show the button).
+    const existing = uiDb
+      .prepare("SELECT * FROM session_files WHERE session_id = ? AND stored_name = ? AND source = 'agent'")
+      .get(sessionId, candidate);
+    if (existing) {
+      detected.push({
+        id: existing.id,
+        filename: existing.filename,
+        size: existing.size,
+        mimeType: existing.mime_type,
+      });
+      continue;
+    }
+
+    const filename = path.basename(candidate);
+    const mimeType = getMimeTypeForPath(candidate);
+    const size = stat.size;
+    const uploadedAt = Date.now();
+
+    let row;
+    try {
+      const result = uiDb
+        .prepare(
+          `INSERT INTO session_files (session_id, filename, stored_name, mime_type, size, uploaded_at, source)
+           VALUES (?, ?, ?, ?, ?, ?, 'agent')`
+        )
+        .run(sessionId, filename, candidate, mimeType, size, uploadedAt);
+      row = uiDb
+        .prepare('SELECT * FROM session_files WHERE id = ?')
+        .get(result.lastInsertRowid);
+    } catch (err) {
+      console.error('Failed to persist agent file row:', err.message);
+      continue;
+    }
+
+    detected.push({
+      id: row.id,
+      filename: row.filename,
+      size: row.size,
+      mimeType: row.mime_type,
+    });
+  }
+  return detected;
+}
 
 // ── POST /api/chat ─────────────────────────────────────────────────────────
 router.post('/', chatLimiter, async (req, res) => {
@@ -111,6 +223,7 @@ router.post('/', chatLimiter, async (req, res) => {
       let isFirstChunk    = true;
       const activeToolCalls = new Map();
       let currentEventType  = null;
+      let responseText      = ''; // Task #24: accumulate for file detection
 
       try {
         while (true) {
@@ -123,7 +236,7 @@ router.post('/', chatLimiter, async (req, res) => {
             isFirstChunk = false;
           }
 
-          // Parse SSE lines to extract tool-call events
+          // Parse SSE lines to extract tool-call events and accumulate text
           const lines = chunk.split('\n');
           for (const line of lines) {
             if (line.startsWith('event: ')) {
@@ -152,6 +265,15 @@ router.post('/', chatLimiter, async (req, res) => {
                 currentEventType = null;
                 continue;
               }
+              // Task #24: capture assistant text for path detection
+              try {
+                const payload = line.slice(6).trim();
+                if (payload && payload !== '[DONE]') {
+                  const parsed = JSON.parse(payload);
+                  const delta = parsed.choices?.[0]?.delta?.content;
+                  if (delta) responseText += delta;
+                }
+              } catch (_) { /* ignore */ }
               currentEventType = null;
             }
           }
@@ -176,6 +298,21 @@ router.post('/', chatLimiter, async (req, res) => {
           },
         })}\n\n`);
       } finally {
+        // Task #24: detect files the agent wrote, record metadata, and emit
+        // an `agent_files` event so the frontend can render download cards.
+        if (session_id && responseText) {
+          try {
+            const detected = detectAgentFiles(session_id, responseText);
+            if (detected.length > 0) {
+              res.write(`data: ${JSON.stringify({
+                type: 'agent_files',
+                files: detected,
+              })}\n\n`);
+            }
+          } catch (detectErr) {
+            console.error('Agent file detection failed:', detectErr.message);
+          }
+        }
         res.end();
       }
 

@@ -122,6 +122,84 @@ Body:
 }
 ```
 
+## Session Files
+
+### Upload File
+```
+POST /api/sessions/:id/files
+Content-Type: multipart/form-data
+```
+
+Field: `file`. Max size: 50 MB. Max 5 files per request.  
+Allowed extensions: `.txt .md .py .js .ts .jsx .tsx .json .csv .yml .yaml .log .html .css .xml .sh .sql .pdf .png .jpg .jpeg .gif .webp`  
+Both the extension and the browser-supplied MIME type are validated server-side.  
+Files are stored in `data/uploads/<session_id>/<uuid>.<ext>` and cleaned up automatically when the session is deleted.
+
+Response `201`:
+```json
+{
+  "files": [
+    {
+      "id": 42,
+      "sessionId": "abc123",
+      "filename": "report.pdf",
+      "size": 204800,
+      "mimeType": "application/pdf",
+      "uploadedAt": 1780926945000
+    }
+  ]
+}
+```
+
+The frontend prepends the server-side path to the message text before sending to Hermes:
+```
+[Attached file: /opt/1230-ui/data/uploads/<session_id>/<uuid>.pdf]
+
+<user message text>
+```
+
+### List Session Files
+```
+GET /api/sessions/:id/files
+```
+
+Returns all files for the session (both `source = 'user'` and `source = 'agent'`).
+
+Response `200`:
+```json
+{
+  "files": [ /* array of file objects — same shape as POST response */ ]
+}
+```
+
+### Delete Session File
+```
+DELETE /api/sessions/:id/files/:fileId
+```
+
+Deletes the DB record and removes the file from disk. Returns `404` if the file does not belong to the session.  
+Response `204 No Content`.
+
+### Download File
+```
+GET /api/sessions/:id/files/:fileId/download
+```
+
+Streams the file via `Content-Disposition: attachment`. Works for both user-uploaded files (`source = 'user'`) and agent-generated files (`source = 'agent'`).  
+Returns `404` if the file no longer exists on disk (e.g. agent-created file was deleted externally).
+
+### SSE Event: `agent_files` (Task #24)
+
+Emitted by `POST /api/chat` inside the SSE stream **after `[DONE]`**, before the connection closes. Signals that the agent created or referenced files during its response turn.
+
+```
+data: {"type":"agent_files","files":[{"id":14,"filename":"report.md","size":8192,"mimeType":"text/markdown"}]}
+```
+
+The frontend renders an `AgentFileCard` per file directly inside the assistant message bubble.  
+Detection: the assistant's response text is parsed for backtick-wrapped absolute paths (`` `/path/to/file` ``). Each candidate is verified with `fs.statSync`; only regular files with a whitelisted extension are recorded.  
+Deduplication: re-mentioning the same path in a later message reuses the existing `session_files` row (same `id`).
+
 ## Chat
 
 ### Send Message

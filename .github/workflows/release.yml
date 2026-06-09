@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    name: Build & publish release artifact
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to create a GitHub Release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Create release archive
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          ARCHIVE="1230-ui-${VERSION}.tar.gz"
+          tar -czf "$ARCHIVE" \
+            dist/ \
+            routes/ \
+            middleware/ \
+            db/ \
+            scripts/ \
+            app.js \
+            server.js \
+            config.js \
+            ecosystem.config.json \
+            install.sh \
+            .env.example \
+            package.json \
+            package-lock.json \
+            CHANGELOG.md \
+            README.md
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Extract the section for this version from CHANGELOG.md
+          NOTES=$(awk "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          # Write to a file to avoid shell escaping issues
+          echo "$NOTES" > release_notes.md
+          echo "Notes extracted for v${VERSION}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "1230-UI ${{ github.ref_name }}"
+          body_path: release_notes.md
+          files: ${{ env.ARCHIVE }}
+          draft: false
+          prerelease: false

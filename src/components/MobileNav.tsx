@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Home, MessageSquare, Plus, Settings } from 'lucide-react';
+import { useMobile } from '../hooks/useMobile';
 
 interface NavItem {
   to: string;
@@ -11,6 +12,7 @@ interface NavItem {
 
 export function MobileNav() {
   const { t } = useTranslation();
+  const isMobile = useMobile();
 
   const ITEMS: NavItem[] = [
     { to: '/', label: t('nav.home'), icon: Home, end: true },
@@ -19,10 +21,12 @@ export function MobileNav() {
     { to: '/settings', label: t('nav.settings'), icon: Settings },
   ];
 
+  if (!isMobile) return null;
+
   return (
     <nav
       aria-label="Primary"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-bg-primary border-t border-border-default pb-[env(safe-area-inset-bottom)]"
+      className="fixed bottom-0 inset-x-0 z-[50] border-t border-border-default bg-bg-primary pb-[env(safe-area-inset-bottom,0px)]"
     >
       <ul className="flex items-stretch justify-around">
         {ITEMS.map(({ to, label, icon: Icon, end }) => (

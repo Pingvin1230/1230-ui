@@ -28,6 +28,7 @@ export interface Session {
   pinned?: number;
   archived?: number;
   assistant?: Assistant | null;
+  fileCount?: number;
 }
 
 export interface ToolCall {
@@ -37,6 +38,13 @@ export interface ToolCall {
     name: string;
     arguments: string;
   };
+}
+
+export interface AgentFile {
+  id: number;
+  filename: string;
+  size: number;
+  mimeType: string;
 }
 
 export interface Message {
@@ -50,6 +58,7 @@ export interface Message {
   timestamp: number;
   tokenCount?: number;
   latencyMs?: number;
+  agentFiles?: AgentFile[];
 }
 
 export interface ApiResponse<T> {

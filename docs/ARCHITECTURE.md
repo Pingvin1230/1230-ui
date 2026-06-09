@@ -80,8 +80,8 @@
 
 | Page | Route | Description |
 |---|---|---|
-| `DashboardPage` | `/` | Quick Chat + Recent Sessions |
-| `SessionsPage` | `/sessions` | Virtualised list, search, date groups, bulk actions |
+| `DashboardPage` | `/` | Time-based greeting, Quick Chat (pill model picker + fixed Send), Assistants quick-start grid (up to 3 tiles), Recent Sessions with preview |
+| `SessionsPage` | `/sessions` | Virtualised list, search, date groups with `<hr>` separators, bulk actions; Refresh button removed |
 | `ChatPage` | `/chat/:id` | Streaming chat, markdown, tool calls, avatars |
 | `NewSessionPage` | `/new` | Assistant tiles + standard model tile |
 | `SettingsPage` | `/settings` | Models, system commands, Hermes status, About |
@@ -94,10 +94,12 @@
 | Component | Description |
 |---|---|
 | `HermesStatusIndicator` | Header icon (green/red/gray) + localized tooltip with running version |
-| `SessionCard` | Per-card swipe-to-delete + long-press bulk, `useSwipe` owned per card |
+| `SessionCard` | 3-row layout: title / preview / meta+actions. Checkbox column always in DOM (right side, `opacity-0`→`opacity-100` in bulk mode, zero layout shift). Swipe-to-delete, long-press bulk. |
 | `AssistantManageTile` | Context menu via `createPortal`, colored border, archived treatment |
 | `AssistantTile` | Clickable tile on `/new`, model label, hover "Create" indicator |
 | `ToolCall` | Collapsible block showing tool name, input, output, timing |
+| `AgentFileCard` | Download card inside assistant messages; filename + size + Download button; `404`-safe |
+| `AgentFileGroup` | Groups multiple `AgentFileCard`s from one message in a collapsible container |
 | `Modal` | Focus-trapped modal; used for confirm dialogs and command output |
 | `Toast` | Queued notifications with auto-dismiss |
 | `MobileNav` | Bottom nav (4 routes); iOS safe-area aware |
@@ -136,9 +138,11 @@ The backend is split into focused modules (v0.8.0):
 | `db/migrate.js` | 109 | `initSchema()`: `CREATE TABLE IF NOT EXISTS` + idempotent `ALTER TABLE` migrations |
 | `db/seed.js` | 60 | `seedStarterAssistants()`: seeds 2-3 assistants on first run |
 | `db/helpers.js` | 62 | Shared pure helpers: `rowToAssistant`, `getDefaultModelId`, `getProviderFromModel` |
+| `db/fileTypes.js` | 55 | Shared MIME map, `ALLOWED_EXTENSIONS`, `getMimeTypeForPath`, `hasAllowedExtension` — single source of truth used by `routes/files.js` and `routes/chat.js` |
 | `routes/system.js` | 166 | `/api/system/status`, `/api/system/exec`, `/api/health` |
-| `routes/sessions.js` | 462 | Full session CRUD + messages (`/api/sessions/*`, `/api/messages`) |
-| `routes/chat.js` | 217 | SSE streaming chat (`POST /api/chat`) |
+| `routes/sessions.js` | 500 | Full session CRUD + messages (`/api/sessions/*`, `/api/messages`); attaches `agentFiles` to messages on load |
+| `routes/chat.js` | 240 | SSE streaming chat (`POST /api/chat`); detects agent-written files after stream ends |
+| `routes/files.js` | 360 | File upload / list / delete / download (`/api/sessions/:id/files/*`); multer, whitelist, disk cleanup |
 | `routes/models.js` | 148 | `/api/models/*` (list, providers, sync, toggle) |
 | `routes/assistants.js` | 235 | `/api/assistants/*` CRUD + fork-on-edit + archive/restore/duplicate |
 | `routes/providers.js` | 154 | `/api/providers/*` (list, set key, remove key) |
@@ -166,6 +170,7 @@ Owned by 1230-UI. Created on first run.
 | `likes` | Like-button cooldowns, indexed on `(user_hash, created_at)` |
 | `session_meta` | Pin/archive flags + `assistant_id` FK per session |
 | `assistants` | Named bundles (name, color, icon, model_id, is_archived, …) |
+| `session_files` | User-uploaded (`source='user'`) and agent-created (`source='agent'`) file records. `stored_name` = UUID filename on disk (user uploads) or absolute agent-written path (agent files). Cleaned up on session delete. |
 
 Schema migrations are idempotent: `PRAGMA table_info` checked before each `ALTER TABLE`.
 
@@ -183,15 +188,22 @@ Schema migrations are idempotent: `PRAGMA table_info` checked before each `ALTER
 **Sessions**
 - `GET /api/sessions` — list (paginated, sort, include_archived)
 - `GET /api/sessions/:id` — single session (includes linked `assistant` object)
+- `GET /api/sessions/:id/messages` — messages; each assistant message includes `agentFiles` array reconstructed from `session_files` by path-matching
 - `POST /api/sessions` — create (accepts optional `assistantId`)
 - `PATCH /api/sessions/:id/title` — rename
 - `PATCH /api/sessions/:id/pin` — toggle pin
 - `PATCH /api/sessions/:id/archive` — toggle archive
-- `DELETE /api/sessions/:id` — delete
-- `DELETE /api/sessions/bulk` — bulk delete
+- `DELETE /api/sessions/:id` — delete (cleans up `data/uploads/<id>/` and `session_files` rows)
+- `DELETE /api/sessions/bulk` — bulk delete (same cleanup)
+
+**Session Files**
+- `POST /api/sessions/:id/files` — upload (multer, whitelist, 50 MB / 5-file limits)
+- `GET /api/sessions/:id/files` — list (user + agent files)
+- `DELETE /api/sessions/:id/files/:fileId` — delete user file (disk + DB)
+- `GET /api/sessions/:id/files/:fileId/download` — stream file (user or agent)
 
 **Chat**
-- `POST /api/chat` — streaming SSE chat (proxied to Hermes API)
+- `POST /api/chat` — streaming SSE chat; after stream ends, detects agent-created files and emits `agent_files` SSE event
 - `POST /api/messages` — persist message to Hermes DB
 
 **Models**
@@ -251,11 +263,19 @@ Frontend → POST /api/chat
          Hermes returns SSE stream
          (status events: thinking → executing_tool → generating)
               ↓
-         Backend forwards chunks + parses tool-call events
-              ↓
-         Frontend accumulates text, updates ToolCall blocks in real time
-              ↓
-         On completion → POST /api/messages to persist
+          Backend forwards chunks + parses tool-call events
+               ↓
+          Frontend accumulates text, updates ToolCall blocks in real time
+               ↓
+          On completion → POST /api/messages to persist
+               ↓
+          Backend scans response text for backtick-wrapped absolute paths
+          → fs.statSync each candidate → surviving files inserted into session_files (source='agent')
+               ↓
+          Backend emits SSE event: {"type":"agent_files","files":[…]}
+               ↓
+          Frontend receives event (after [DONE], before stream close)
+          → attaches AgentFileCard(s) to the assistant message
 ```
 
 ### Dual Database Architecture

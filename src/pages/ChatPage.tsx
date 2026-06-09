@@ -5,14 +5,19 @@ import { api, type ChatMessage, type ChatError } from '../lib/api';
 import type { Message, Session } from '../types/api';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import ToolCall from '../components/ToolCall';
+import { AgentFileGroup } from '../components/AgentFileCard';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { ShieldAlert, Plus, Copy, Check, RefreshCw, Bot, User, AlertCircle, ChevronRight, Trash2, Pencil, Loader2 } from 'lucide-react';
+import { Copy, Check, RefreshCw, Bot, User, X, ChevronRight, Trash2, Pencil, Loader2, Square, ChevronDown, AlertCircle, Paperclip } from 'lucide-react';
+import { useChatInputStore } from '../store/chatInputStore';
+import type { ChatInputHandle } from '../components/ChatInput';
 import { NoMessagesIllustration } from '../assets/illustrations';
 import { formatTimeAgo, formatFullDateTime } from '../lib/time';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useNotifications } from '../hooks/useNotifications';
 import { useNotificationsStore } from '../store/notificationsStore';
 // highlight.js CSS is loaded lazily in MarkdownRenderer (UX-13)
+
+// ── Task #35: SessionFilesBar moved to ChatInput.tsx ───────────────────────
 
 export function ChatPage() {
   const { t } = useTranslation();
@@ -22,7 +27,6 @@ export function ChatPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
-  const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
   const [processStatus, setProcessStatus] = useState<'thinking' | 'generating' | 'executing_tool'>('thinking');
@@ -39,13 +43,30 @@ export function ChatPage() {
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const initialSentRef = useRef(false);
   const lastSentContentRef = useRef<string>('');
   const streamStartedAtRef = useRef<number | null>(null);
+  // Task #24: tracks the id of the assistant message currently being streamed,
+  // so the `agent_files` SSE event can attach download cards to it.
+  const currentAssistantIdRef = useRef<number | null>(null);
   const [isSessionBlocked, setIsSessionBlocked] = useState(
     () => Boolean(id && sessionStorage.getItem(`blocked:${id}`))
   );
+  const setChatActive = useChatInputStore((s) => s.setActiveSession);
+  const setChatSending = useChatInputStore((s) => s.setSending);
+  const setChatBlocked = useChatInputStore((s) => s.setSessionBlocked);
+  const inputHasText = useChatInputStore((s) => s.hasAttachedFiles);
+  // #35: track session file count for the header indicator
+  const sessionFiles = useChatInputStore((s) => s.sessionFiles);
+  const sessionFileCount = sessionFiles?.length ?? 0;
+
+  useEffect(() => {
+    setChatActive(id ?? null);
+    return () => setChatActive(null);
+  }, [id, setChatActive]);
+
+  useEffect(() => { setChatSending(sending); }, [sending, setChatSending]);
+  useEffect(() => { setChatBlocked(isSessionBlocked); }, [isSessionBlocked, setChatBlocked]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<number | null>(null);
   const [retryTrigger, setRetryTrigger] = useState(0);
@@ -57,15 +78,21 @@ export function ChatPage() {
   const titleInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
+  // ChatInput is rendered by Layout (sibling of MobileNav). We reach it via
+  // the chatInputStore (which holds ChatInput's imperative handle).
+  const chatInputRef = useRef<ChatInputHandle>(null);
+  const inputHandle = useChatInputStore((s) => s.handle);
+  useEffect(() => { chatInputRef.current = inputHandle; }, [inputHandle]);
+
   // UX-4: Navigation guard — show confirmation modal when input has unsent text.
   // BrowserRouter does not support useBlocker (data-router only), so we implement
   // the guard manually:
   //  - beforeunload  → native browser dialog on tab close / hard navigation
   //  - popstate      → back/forward button intercept
   //  - click capture → intercept <Link> / <a> clicks before React Router handles them
+  // Task #23: also block navigation when there are unsent attached files.
   const [leaveGuardPending, setLeaveGuardPending] = useState(false);
   const pendingUrlRef = useRef<string | null>(null);
-  const inputHasText = input.trim().length > 0;
   const inputHasTextRef = useRef(inputHasText);
   useEffect(() => { inputHasTextRef.current = inputHasText; }, [inputHasText]);
 
@@ -117,7 +144,7 @@ export function ChatPage() {
 
   const handleLeaveConfirm = useCallback(() => {
     setLeaveGuardPending(false);
-    setInput('');
+    chatInputRef.current?.clearInput();
     if (pendingUrlRef.current) {
       navigate(pendingUrlRef.current);
       pendingUrlRef.current = null;
@@ -134,13 +161,31 @@ export function ChatPage() {
     enabled: notificationsEnabled,
   });
 
+  // Listen for send/stop events from ChatInput (which lives in Layout).
+  useEffect(() => {
+    const onSend = (e: Event) => {
+      const detail = (e as CustomEvent<{ content: string }>).detail;
+      doSend(detail.content);
+    };
+    const onStop = () => {
+      handleStop();
+    };
+    window.addEventListener('chat:send', onSend);
+    window.addEventListener('chat:stop', onStop);
+    return () => {
+      window.removeEventListener('chat:send', onSend);
+      window.removeEventListener('chat:stop', onStop);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useKeyboardShortcuts([
     {
       key: 'Enter',
       metaKey: true,
       action: () => {
-        if (!isSessionBlocked && !sending && input.trim()) {
-          handleSend();
+        if (!isSessionBlocked && !sending) {
+          // ChatInput handles its own Ctrl+Enter; this is a no-op fallback.
         }
       },
     },
@@ -219,7 +264,7 @@ export function ChatPage() {
         if (!cancelled) setLoading(false);
       }
     })();
-    
+
     return () => {
       cancelled = true;
     };
@@ -271,19 +316,26 @@ export function ChatPage() {
     const userContent = content.trim();
     if (!userContent || sending) return;
 
+    // Prepend attached file paths (Task #23). Only ready files are included.
+    const attached = chatInputRef.current?.getAttachedFiles() ?? [];
+    const fileLines = attached
+      .filter((f) => f.path)
+      .map((f) => `[Attached file: ${f.path}]`)
+      .join('\n');
+    const fullContent = fileLines
+      ? `${fileLines}\n\n${userContent}`
+      : userContent;
+
     const userMessage: Message = {
       id: Date.now(),
       sessionId: id!,
       role: 'user',
-      content: userContent,
+      content: fullContent,
       timestamp: Date.now() / 1000,
     };
 
     setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
+    chatInputRef.current?.clearInput();
     setSending(true);
     setStreamingContent('');
     setError(null);
@@ -293,6 +345,23 @@ export function ChatPage() {
     setActiveToolCalls(new Map());
     lastSentContentRef.current = userContent;
     streamStartedAtRef.current = Date.now();
+
+    // Task #24: pre-allocate the assistant message id and append an empty
+    // message to the list right away. This way the `agent_files` SSE event
+    // (emitted before the stream's [DONE]) can find the message to attach
+    // download cards to, and we just update its content when streaming ends.
+    const assistantMessageId = Date.now() + 1;
+    currentAssistantIdRef.current = assistantMessageId;
+    setMessages(prev => [
+      ...prev,
+      {
+        id: assistantMessageId,
+        sessionId: id!,
+        role: 'assistant',
+        content: '',
+        timestamp: Date.now() / 1000,
+      },
+    ]);
 
     const chatMessages: ChatMessage[] = [...messages, userMessage]
       .filter(m => m.role === 'user' || (m.role === 'assistant' && m.content))
@@ -331,8 +400,22 @@ export function ChatPage() {
           return next;
         });
       },
+      onAgentFiles: (files) => {
+        if (!files || files.length === 0) return;
+        // currentAssistantIdRef may already be null if onDone fired first.
+        // Fall back to finding the last assistant message in the list.
+        const assistantId = currentAssistantIdRef.current;
+        setMessages(prev => {
+          const targetId = assistantId ?? [...prev].reverse().find(m => m.role === 'assistant')?.id;
+          if (targetId == null) return prev;
+          return prev.map(m =>
+            m.id === targetId
+              ? { ...m, agentFiles: [...(m.agentFiles ?? []), ...files] }
+              : m
+          );
+        });
+      },
       onDone: async (fullContent) => {
-        console.log('[ChatPage] onDone called, content length:', fullContent?.length);
         setIsWaitingForResponse(false);
         setActiveToolCalls(new Map());
         setCompletedToolCalls([]);
@@ -340,15 +423,19 @@ export function ChatPage() {
         setExecutingTool(null);
         const latencyMs = streamStartedAtRef.current ? Date.now() - streamStartedAtRef.current : undefined;
         streamStartedAtRef.current = null;
-        const assistantMessage: Message = {
-          id: Date.now() + 1,
-          sessionId: id!,
-          role: 'assistant',
-          content: fullContent,
-          timestamp: Date.now() / 1000,
-          latencyMs,
-        };
-        setMessages(prev => [...prev, assistantMessage]);
+        // Update the pre-allocated assistant message in-place with the final
+        // content. Clear the ref after a short delay — onAgentFiles fires
+        // after onDone (agent_files SSE arrives after [DONE]) and still needs
+        // the ref. The fallback in onAgentFiles handles the null case anyway.
+        const assistantId = currentAssistantIdRef.current;
+        if (assistantId != null) {
+          setMessages(prev => prev.map(m =>
+            m.id === assistantId
+              ? { ...m, content: fullContent, latencyMs }
+              : m
+          ));
+          setTimeout(() => { currentAssistantIdRef.current = null; }, 2000);
+        }
         setStreamingContent('');
         setSending(false);
         abortRef.current = null;
@@ -362,13 +449,15 @@ export function ChatPage() {
         notify(t('chat.responseReceived'), preview);
       },
       onError: (chatError) => {
-        console.error('[ChatPage] Chat error:', JSON.stringify(chatError, null, 2));
+        console.error('[ChatPage] Chat error:', chatError);
         setError(chatError);
         if (chatError.type === 'content_moderation' && !chatError.retryable) {
           setIsSessionBlocked(true);
           if (id) sessionStorage.setItem(`blocked:${id}`, 'true');
         }
-        setMessages(prev => prev.filter(m => m.id !== userMessage.id));
+        // Remove both the user message and the pre-allocated assistant placeholder.
+        setMessages(prev => prev.filter(m => m.id !== userMessage.id && m.id !== currentAssistantIdRef.current));
+        currentAssistantIdRef.current = null;
         setIsWaitingForResponse(false);
         setStreamingContent('');
         setSending(false);
@@ -377,10 +466,6 @@ export function ChatPage() {
     });
 
     abortRef.current = controller;
-  }
-
-  function handleSend() {
-    doSend(input);
   }
 
   function handleRetry() {
@@ -405,14 +490,22 @@ export function ChatPage() {
     abortRef.current?.abort();
     if (streamingContent) {
       const fullContent = streamingContent + '\n\n*[stopped]*';
-      const assistantMessage: Message = {
-        id: Date.now() + 1,
-        sessionId: id!,
-        role: 'assistant',
-        content: fullContent,
-        timestamp: Date.now() / 1000,
-      };
-      setMessages(prev => [...prev, assistantMessage]);
+      const assistantId = currentAssistantIdRef.current;
+      if (assistantId != null) {
+        setMessages(prev => prev.map(m =>
+          m.id === assistantId ? { ...m, content: fullContent } : m
+        ));
+        currentAssistantIdRef.current = null;
+      } else {
+        const assistantMessage: Message = {
+          id: Date.now() + 1,
+          sessionId: id!,
+          role: 'assistant',
+          content: fullContent,
+          timestamp: Date.now() / 1000,
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+      }
     }
     setStreamingContent('');
     setSending(false);
@@ -478,7 +571,7 @@ export function ChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div ref={scrollContainerRef} className="flex-1 min-h-0 flex flex-col relative overflow-y-auto">
       <div className="px-3 sm:px-4 py-3 border-b border-border-default bg-bg-primary">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <nav className="flex items-center gap-1.5 min-w-0 flex-1 basis-full sm:basis-auto" aria-label="Breadcrumb">
@@ -521,7 +614,7 @@ export function ChatPage() {
                   className="p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-fg-muted hover:bg-bg-secondary disabled:opacity-50 flex-shrink-0"
                   aria-label={t('chat.cancelEditing')}
                 >
-                  <AlertCircle className="w-4 h-4" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             ) : (
@@ -543,6 +636,18 @@ export function ChatPage() {
           </nav>
 
           <div className="flex items-center gap-1 flex-shrink-0 ml-auto sm:ml-0">
+            {/* Stop button in header — visible during generation so user doesn't need to scroll down */}
+            {sending && (
+              <button
+                type="button"
+                onClick={handleStop}
+                className="flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-medium transition-colors"
+                aria-label={t('chat.stopGenerating')}
+              >
+                <Square className="w-3 h-3 fill-current" />
+                {t('common.stop')}
+              </button>
+            )}
             {confirmDelete ? (
               <>
                 <button
@@ -585,20 +690,48 @@ export function ChatPage() {
             </span>
           )}
           <span>{session?.model}</span>
+          {/* #35: file count indicator */}
+          {sessionFileCount > 0 && (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-bg-secondary text-fg-secondary"
+              title={t('chat.sessionFilesBar', { count: sessionFileCount })}
+            >
+              <Paperclip className="w-3 h-3" />
+              {sessionFileCount}
+            </span>
+          )}
         </div>
       </div>
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
+      <div>
         <div className="max-w-4xl mx-auto p-3 sm:p-4 space-y-3">
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-24 text-center">
-              <NoMessagesIllustration className="w-24 h-24 mb-4 text-fg-muted" />
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <NoMessagesIllustration className="w-20 h-20 mb-4 text-fg-muted" />
               <h2 className="text-lg font-semibold text-fg-primary mb-1">
                 {t('chat.startConversation')}
               </h2>
-              <p className="text-sm text-fg-muted max-w-sm">
+              <p className="text-sm text-fg-muted max-w-sm mb-8">
                 {t('chat.startConversationDesc')}
               </p>
+              {/* Prompt suggestions — click to prefill the chat input */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
+                {[
+                  t('chat.suggestion1', { defaultValue: 'Объясни простыми словами' }),
+                  t('chat.suggestion2', { defaultValue: 'Помоги составить план' }),
+                  t('chat.suggestion3', { defaultValue: 'Исправь ошибки в тексте' }),
+                  t('chat.suggestion4', { defaultValue: 'Переведи на русский' }),
+                ].map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => window.dispatchEvent(new CustomEvent('chat:prefill', { detail: { text: suggestion } }))}
+                    className="text-left px-4 py-3 rounded-xl border border-border-default bg-bg-primary hover:bg-bg-secondary hover:border-blue-300 dark:hover:border-blue-700 transition-all text-sm text-fg-secondary"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           {messages.map((msg) => {
@@ -613,7 +746,7 @@ export function ChatPage() {
               );
             }
 
-            if (msg.role === 'assistant' && (!msg.content || msg.content.trim() === '')) {
+            if (msg.role === 'assistant' && (!msg.content || msg.content.trim() === '') && (!msg.agentFiles || msg.agentFiles.length === 0)) {
               return null;
             }
 
@@ -623,9 +756,9 @@ export function ChatPage() {
                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-700 dark:text-blue-300">
                     <User className="w-4 h-4" />
                   </div>
-                  <div className="flex-1 min-w-0 relative rounded-lg p-3 sm:p-4 bg-bg-secondary border-2 border-blue-500 text-fg-primary">
+                  <div className="flex-1 min-w-0 relative rounded-lg p-3 sm:p-4 pb-2 bg-bg-secondary border-2 border-blue-500 text-fg-primary">
                     <MarkdownRenderer content={msg.content || ''} className="user-message" />
-                    <div className="flex items-center justify-between mt-2">
+                    <div className="flex items-center justify-between mt-1.5">
                       <div className="text-xs text-fg-muted" title={formatFullDateTime(msg.timestamp)}>
                         {formatTimeAgo(msg.timestamp)}
                       </div>
@@ -633,7 +766,8 @@ export function ChatPage() {
                         type="button"
                         onClick={() => handleCopyMessage(msg.id, msg.content || '')}
                         aria-label={copiedMessageId === msg.id ? t('chat.messageCopied') : t('chat.copyMessage')}
-                        className="p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-fg-muted opacity-60 md:opacity-40 md:group-hover:opacity-100 md:focus-visible:opacity-100 transition-opacity hover:bg-bg-secondary"
+                        title={copiedMessageId === msg.id ? t('chat.messageCopied') : t('chat.copyMessage')}
+                        className="p-1 inline-flex items-center justify-center rounded text-fg-muted opacity-60 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 transition-opacity hover:bg-bg-secondary"
                       >
                         {copiedMessageId === msg.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
@@ -648,26 +782,34 @@ export function ChatPage() {
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-bg-muted flex items-center justify-center text-fg-secondary">
                   <Bot className="w-4 h-4" />
                 </div>
-                <div className="flex-1 min-w-0 relative rounded-lg p-3 sm:p-4 bg-bg-primary border border-border-default text-fg-primary">
+                <div className="flex-1 min-w-0 relative rounded-lg p-3 sm:p-4 pb-2 bg-bg-primary border border-border-default text-fg-primary">
                   <MarkdownRenderer content={msg.content || ''} className="assistant-message" />
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-center gap-2 text-xs text-fg-muted">
-                      <span title={formatFullDateTime(msg.timestamp)}>
+                  {msg.agentFiles && msg.agentFiles.length > 0 && id && (
+                    <div className="mt-2 space-y-2">
+                      <AgentFileGroup files={msg.agentFiles} sessionId={id} />
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between mt-2 gap-2">
+                    {/* Timestamp — always visible. Latency/tokens hidden until hover */}
+                    <div className="flex items-center gap-2 text-xs text-fg-muted min-w-0">
+                      <span title={formatFullDateTime(msg.timestamp)} className="flex-shrink-0">
                         {formatTimeAgo(msg.timestamp)}
                       </span>
                       {msg.latencyMs !== undefined && (
-                        <span>
-                          · ⏱ {(msg.latencyMs / 1000).toFixed(1)}s
-                          {msg.tokenCount !== undefined && ` · ${msg.tokenCount} tokens`}
+                        <span className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                          · {(msg.latencyMs / 1000).toFixed(1)}s
+                          {msg.tokenCount !== undefined && ` · ${msg.tokenCount} tok`}
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 opacity-60 md:opacity-40 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity">
+                    {/* Action buttons: visible on mobile, hover-only on desktop */}
+                    <div className="flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity flex-shrink-0">
                       <button
                         type="button"
                         onClick={() => handleCopyMessage(msg.id, msg.content || '')}
-                        aria-label={copiedMessageId === msg.id ? 'Message copied' : 'Copy message'}
-                        className="p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-fg-muted hover:bg-bg-secondary"
+                        aria-label={copiedMessageId === msg.id ? t('chat.messageCopied') : t('chat.copyMessage')}
+                        title={copiedMessageId === msg.id ? t('chat.messageCopied') : t('chat.copyMessage')}
+                        className="p-1.5 inline-flex items-center justify-center rounded text-fg-muted hover:bg-bg-secondary hover:text-fg-primary transition-colors"
                       >
                         {copiedMessageId === msg.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
@@ -676,7 +818,8 @@ export function ChatPage() {
                         onClick={handleRetry}
                         disabled={sending}
                         aria-label={t('chat.regenerateResponse')}
-                        className="p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-fg-muted hover:bg-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={t('chat.regenerateResponse')}
+                        className="p-1.5 inline-flex items-center justify-center rounded text-fg-muted hover:bg-bg-secondary hover:text-fg-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
                       </button>
@@ -743,9 +886,14 @@ export function ChatPage() {
           )}
 
           {streamingContent && (
-            <div key="streaming" className="max-w-3xl">
-              <div className="bg-bg-primary rounded-lg p-3 sm:p-4 border border-border-default">
-                <MarkdownRenderer content={streamingContent} />
+            <div key="streaming" className="flex gap-3">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-bg-muted flex items-center justify-center text-fg-secondary">
+                <Bot className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0 rounded-lg p-3 sm:p-4 bg-bg-primary border border-border-default text-fg-primary">
+                <MarkdownRenderer content={streamingContent} className="assistant-message" />
+                {/* Blinking cursor at end of stream */}
+                <span className="inline-block w-0.5 h-4 bg-fg-primary align-middle ml-0.5 animate-[blink_1s_step-end_infinite]" aria-hidden="true" />
               </div>
             </div>
           )}
@@ -774,15 +922,16 @@ export function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {!isAtBottom && unreadCount > 0 && (
+        {!isAtBottom && (
           <div className="sticky bottom-3 flex justify-center pointer-events-none">
             <button
               type="button"
               onClick={() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })}
-              aria-label={t('chat.scrollToNewMessages', { count: unreadCount })}
-              className="pointer-events-auto px-3 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium shadow-lg transition-colors"
+              aria-label={unreadCount > 0 ? t('chat.scrollToNewMessages', { count: unreadCount }) : t('chat.scrollToBottom', { defaultValue: 'Scroll to bottom' })}
+              className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-bg-primary border border-border-default hover:bg-bg-secondary text-fg-primary text-xs font-medium shadow-lg transition-colors"
             >
-              {t('chat.newMessagesBadge', { count: unreadCount })}
+              <ChevronDown className="w-3.5 h-3.5" />
+              {unreadCount > 0 ? t('chat.newMessagesBadge', { count: unreadCount }) : t('chat.scrollToBottom', { defaultValue: '↓' })}
             </button>
           </div>
         )}
@@ -835,73 +984,6 @@ export function ChatPage() {
           </div>
         </div>
       )}
-
-      <div className="p-3 sm:p-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-border-default bg-bg-primary">
-        <div className="max-w-4xl mx-auto">
-          {isSessionBlocked ? (
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <ShieldAlert className="w-5 h-5 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                    {t('chat.sessionBlocked')}
-                  </p>
-                  <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                    {t('chat.sessionBlockedDesc')}
-                  </p>
-                  <Link
-                    to="/new"
-                    className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs rounded-lg transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    {t('chat.createNewSession')}
-                  </Link>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex gap-2 items-end">
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  e.target.style.height = 'auto';
-                  e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                placeholder={t('chat.typeMessage')}
-                disabled={sending}
-                rows={1}
-                className="flex-1 px-4 py-2 rounded-lg border border-border-default bg-bg-secondary text-fg-primary focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 resize-none overflow-y-auto"
-              />
-              {sending ? (
-                <button
-                  onClick={handleStop}
-                  aria-label={t('chat.stopGenerating')}
-                  className="px-4 py-2 min-h-[44px] rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
-                >
-                  {t('common.stop')}
-                </button>
-              ) : (
-                <button
-                  onClick={handleSend}
-                  disabled={!input.trim()}
-                  aria-label={t('chat.sendMessage')}
-                  className="px-4 py-2 min-h-[44px] rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {t('common.send')}
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

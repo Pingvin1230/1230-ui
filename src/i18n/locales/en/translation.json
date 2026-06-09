@@ -32,7 +32,6 @@
     "selected_one": "{{count}} selected",
     "selected_other": "{{count}} selected"
   },
-
   "nav": {
     "home": "Home",
     "sessions": "Sessions",
@@ -55,7 +54,6 @@
     "hermesApiDisconnected": "Hermes API: Disconnected",
     "hermesApiChecking": "Hermes API: Checking…"
   },
-
   "chat": {
     "sessionNotFound": "Session not found",
     "sessionTitlePlaceholder": "Session title",
@@ -97,9 +95,32 @@
     "breadcrumbsSessions": "Sessions",
     "leavePageTitle": "Leave this page?",
     "leavePageDesc": "You have unsent text. If you leave now, it will be lost.",
-    "leavePageConfirm": "Leave"
+    "leavePageConfirm": "Leave",
+    "attachFile": "Attach file",
+    "dropFilesHere": "Drop to attach",
+    "fileUploading": "Uploading…",
+    "fileError": "Upload failed",
+    "fileRetry": "Retry",
+    "fileTooLarge": "File exceeds 50 MB limit",
+    "fileTypeNotAllowed": "File type not supported",
+    "tooManyFiles": "Maximum 5 files",
+    "agentFilesLabel": "Files created",
+    "agentFilesLabel_one": "File created",
+    "agentFilesLabel_other": "Files created",
+    "downloadFile": "Download",
+    "fileNotFound": "File no longer available",
+    "expandFile": "Expand file",
+    "collapseFile": "Collapse file",
+    "sessionFilesBar_one": "{{count}} file in session",
+    "sessionFilesBar_other": "{{count}} files in session",
+    "sessionFilesUser_one": "{{count}} your file",
+    "sessionFilesUser_other": "{{count}} your files",
+    "sessionFilesAgent_one": "{{count}} from agent",
+    "sessionFilesAgent_other": "{{count}} from agent",
+    "sessionFilesInSession": "files in session",
+    "sessionFilesCount_one": "{{count}} file",
+    "sessionFilesCount_other": "{{count}} files"
   },
-
   "sessions": {
     "title": "Sessions",
     "pinned": "Pinned",
@@ -126,17 +147,30 @@
     "failedToLoadSessions": "Failed to load sessions",
     "holdToSelect": "Hold to select"
   },
-
   "dashboard": {
     "welcome": "Welcome",
-    "startNewConversation": "Start a New Conversation",
+    "greetingMorning": "Good morning",
+    "greetingAfternoon": "Good afternoon",
+    "greetingEvening": "Good evening",
+    "startNewConversation": "Type a message...",
+    "selectModel": "Select model",
+    "assistants": "Assistants",
     "connected": "Connected",
     "disconnected": "Disconnected",
     "totalSessions": "Total Sessions",
     "recentSessions": "Recent Sessions",
-    "failedToLoadDashboard": "Failed to load dashboard data"
+    "failedToLoadDashboard": "Failed to load dashboard data",
+    "onboardingTitle": "Welcome to 1230.UI",
+    "onboardingDesc": "To start chatting, connect at least one AI service and enable a model.",
+    "onboardingStep1": "Add a service key",
+    "onboardingStep1Desc": "Connect OpenAI, Anthropic, or another provider.",
+    "onboardingStep2": "Enable a model",
+    "onboardingStep2Desc": "Choose which models to use in Settings → AI Services.",
+    "onboardingStep3": "Start chatting",
+    "onboardingStep3Desc": "Come back here and type your first message.",
+    "onboardingDismiss": "Got it",
+    "onboardingGoToKeys": "Add service key →"
   },
-
   "newSession": {
     "title": "New Session",
     "description": "Create a new conversation with Hermes",
@@ -150,7 +184,6 @@
     "sectionAssistants": "Assistants",
     "manageAssistants": "Manage"
   },
-
   "settings": {
     "title": "Settings",
     "description": "Web UI configuration",
@@ -174,8 +207,8 @@
     "sortLastMessageBtn": "Last message",
     "defaultModelDesc": "Default model used when creating new sessions",
     "defaultModel": "Default model",
-    "modelProviders": "Model Providers",
-    "modelProvidersDesc": "Manage available models for chat sessions",
+    "modelProviders": "AI Services",
+    "modelProvidersDesc": "Enable or disable available AI models",
     "syncing": "Syncing...",
     "syncAll": "Sync All",
     "synced": "Synced",
@@ -229,7 +262,6 @@
     "timeFormatMs": "{{m}}m {{s}}s",
     "timeFormatS": "{{s}}s"
   },
-
   "errors": {
     "content_moderation": "Request blocked",
     "rate_limit": "Rate limit exceeded",
@@ -242,7 +274,6 @@
     "fallback": "Error",
     "details": "Details"
   },
-
   "api": {
     "failedToFetchSessions": "Failed to fetch sessions",
     "failedToFetchSession": "Failed to fetch session",
@@ -284,38 +315,36 @@
     "failedToUpdateAssistant": "Failed to update assistant",
     "failedToArchiveAssistant": "Failed to archive assistant",
     "failedToDuplicateAssistant": "Failed to duplicate assistant",
-    "failedToRestoreAssistant": "Failed to restore assistant"
+    "failedToRestoreAssistant": "Failed to restore assistant",
+    "failedToUploadFile": "Failed to upload file",
+    "failedToDeleteFile": "Failed to delete file",
+    "failedToListFiles": "Failed to list files"
   },
-
   "errorBoundary": {
     "title": "An error occurred",
     "unknownError": "Unknown application error",
     "showDetails": "Show details",
     "reloadPage": "Reload page"
   },
-
   "toolCall": {
     "label": "Tool call"
   },
-
   "modal": {
     "closeDialog": "Close dialog"
   },
-
   "toast": {
     "dismiss": "Dismiss notification"
   },
-
   "providers": {
-    "title": "Provider Keys",
-    "description": "Add or remove API keys. Keys are stored in ~/.hermes/.env (mode 600) and never in 1230-UI.",
+    "title": "Service Keys",
+    "description": "Add or remove access keys for AI services. Keys are stored in ~/.hermes/.env (mode 600) and never in 1230-UI.",
     "backToSettings": "Back to Settings",
     "noProviders": "No providers available",
     "addKey": "Add key",
     "keyConfigured": "Key configured",
     "envVarLabel": "Environment variable",
-    "apiKeyLabel": "API key",
-    "apiKeyPlaceholder": "Paste your API key",
+    "apiKeyLabel": "Access key",
+    "apiKeyPlaceholder": "Paste your access key",
     "storedInEnv": "Stored in ~/.hermes/.env. Not saved in 1230-UI.",
     "saving": "Saving...",
     "saveKey": "Save key",
@@ -324,13 +353,12 @@
     "confirmRemoveDesc": "This will delete the {{envVar}} line from ~/.hermes/.env. {{name}} models will stop working until you add a new key and restart Hermes.",
     "showKey": "Show key",
     "hideKey": "Hide key",
-    "errorKeyEmpty": "Please enter an API key",
+    "errorKeyEmpty": "Please enter an access key",
     "errorAddFailed": "Failed to save the key",
     "errorRemoveFailed": "Failed to remove the key",
     "errorLoadFailed": "Failed to load providers",
-    "manageKeys": "Manage provider keys"
+    "manageKeys": "Manage service keys"
   },
-
   "assistants": {
     "title": "Assistants",
     "subtitle": "Named bundles that pre-pick a model and surface on the New Session page.",

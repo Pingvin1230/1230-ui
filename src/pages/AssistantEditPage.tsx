@@ -169,14 +169,14 @@ export function AssistantEditPage() {
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center">
         <Loader2 className="w-5 h-5 animate-spin text-fg-muted" />
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+    <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4">
       <div className="max-w-2xl w-full mx-auto">
         <Link
           to="/assistants"

@@ -92,7 +92,7 @@ export function NewSessionPage() {
 
   if (loading) {
     return (
-      <div className="p-3 sm:p-4 md:p-6 max-w-4xl mx-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 md:p-6">
         <div className="mb-6">
           <h1 className="text-2xl font-semibold text-fg-primary">{t('newSession.title')}</h1>
         </div>
@@ -106,7 +106,8 @@ export function NewSessionPage() {
   }
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 max-w-4xl mx-auto">
+    <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 md:p-6">
+    <div className="max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-fg-primary">{t('newSession.title')}</h1>
         <p className="text-sm text-fg-muted mt-1">{t('newSession.description')}</p>
@@ -203,6 +204,7 @@ export function NewSessionPage() {
           {t('common.noModelsAvailable')}
         </div>
       )}
+    </div>
     </div>
   );
 }

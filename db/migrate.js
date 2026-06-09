@@ -66,6 +66,17 @@ export function initSchema(uiDb) {
     );
     CREATE INDEX IF NOT EXISTS idx_assistants_archived ON assistants(is_archived);
     CREATE INDEX IF NOT EXISTS idx_assistants_model ON assistants(model_id);
+
+    CREATE TABLE IF NOT EXISTS session_files (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id  TEXT    NOT NULL,
+      filename    TEXT    NOT NULL,
+      stored_name TEXT    NOT NULL,
+      mime_type   TEXT,
+      size        INTEGER NOT NULL,
+      uploaded_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_session_files_session ON session_files(session_id);
   `);
 
   // ── Idempotent column migrations ──────────────────────────────────────────
@@ -102,6 +113,18 @@ export function initSchema(uiDb) {
       console.log('Added column session_meta.assistant_id');
     } catch (err) {
       console.warn(`Failed to add column session_meta.assistant_id: ${err.message}`);
+    }
+  }
+
+  // session_files: source
+  const sessionFilesColumns = new Set(
+    uiDb.prepare('PRAGMA table_info(session_files)').all().map((c) => c.name)
+  );
+  if (!sessionFilesColumns.has('source')) {
+    try {
+      uiDb.exec("ALTER TABLE session_files ADD COLUMN source TEXT NOT NULL DEFAULT 'user'");
+    } catch (err) {
+      console.warn(`Failed to add column session_files.source: ${err.message}`);
     }
   }
 

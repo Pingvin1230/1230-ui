@@ -31,6 +31,18 @@ export interface CreateAssistantInput {
 
 export type UpdateAssistantInput = Partial<CreateAssistantInput>;
 
+export interface SessionFile {
+  id: number;
+  sessionId: string;
+  filename: string;
+  storedName: string;
+  mimeType: string | null;
+  size: number;
+  uploadedAt: number;
+  path: string;
+  source?: 'user' | 'agent';
+}
+
 export const api = {
   async getSessions(limit = 20, offset = 0, includeArchived = false, sort: 'created' | 'lastMessage' = 'created'): Promise<{ sessions: Session[]; total: number; limit: number; offset: number }> {
     const res = await fetch(`${API_BASE}/api/sessions?limit=${limit}&offset=${offset}&includeArchived=${includeArchived ? 1 : 0}&sort=${sort}`);
@@ -105,6 +117,7 @@ export const api = {
       onError?: (error: ChatError) => void;
       onToolCallStart?: (id: string, toolName: string, label?: string) => void;
       onToolCallEnd?: (id: string) => void;
+      onAgentFiles?: (files: Array<{ id: number; filename: string; size: number; mimeType: string }>) => void;
     } = {},
     maxRetries = 3
   ): AbortController {
@@ -181,6 +194,7 @@ export const api = {
         let fullContent = '';
         let buffer = '';
         let isDone = false;
+        let doneFired = false;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -195,28 +209,17 @@ export const api = {
               const data = line.slice(6).trim();
               if (data === '[DONE]') {
                 isDone = true;
-                // Check that content is not empty
+                // Do NOT return here — the server may still send agent_files
+                // events after [DONE] (in the finally block of routes/chat.js).
+                // We fire onDone now so the UI shows the message immediately,
+                // but we keep reading until the stream is physically closed.
                 if (!fullContent || fullContent.trim().length === 0) {
-                  console.log(`[api] [DONE] received but content is empty, attempt=${attempt}/${maxRetries}`);
-                  if (attempt < maxRetries) {
-                    options.onStatus?.('thinking');
-                    await new Promise(r => setTimeout(r, 1000 * attempt));
-                    return doSend(attempt + 1);
-                  }
-                  options.onError?.({
-                    type: 'content_moderation',
-                    message: i18n.t('api.requestBlocked'),
-                    provider: 'opencode-go',
-                    model: options.model || 'unknown',
-                    details: i18n.t('api.providerRejected'),
-                    code: 'EMPTY_RESPONSE',
-                    retryable: false,
-                    suggestion: i18n.t('api.blockedSuggestion')
-                  });
-                } else {
+                  // Empty-content retry is deferred to after stream close (below).
+                } else if (!doneFired) {
+                  doneFired = true;
                   options.onDone?.(fullContent);
                 }
-                return;
+                continue;
               }
               try {
                 const parsed = JSON.parse(data);
@@ -235,6 +238,12 @@ export const api = {
                 }
                 if (parsed.type === 'tool_call_end' && parsed.id) {
                   options.onToolCallEnd?.(parsed.id);
+                  continue;
+                }
+
+                // Task #24: agent files detected from the assistant's text.
+                if (parsed.type === 'agent_files' && Array.isArray(parsed.files)) {
+                  options.onAgentFiles?.(parsed.files);
                   continue;
                 }
 
@@ -268,7 +277,6 @@ export const api = {
 
         // Stream closed without [DONE] — retry
         if (!isDone) {
-          console.log(`[api] Stream ended without [DONE], content=${fullContent.length} chars, attempt=${attempt}/${maxRetries}`);
           const err: ChatError = {
             type: 'network',
             message: fullContent ? i18n.t('api.responseIncomplete') : i18n.t('api.connectionInterrupted'),
@@ -284,6 +292,30 @@ export const api = {
           }
           options.onError?.(err);
           return;
+        }
+
+        // Stream closed after [DONE]. Handle the empty-content case that was
+        // deferred above (we needed to keep reading for agent_files first).
+        if (!doneFired) {
+          if (!fullContent || fullContent.trim().length === 0) {
+            if (attempt < maxRetries) {
+              options.onStatus?.('thinking');
+              await new Promise(r => setTimeout(r, 1000 * attempt));
+              return doSend(attempt + 1);
+            }
+            options.onError?.({
+              type: 'content_moderation',
+              message: i18n.t('api.requestBlocked'),
+              provider: 'opencode-go',
+              model: options.model || 'unknown',
+              details: i18n.t('api.providerRejected'),
+              code: 'EMPTY_RESPONSE',
+              retryable: false,
+              suggestion: i18n.t('api.blockedSuggestion')
+            });
+          } else {
+            options.onDone?.(fullContent);
+          }
         }
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') return;
@@ -487,6 +519,37 @@ export const api = {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || i18n.t('api.failedToRemoveProviderKey'));
     return data;
+  },
+
+  // --- Session file management ---
+
+  async uploadFile(sessionId: string, file: File): Promise<SessionFile> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${API_BASE}/api/sessions/${sessionId}/files`, {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || i18n.t('api.failedToUploadFile'));
+    return data as SessionFile;
+  },
+
+  async listSessionFiles(sessionId: string): Promise<{ files: SessionFile[] }> {
+    const res = await fetch(`${API_BASE}/api/sessions/${sessionId}/files`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || i18n.t('api.failedToListFiles'));
+    return data;
+  },
+
+  async deleteSessionFile(sessionId: string, fileId: number): Promise<void> {
+    const res = await fetch(`${API_BASE}/api/sessions/${sessionId}/files/${fileId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok && res.status !== 204) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || i18n.t('api.failedToDeleteFile'));
+    }
   },
 
   async getAssistants(includeArchived = false): Promise<{ assistants: Assistant[] }> {

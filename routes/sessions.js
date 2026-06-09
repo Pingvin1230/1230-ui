@@ -21,6 +21,7 @@
 
 import { Router } from 'express';
 import crypto from 'crypto';
+import fs from 'fs';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import path from 'path';
@@ -39,6 +40,23 @@ const HERMES_API_KEY = config.hermesApiKey;
 const HERMES_DB_PATH = config.hermesDbPath;
 const HERMES_PYTHON_PATH = config.hermesPythonPath;
 const SAVE_MESSAGES_SCRIPT = config.scripts.saveMessages;
+
+const projectRoot = path.resolve(__dirname, '..');
+const uploadsDir  = path.join(projectRoot, 'data', 'uploads');
+
+function cleanupSessionUploads(sessionId) {
+  const files = uiDb
+    .prepare('SELECT stored_name, source FROM session_files WHERE session_id = ?')
+    .all(sessionId);
+  for (const f of files) {
+    // Task #24: skip agent files — they live at `stored_name` (the agent's
+    // absolute path), not under data/uploads/, and we don't own them.
+    if ((f.source || 'user') === 'agent') continue;
+    try { fs.unlinkSync(path.join(uploadsDir, sessionId, f.stored_name)); } catch (_) { /* ignore */ }
+  }
+  try { fs.rmdirSync(path.join(uploadsDir, sessionId)); } catch (_) { /* ignore */ }
+  uiDb.prepare('DELETE FROM session_files WHERE session_id = ?').run(sessionId);
+}
 
 // ── GET /api/sessions ──────────────────────────────────────────────────────
 router.get('/', (req, res) => {
@@ -84,6 +102,13 @@ router.get('/', (req, res) => {
       for (const a of rows) assistantMap[a.id] = a;
     }
 
+    // #35: fetch file counts for all sessions in one query
+    const fileCountRows = uiDb.prepare(
+      'SELECT session_id, COUNT(*) AS cnt FROM session_files GROUP BY session_id'
+    ).all();
+    const fileCountMap = {};
+    for (const r of fileCountRows) fileCountMap[r.session_id] = r.cnt;
+
     let filtered = sessions.map((s) => {
       const meta = metaMap[s.id];
       const assistant = meta?.assistant_id ? assistantMap[meta.assistant_id] : null;
@@ -93,6 +118,7 @@ router.get('/', (req, res) => {
         pinned: meta?.pinned ?? 0,
         archived: meta?.archived ?? 0,
         assistant: assistant ? rowToAssistant(assistant) : null,
+        fileCount: fileCountMap[s.id] ?? 0,
       };
     });
 
@@ -312,6 +338,7 @@ router.delete('/bulk', (req, res) => {
     for (const id of ids) {
       try {
         deleteOne(id);
+        cleanupSessionUploads(id);
         deletedCount++;
       } catch (e) {
         console.error(`Failed to delete session ${id}:`, e);
@@ -343,6 +370,7 @@ router.delete('/:id', (req, res) => {
     run();
 
     uiDb.prepare('DELETE FROM session_meta WHERE session_id = ?').run(sessionId);
+    cleanupSessionUploads(sessionId);
     res.json({ success: true, deletedSessionId: sessionId });
   } catch (error) {
     console.error('Error deleting session:', error);
@@ -389,6 +417,8 @@ router.patch('/:id/archive', (req, res) => {
 // ── GET /api/sessions/:id/messages ─────────────────────────────────────────
 router.get('/:id/messages', (req, res) => {
   try {
+    const sessionId = req.params.id;
+
     const messages = db.prepare(`
       SELECT
         id,
@@ -403,11 +433,39 @@ router.get('/:id/messages', (req, res) => {
       FROM messages
       WHERE session_id = ?
       ORDER BY timestamp ASC
-    `).all(req.params.id);
+    `).all(sessionId);
+
+    // Load agent-generated files for this session and attach each file to
+    // every assistant message whose content mentions the file's path.
+    // This correctly handles repeated references to the same file across
+    // multiple messages.
+    const agentFiles = uiDb.prepare(`
+      SELECT id, filename, stored_name AS storedName, mime_type AS mimeType, size
+      FROM session_files
+      WHERE session_id = ? AND source = 'agent'
+    `).all(sessionId);
+
+    const filesByMessageId = new Map();
+
+    if (agentFiles.length > 0) {
+      const assistantMessages = messages.filter(m => m.role === 'assistant' && m.content);
+      for (const msg of assistantMessages) {
+        const matched = agentFiles.filter(f => msg.content.includes(f.storedName));
+        if (matched.length > 0) {
+          filesByMessageId.set(msg.id, matched.map(f => ({
+            id: f.id,
+            filename: f.filename,
+            mimeType: f.mimeType,
+            size: f.size,
+          })));
+        }
+      }
+    }
 
     const parsed = messages.map((msg) => ({
       ...msg,
       toolCalls: msg.toolCalls ? JSON.parse(msg.toolCalls) : null,
+      agentFiles: filesByMessageId.get(msg.id) ?? null,
     }));
 
     res.json(parsed);

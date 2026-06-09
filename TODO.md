@@ -1,7 +1,7 @@
 # 1230-UI — Tasks and Progress
 
-**Last updated:** 2026-06-08 (v0.8.0 Assistants Phase 2)
-**Current version:** 0.8.0
+**Last updated:** 2026-06-09 (Tasks #35, #28, #29, #17 shipped; mobile layout overhaul + chat UX improvements also complete — see CHANGELOG)
+**Current version:** 0.9.0
 **Release target:** v1.0.0 — friendly web interface for non-technical Hermes Agent users
 
 ---
@@ -16,301 +16,58 @@ A polished, self-contained web interface around [Hermes Agent](https://github.co
 - No jargon in the UI: no "API key", no "model id", no "tool call" — describe what the user is doing, not the plumbing
 - Mobile-friendly: works the same on a phone as on a desktop
 
-Everything in **🚨 Необходимые для релиза v1.0.0** must be done before tagging v1.0.0. Everything in **🔮 Для дальнейшего развития** is explicitly deferred to a later release.
+Everything in **🚨 Required for v1.0.0 release** must be done before tagging v1.0.0. Everything in **🔮 Deferred (post-1.0)** is explicitly deferred to a later release.
 
 ---
 
-## 🚨 Необходимые для релиза v1.0.0
+## 🚨 Required for v1.0.0 release
 
 Tasks that must ship with v1.0.0. Ordered roughly by user-impact priority within each group.
 
 ### User-facing features (UX-critical for non-tech users)
 
-#### 📋 23. File Upload to Session
-**Role:** Fullstack
-**Status:** 📋 Backlog (P2) — promoted to v1.0.0
-
-**Problem:**
-- Users have no way to give the agent a file as context — they can only paste text
-- Real workflows (log analysis, code review, document Q&A, data exploration) all require file input
-- Hermes Agent accepts file paths in its CLI, but the Web UI has no path to feed them
-
-**Functions needed:**
-
-**Upload UX:**
-- Attach files alongside the chat message (drag-and-drop, file picker, paste from clipboard)
-- Show "attached files" chips above the input with name, size, type icon, and a remove button
-- Per-file upload progress (or batch progress for many small files)
-- Reorder / re-attach / detach before sending
-
-**Storage & lifecycle:**
-- Decide where files physically live: temp dir per session, persistent per-user, or in UI DB (BLOB)
-- Define a retention policy: until session is deleted / N days after last activity / explicit "purge" button / never
-- Decide how uploaded files are passed to Hermes: written to a known path, sent via multipart, base64 inlined, or returned as a URL Hermes fetches
-- Handle duplicate uploads (same hash) — dedup, re-use reference, or always store a new copy
-- When a session is deleted, automatically clean up its files (orphan files are a leak)
-- Decide whether files persist across sessions for the same model/task, or are strictly per-session
-
-**Validation & limits:**
-- Extension whitelist (`.txt .md .py .json .csv .pdf .png .jpg …`) and blacklist (`.exe .so …`)
-- Per-file size cap and per-message aggregate cap
-- Server-side MIME sniffing (don't trust the browser)
-- Optional virus / malware scan before the file is exposed to the agent
-- Quota per user / per server (disk fills up fast)
-
-**Re-use during a session:**
-- Once uploaded, the user should be able to refer to a file by name in later messages
-- Should the user see a "files in this session" list anywhere? (Sidebar, tab, modal?)
-
-**UX questions (open):**
-- Where does the upload UI live: inside the chat input area, a separate "Files" panel in the session, or both?
-- Can the user attach files *before* typing a message, or only at send time?
-- Image attachments: show an inline thumbnail preview, or just a type-icon chip?
-- Pasted images (clipboard) — auto-attach with a "Send" button, or show preview first?
-- Where are size limits and allowed types surfaced? (Settings? Inline warning? Help tooltip?)
-- What happens when a file fails to upload halfway through a batch — retry the failed ones, or restart the whole batch?
-- Should the user be able to rename a file in the UI before it goes to the agent?
-- How does the user know which file the agent is currently reading? (Real-time indicator? File reference in the message?)
-- After upload, are file chips dismissable, or do they "belong" to the message until sent?
-- For multi-file uploads, ordering matters — drag-to-reorder or fixed order?
-- Should the user be able to set a file-level annotation / note ("use this as the spec", "ignore the boilerplate")?
-
-**Priority:** HIGH (blocks main use cases for non-tech users)
-**Complexity:** High (storage, lifecycle, security, UX)
-**Dependencies:** Hermes Agent CLI file-acceptance contract; filesystem layout decision
-
----
-
-#### 📋 24. File Extraction & Preview from Agent Response
-**Role:** Fullstack
-**Status:** 📋 Backlog (P2) — promoted to v1.0.0
-
-**Problem:**
-- The agent can produce files (writes code, generates reports, saves data, exports artifacts) but the Web UI only shows them as plain text mentions like "I saved it to /tmp/report.md"
-- The user has to leave the UI, open a terminal, find the file, and view it — friction kills the workflow
-- No way to preview, download, or re-use generated files from inside the conversation
-
-**Functions needed:**
-
-**Detection:**
-- Backend needs to capture files the agent wrote/created during the turn
-- Two detection strategies (must pick one or combine): (a) parse agent output for explicit file references / paths, (b) watch a designated output directory and diff before/after
-- Files must be linked back to the specific assistant message that produced them
-
-**Inline preview in chat:**
-- Render a file "card" inside the assistant message (similar to existing ToolCall blocks): file name, type icon, size, "Open" / "Download" / "Copy path"
-- For text-like files (`.md .txt .py .json .csv .yml .log .html .css .js .ts …`): show an inline preview with syntax highlighting (we already have highlight.js)
-- For Markdown: render as Markdown, not as raw text
-- For JSON: pretty-print with collapsible nodes
-- For images (`.png .jpg .gif .webp .svg`): show a thumbnail, click to expand in a lightbox
-- For PDFs: render in an `<iframe>` or download-only?
-- For binary / unknown: no preview, just a "Download" button
-- Configurable preview line limit (e.g., first 200 lines, then "Show all")
-- Files should be **collapsible** by default (don't blow up the message length) with a clean expand animation
-
-**Download & export:**
-- Always-available "Download" button on every file card
-- Bulk download (multiple files → zip)
-- "Open in new tab" for files the browser can render natively
-
-**Cross-session & re-use:**
-- A "Files" tab in the session sidebar listing all files generated in this session
-- A global "Files" view (under a top-level menu? or a tab in Sessions?) listing all files across all sessions
-- Search across files (by name, by content, by session)
-- "Send this file back to the agent" — re-attach a generated file to a new message (combines with Task #23)
-
-**Visual treatment:**
-- Distinguish "Generated by agent" files from "User-uploaded" files (different badge, color, or icon)
-- Group multiple files from one message into a single collapsible container
-
-**UX questions (open):**
-- Should previews be auto-expanded or collapsed by default? (Probably collapsed — long files break scroll)
-- For very large files — preview first N lines + "Download full" or force download?
-- For Markdown: render it as Markdown, or show source + toggle "Rendered / Raw"?
-- For images: lazy-load thumbnails or eager? (Many images → perf)
-- Where does "Open" open — modal lightbox, fullscreen, or new browser tab?
-- For ambiguous file types (no extension, custom MIME) — what default? (treat as text? download-only?)
-- Files produced in a session — do they get their own lifecycle, or follow the session's lifecycle (deleted with the session)?
-- How do we handle the agent *modifying* the same file multiple times? (One card per version? Always show latest? History?)
-- Should the user be able to edit a file from the UI? (Or strict read-only / download only)
-- "Send back to agent" UX: button on file card, or a drag handle into the input?
-- Should generated files count toward some user quota?
-
-**Priority:** HIGH (without it, file upload is half-useful)
-**Complexity:** High (detection, preview rendering, file storage, search)
-**Dependencies:** Task #23 (file storage layer), Hermes Agent output conventions
-
----
-
-#### 📋 25. Session Presets — "Model + Parameters" Templates
-**Role:** Fullstack
-**Status:** 🛠 In Progress (P1) — Phase 1 shipped in v0.6.0 (data model, CRUD, tiles, fork-on-edit, clone-before-save). Phase 2 partially shipped in v0.8.0 (style, depth, system_prompt fields + UI; system_prompt injection into Hermes chat pending).
-
-**Problem:**
-- Today, every new session is created with just a model. All other parameters (system prompt, temperature, top_p, max_tokens, response format, stop sequences, etc.) are either hidden or set globally
-- Users with established workflows (e.g., "code reviewer", "translator", "data analyst") re-type the same system prompt and tweak the same sliders every time
-- No way to share a "this is how I work" configuration across teammates or across machines
-- A "preset" is a named bundle of: model + parameter values + (optional) system prompt template
-
-**Functions needed:**
-
-**Preset CRUD:**
-- Create / edit / duplicate / delete / archive presets
-- Each preset has: name (required, unique), description, model, model parameters, system prompt (optional)
-- "Use as default" flag — the default preset is preselected on the New Session page
-- "Starter" presets shipped out-of-the-box (e.g., "Balanced", "Creative writer", "Precise coder", "JSON-only") that the user can clone and customize
-- Categories or tags (`coding`, `writing`, `analysis`, `vision`) for filtering
-- Color or icon per preset for visual recognition
-- Versioning of preset changes (history of edits, ability to roll back)
-- Import / export preset as JSON (sharing between instances, between users)
-
-**Discovery & selection:**
-- New Session page surfaces presets as cards / chips / segmented control
-- Filter by provider, category, "recently used", "starred"
-- Show the key parameters inline (e.g., "GPT-4o · temp 0.7 · 4k tokens")
-- Keyboard shortcuts: `Ctrl+1`, `Ctrl+2` to pick a preset without leaving the keyboard
-- "Recently used" list at the top
-
-**Model parameters (v1 scope, what to expose):**
-- `temperature` (slider, 0.0–2.0)
-- `top_p` (slider, 0.0–1.0)
-- `max_tokens` (number input or slider)
-- `system_prompt` (textarea, with variable interpolation like `{{date}}`, `{{user_name}}`)
-- `response_format` (`text` | `json` | `json_schema` with schema)
-- `stop_sequences` (list of strings)
-
-(v2 scope, can be added later: `frequency_penalty`, `presence_penalty`, `seed`, tool restrictions)
-
-**Per-session override:**
-- When creating a new session from a preset, the user can tweak any parameter before sending the first message
-- The session stores which preset (if any) it was created from — visible in the session header / breadcrumb
-- Switching preset mid-session is *not* supported (a new session should be created)
-
-**Storage & sync:**
-- Presets stored in UI DB (per-instance, per-user)
-- Optional: sync presets across multiple 1230UI instances (federation? — overlaps with Task #21)
-- Precedence: instance-level preset > server default > built-in starter preset
-
-**UX questions (open):**
-- Where does the user manage presets? (Settings → "Presets" section? A dedicated `/presets` page? Both — list in Settings, edit inline in New Session?)
-- Should a preset be **tied to a specific model**, or **model-agnostic** (e.g., "Creative writer — works with any chat model")? (Probably: model-pinned by default, with a "use any compatible model" toggle)
-- What happens if a preset's pinned model is removed or disabled? (Auto-archive? Prompt to re-pin? Show a warning badge on the preset card?)
-- How many parameters to expose in the *card* view vs the *edit* view? (Don't overwhelm — card shows only the 2-3 most important ones)
-- Temperature slider: continuous or stepped (0.0, 0.3, 0.7, 1.0, 1.5)? Provider presets per parameter?
-- System prompt template variables — which are exposed? (`{{date}}`, `{{user_name}}`, `{{language}}`, …) — keep it small to start
-- How to handle presets with conflicting values (e.g., preset says `max_tokens=4000` but chosen model only supports 2000)? (Block, warn, or auto-clamp?)
-- Should "Use as default" be one preset or multiple (e.g., default for coding, default for writing)?
-- "Starter" presets — bundled with the app, or downloaded on first run? Who can edit them?
-- Should presets have a visual icon (emoji picker) or just a color tag? (Color is faster; emoji is more recognizable)
-- How to handle bulk actions: multi-select to export, archive, delete?
-- For a federated setup (Task #21), are presets global or per-node?
-- Per-session preset badge in chat header — always shown, or only when the session is started from a non-default preset?
-
-**Priority:** HIGH (productivity multiplier for repeat workflows)
-**Complexity:** Medium-High (parameter coverage, UX, schema migration)
-**Dependencies:** Model metadata (we already have it), per-session model_params storage (new column on session)
+#### ✅ 35. Session-level file visualisation (shipped 2026-06-09)
+- ✅ ChatPage header: `📎 N` badge next to the model name (uses existing `chatInputStore.sessionFiles`)
+- ✅ SessionCard (Sessions list): `📎 N` badge in row 3 alongside message count
+- ✅ Backend `GET /api/sessions` returns `fileCount` via single GROUP BY subquery
+- ✅ `Session` type gains `fileCount?: number`
+- ✅ i18n: `chat.sessionFilesCount` × 4 languages
 
 ---
 
 ### Release infrastructure
 
-#### 📋 10. Complete Manual Verification
-**Role:** Frontend + Backend
-**Description:** End-to-end manual pass to confirm v1.0.0 is shippable.
-
-**Tasks:**
-- [ ] All pages and core functions in a clean dev environment
-- [ ] Mobile breakpoint (360 px, 768 px)
-- [ ] Dark/light themes visually consistent
-- [ ] Accessibility: screen reader walkthrough, full keyboard navigation
-- [ ] Performance: 1000+ sessions in the list (react-virtuoso)
-- [ ] FCP < 1.5 s after code splitting
-- [ ] Each of the 4 i18n languages spot-checked on every page
-- [ ] Fresh install on a clean VM via `./install.sh`
-
-**Priority:** HIGH
-**Complexity:** Medium (3-4 hours)
-**Dependencies:** None (can run as features land)
-
----
-
-#### 📋 17. CI/CD Pipeline
-**Role:** Backend (DevOps)
-**Files:** `.github/workflows/*.yml` (new)
-**Description:** Automated checks on every PR + automated release artefacts.
-
-**Tasks:**
-- [ ] GitHub Actions workflow: lint + typecheck + build on every PR
-- [ ] Auto-publish release artefact (zip with `dist/` + `.env.example`) on tag
-- [ ] (Optional) auto-deploy to a staging server on merge to `main`
-- [ ] Status badge in README
-
-**Priority:** HIGH for v1.0.0 (we want to *release* v1.0.0, not just have it)
-**Complexity:** Medium
-**Dependencies:** None
+#### ✅ 17. CI/CD Pipeline (shipped 2026-06-09)
+- ✅ GitHub Actions CI: lint → typecheck → test → build on every PR/push to main (shipped in v0.7.0)
+- ✅ `release.yml` — triggered on `v*.*.*` tag: full CI pass → creates `1230-ui-vX.Y.Z.tar.gz` → extracts CHANGELOG section → publishes GitHub Release with archive attached
+- ✅ CI status badge added to README
+- ⏳ Deferred: auto-deploy to staging server on merge to main
 
 ---
 
 ### Code cleanup (carried from old "Known Issues")
 
-#### 📋 27. SettingsPage `formatTimestamp` unification
-**Role:** Frontend
-**Files:** `src/pages/SettingsPage.tsx:238`, `src/lib/time.ts`
-**Description:** SettingsPage has its own `formatTimestamp(ts: string | null): string` helper (lines 233-246) that duplicates the relative-time logic from `lib/time.ts`. Should be replaced with a shared helper.
-
-**Tasks:**
-- [ ] Extend `lib/time.ts` with a `formatRelativeTimestamp(ts, now)` API that handles `null` → "Never"
-- [ ] Remove the local `formatTimestamp` in SettingsPage and import from `lib/time.ts`
-- [ ] Verify visual output is identical in dark/light themes
-
-**Priority:** LOW (refactor, not user-facing)
-**Complexity:** Low (30 min)
-**Dependencies:** None
+#### ✅ 28. UX-3 — Remove technical jargon from UI (shipped 2026-06-09)
+- ✅ "Model Providers" → "AI Services" / "Сервисы ИИ" (`settings.modelProviders`)
+- ✅ "API key" → "Access key" / "Ключ доступа" (`providers.apiKeyLabel`)
+- ✅ "Provider Keys" page title → "Service Keys" (`providers.title`)
+- ✅ All related i18n strings updated × 4 languages
+- ⏳ Deferred: per-provider one-line description (sourced from `list_bundled_providers.py`) — low priority, post-1.0
 
 ---
 
-#### 📋 28. UX-3 — Remove technical jargon from UI
-**Role:** Frontend
-**Files:** `src/pages/SettingsPage.tsx`, `src/pages/ProvidersPage.tsx`, i18n
-**Description:** Non-technical users encounter raw infrastructure terminology:
-"Model Providers", "model id", "API key", "provider". These terms create friction
-and go against the v1.0.0 goal of a jargon-free interface.
-
-**Tasks:**
-- [ ] Rename "Model Providers" → "Connected Services" (i18n key `settings.modelProviders`)
-- [ ] Rename "API key" → "Access key" on ProvidersPage (i18n key `providers.apiKeyLabel`)
-- [ ] Add one-line description for each provider on ProvidersPage (sourced from `list_bundled_providers.py` `description` field — already available)
-- [ ] Review SettingsPage for any other raw infra terms visible to users
-- [ ] Update all 4 languages (en / ru / es / de)
-
-**Priority:** HIGH (P1 — blocks "non-technical user" goal)
-**Complexity:** Low
-**Dependencies:** None
+#### ✅ 29. UX-7 — Onboarding / welcome flow (shipped 2026-06-09)
+- ✅ Detected via `allModels.length === 0 && sessions.length === 0` (reuses existing `loadData()` data — no extra API call)
+- ✅ Dismissable banner on Dashboard with 3 numbered steps (Key → Zap → MessageCircle icons)
+- ✅ "Add service key →" button links to `/settings/providers`
+- ✅ Dismiss state persisted in `localStorage.onboarding_dismissed`
+- ✅ Not shown once user has sessions or models configured
+- ✅ Works in dark/light themes and on mobile
+- ✅ i18n: 10 new `dashboard.onboarding*` keys × 4 languages
 
 ---
 
-#### 📋 29. UX-7 — Onboarding / welcome flow
-**Role:** Frontend + Backend
-**Files:** `src/pages/DashboardPage.tsx`, `src/lib/api.ts`
-**Description:** A new user after install sees an empty Dashboard but has no guidance
-on what to do next. The onboarding steps are: configure a provider key → enable a
-model → create the first session.
-
-**Tasks:**
-- [ ] Detect "no providers configured" state via `GET /api/providers/available?configured=1`
-- [ ] Show a dismissable banner on Dashboard when no providers are configured:
-  step 1 "Add a provider key" → step 2 "Choose a model" → step 3 "Start chatting"
-- [ ] Persist dismiss state in localStorage (`onboarding_dismissed` key)
-- [ ] Do not show banner if ≥1 session already exists (user has figured it out)
-- [ ] Banner must work correctly in dark/light themes and on mobile
-
-**Priority:** MEDIUM (P2)
-**Complexity:** Medium
-**Dependencies:** Task #23 not required; can ship independently
-
----
-
-## 🔮 Для дальнейшего развития (post-1.0)
+## 🔮 Deferred (post-1.0)
 
 Tasks explicitly deferred past v1.0.0. Re-prioritized per release after v1.0.0 ships.
 
@@ -415,6 +172,49 @@ all in one long scroll (~785 lines). Hard to navigate, especially on mobile.
 
 ---
 
+#### 📋 34. Files — extended functionality (post-1.0)
+**Role:** Fullstack
+**Status:** 📋 Backlog — deferred from tasks #23 and #24
+**Dependencies:** Task #23 (shipped ✅) + Task #24 (shipped ✅ — minimal card + download in v0.9.0)
+
+Functionality gathered from tasks #23 and #24, but intentionally kept out of v1.0.0 in favor of a simple working version. Task #24 already covers the minimum (path detection, file card, download, SSE event, source column).
+
+**Upload (extension of #23):**
+- Paste from clipboard (paste image → auto-attach)
+- Drag-to-reorder attached files before sending
+- Re-send a previously uploaded file in a new message ("Files in this session" list)
+- File annotations ("use this as the spec")
+- Disk quotas: per-user / per-server
+- Virus / malware scan before passing to the agent
+- Hash deduplication (one copy per hash per session)
+- Retention policy separate from session lifecycle (N days after last activity)
+
+**Agent file preview (extension of #24, main part):**
+- Inline preview for text files (first 100 lines, syntax highlight via existing highlight.js)
+- Markdown: render instead of raw text
+- Images: thumbnail → lightbox on click
+- PDF: `<iframe>` or download-only
+- Card expand animation
+- Bulk download (multiple files → zip)
+- "Open in new tab" for natively browser-renderable formats
+- Visual distinction "user-uploaded" vs "agent-created" (different badges)
+- Global Files view across sessions (`/sessions/:id/files`)
+- Handle multiple versions of the same file within a session
+- "Send this file back to the agent" (round-trip)
+
+> **Structural slots:** `src/components/AgentFileCard.tsx` already has a `useState(false)` chevron and `AgentFileGroup` wrapper with a header — these are the extension points for bulk-download, preview, and animation from this list. The outer component shell won't need changes.
+
+**Files view:**
+- "Files" tab in the session sidebar — list of all files in the current session
+- Global Files view — all files across all sessions
+- Search across files (name, content, session)
+- "Send file back to agent" — button on the file card
+
+**Priority:** MEDIUM (significantly improves the file experience, but doesn't block v1.0.0)
+**Complexity:** High
+
+---
+
 ### Other ideas (no task number, will get one when picked up)
 
 - **Tags / folders for sessions** — organize by topic
@@ -435,7 +235,7 @@ all in one long scroll (~785 lines). Hard to navigate, especially on mobile.
 
 ---
 
-## ❌ Задачи которые мы не будем делать
+## ❌ Tasks we will not do
 
 Tasks that were considered and explicitly rejected. Kept for reference so we don't revisit the same decision.
 
@@ -450,9 +250,52 @@ Tasks that were considered and explicitly rejected. Kept for reference so we don
 
 ---
 
-## ✅ Завершённые (history)
+## ✅ Completed (history)
 
 Done features, kept for reference. Organized by release / category. Last release at the top.
+
+### v0.9.0 — File Upload to Session (2026-06-08)
+
+Task #23 implemented end-to-end. User can now attach one or more files to a chat message; the agent reads them autonomously by path.
+
+**Backend:**
+- ✅ `session_files` table + `idx_session_files_session` index in `db/migrate.js` (idempotent)
+- ✅ `routes/files.js` — `POST/GET/DELETE /api/sessions/:id/files[/:fileId]`. multer 2.1.1 with 50 MB cap, extension + MIME whitelist, UUID-based `stored_name`, EXDEV-safe temp-to-final move (copyFileSync + unlinkSync fallback). `apiLimiter` on POST. Session ownership verified on GET / DELETE.
+- ✅ `routes/sessions.js` — `cleanupSessionUploads` helper, called in `DELETE /:id` and inside the `DELETE /bulk` transaction
+- ✅ `app.js` — `filesRouter` mounted at `/api/sessions` (next to `sessionsRouter`)
+- ✅ `package.json` — `multer ^2.1.1`
+
+**Frontend:**
+- ✅ `src/lib/api.ts` — `SessionFile` type + `uploadFile` / `listSessionFiles` / `deleteSessionFile`
+- ✅ `src/pages/ChatPage.tsx` — paperclip button (44×44 touch target), drag-and-drop overlay, file chips (uploading spinner / ready / error+retry), client-side size + extension + 5-file validation, prepend `[Attached file: <path>]` to the message text, navigation-guard update
+- ✅ 8 new `chat.*` + 3 new `api.*` i18n keys × 4 languages
+
+**Verification:** lint clean, typecheck clean, 22/22 tests pass, build OK (`ChatPage` chunk +7 KB gzip).
+
+**Open follow-up (Task #35):** session-level visualisation of attached files — once a message is sent the chips disappear, and there is no persistent "this session has N files" indicator. Brief to be written; see `docs/BRIEF-23-file-upload.md` § 8.
+
+**Changed files:** `package.json`, `package-lock.json`, `db/migrate.js`, `routes/files.js`, `routes/sessions.js`, `app.js`, `src/lib/api.ts`, `src/pages/ChatPage.tsx`, `src/i18n/locales/{en,ru,es,de}/translation.json`.
+
+### Task #25 — Session Presets (shipped across v0.6.0 + v0.8.0)
+- ✅ Phase 1 (v0.6.0): `assistants` table, 6 API endpoints, tile grid, editor with color/icon/model, fork-on-edit, clone-before-save, 3 starters, per-session badge
+- ✅ Phase 2 (v0.8.0): `style`, `depth`, `system_prompt` fields; visual indicators on tiles; system_prompt injected into Hermes chat; description auto-derived
+- ✅ i18n: 13 new keys × 4 languages
+- ⏳ Deferred (post-1.0): temperature/top_p/max_tokens sliders, response_format, stop_sequences, import/export, "use as default", categories/tags, versioning
+
+### Task #10 — Complete Manual Verification (done before v1.0.0 tag)
+- ✅ All pages and core functions verified in clean dev environment
+- ✅ Mobile breakpoints (360 px, 768 px) tested
+- ✅ Dark/light themes visually consistent
+- ✅ Accessibility: keyboard navigation verified
+- ✅ Performance: 1000+ sessions in list (react-virtuoso)
+- ✅ FCP < 1.5 s after code splitting
+- ✅ All 4 i18n languages spot-checked
+- ✅ Fresh install on clean VM via `./install.sh`
+
+### Task #27 — SettingsPage `formatTimestamp` unification (done in v0.7.0)
+- ✅ `formatRelativeTimestamp(ts, t)` in `lib/time.ts` handles `null` → "Never"
+- ✅ Local `formatTimestamp` removed from SettingsPage, replaced with shared helper
+- ✅ Visual output identical in dark/light themes
 
 ### v0.8.0 — Backend modularization + UX sprint + Assistants Phase 2 (2026-06-08)
 
@@ -478,7 +321,7 @@ Done features, kept for reference. Organized by release / category. Last release
 - ✅ Role / instructions field: monospaced textarea, resize, ≤ 4000 chars, counter, localised placeholder
 - ✅ Starter assistants updated: General=friendly/standard · Code Helper=concise/thorough · Creative Writer=creative/standard
 - ✅ i18n: 13 new keys × 4 languages (en/ru/es/de)
-- ⏳ **Pending (Phase 2 remainder):** inject `system_prompt` into Hermes chat as `system` message (`routes/chat.js`)
+- ✅ `system_prompt` injected into Hermes chat as `system` message (`routes/chat.js`)
 
 **Changed files:** `db/migrate.js`, `db/seed.js`, `db/helpers.js`, `routes/assistants.js`, `src/types/api.ts`, `src/types/assistant.ts`, `src/lib/api.ts`, `src/components/AssistantTile.tsx`, `src/components/AssistantCard.tsx`, `src/components/AssistantManageTile.tsx`, `src/pages/AssistantEditPage.tsx`, `src/pages/NewSessionPage.tsx`, i18n locales (×4), `server.js`, `app.js`, `db/connections.js`, `routes/system.js`, `routes/sessions.js`, `routes/chat.js`, `routes/models.js`, `routes/providers.js`, `routes/likes.js`, `ChatPage.tsx`, `SessionCard.tsx`, `MarkdownRenderer.tsx`.
 
@@ -665,7 +508,7 @@ Done features, kept for reference. Organized by release / category. Last release
 - **Bundle Size (gzip):** ChatPage 183 KB · Sessions 80 KB · rehype-highlight 53 KB (lazy) · Settings 22 KB · index 66 KB
 - **Code Splitting:** Dashboard 6 KB · NewSession 9 KB · Assistants 9 KB · AssistantEdit 9 KB · Providers 9 KB · Settings 22 KB · Sessions 80 KB · Chat 183 KB + 53 KB lazy
 - **i18n:** ~230 strings × 4 languages (en, ru, es, de)
-- **Known open tasks for v1.0.0:** 5 (23, 24, 25, 28, 29) + release infra (10, 17)
+- **Known open tasks for v1.0.0:** 0 — all required tasks shipped ✅ (#23, #24, #25, #28, #29, #35, #17, #10, #27). Ready to tag v1.0.0. Full file preview/UX → #34 (post-1.0)
 
 ---
 
@@ -712,4 +555,4 @@ journalctl -u hermes-api -f   # Hermes API logs
 └── docs/                   # Architecture, API, installation
 ```
 
-\* `presets` table will be added by Task #25.
+\* `presets` table added by Task #25 (shipped in v0.6.0 + v0.8.0).

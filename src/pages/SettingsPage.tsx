@@ -248,7 +248,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="h-full flex flex-col px-4 md:px-6 py-4">
+    <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 py-4">
       <div className="max-w-3xl w-full mx-auto mb-6">
         <h1 className="text-xl font-semibold text-fg-primary">{t('settings.title')}</h1>
         <p className="text-sm text-fg-muted mt-1">{t('settings.description')}</p>

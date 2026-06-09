@@ -1,6 +1,8 @@
 # 1230-UI — Hermes Web Interface
 
-> **Status:** `v0.8.0` — Backend modularization (server.js 1911 → 39 lines, 12 route modules) + UX improvements (navigation guard, section headers, dynamic highlight.js import, button visibility) + **Assistants Phase 2** (style, depth, system prompt).
+[![CI](https://github.com/Pingvin1230/1230-ui/actions/workflows/ci.yml/badge.svg)](https://github.com/Pingvin1230/1230-ui/actions/workflows/ci.yml)
+
+> **Status:** `v0.9.0` — Mobile layout overhaul (fixed scroll, sidebar overlay, MobileNav on foldables) · Chat UX improvements (clickable links, code block language labels, streaming cursor, Stop in header, prompt suggestions) · Session file indicators · Onboarding banner · Jargon-free UI terminology · File upload & agent file download · Assistants Phase 2 · Backend modularization.
 
 Modern web interface for managing sessions and interacting with [Hermes Agent](https://github.com/anthropics/hermes-agent) through a browser.
 
@@ -9,6 +11,8 @@ Modern web interface for managing sessions and interacting with [Hermes Agent](h
 - **Dashboard** — quick chat, recent sessions, Hermes API status
 - **Session Management** — create, rename, pin, archive, delete, bulk actions, **swipe-to-delete** (mobile), **long-press to enter bulk mode** (mobile)
 - **Real-time Chat** — streaming responses, markdown rendering, syntax highlighting, tool calls visualization
+- **File Attachments** — attach files to a chat message via the paperclip button or by dragging them onto the chat area. Allowed: `.txt .md .py .js .ts .jsx .tsx .json .csv .yml .yaml .log .html .css .xml .sh .sql .pdf .png .jpg .jpeg .gif .webp`. Limits: 50 MB per file, 5 files per message. Files live in `data/uploads/<session_id>/` and are cleaned up automatically when the session is deleted.
+- **Agent File Download** — when the agent creates or writes a file and mentions its absolute path in the response (e.g. `` `/tmp/report.md` ``), a download card appears directly inside the assistant message with the filename, size, and a Download button. Multiple files from one message are grouped in a collapsible container. Download cards persist across page reloads. If the file is deleted from disk, the endpoint returns `404` with a clear message.
 - **Model Management** — enable/disable models, select default model
 - **Provider Keys** — manage API keys for all bundled `api_key` providers from the UI (no terminal needed)
 - **System Commands** — execute `hermes update` and `hermes doctor --fix`
@@ -79,7 +83,7 @@ Application will be available on port 3001.
 
 **Frontend:** React 19, TypeScript 6, Vite 8, Tailwind CSS v4, Zustand, React Router v7
 
-**Backend:** Node.js, Express 5, better-sqlite3
+**Backend:** Node.js, Express 5, better-sqlite3, multer
 
 **Testing:** Vitest — `npm test` (22 tests)
 

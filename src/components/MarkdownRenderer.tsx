@@ -1,15 +1,8 @@
 import { useRef, useState, useEffect, type HTMLAttributes, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, ChevronDown, ExternalLink } from 'lucide-react';
 
-// UX-13: Load rehype-highlight + the 37-language "common" lowlight bundle
-// lazily so they are excluded from the initial ChatPage chunk. The CSS theme
-// is also loaded dynamically here (once) instead of via a static import in
-// ChatPage.tsx, which keeps it out of the main bundle entirely.
-//
-// We use a module-level flag so the dynamic import runs only once across all
-// MarkdownRenderer instances in the same page lifetime.
 let _rehypeHighlight: typeof import('rehype-highlight')['default'] | null = null;
 let _highlightLoading = false;
 const _highlightCallbacks: Array<() => void> = [];
@@ -34,9 +27,49 @@ interface MarkdownRendererProps {
   className?: string;
 }
 
-function CodeBlock({ children, ...rest }: HTMLAttributes<HTMLPreElement> & { children?: ReactNode }) {
+// Extracts a human-readable language label from a highlight.js className
+function getLangLabel(className?: string): string | null {
+  if (!className) return null;
+  const match = className.match(/language-(\w+)/);
+  if (!match) return null;
+  const lang = match[1].toLowerCase();
+  const labels: Record<string, string> = {
+    js: 'JavaScript', javascript: 'JavaScript',
+    ts: 'TypeScript', typescript: 'TypeScript',
+    jsx: 'JSX', tsx: 'TSX',
+    py: 'Python', python: 'Python',
+    sh: 'Shell', bash: 'Bash', zsh: 'Shell',
+    json: 'JSON', yaml: 'YAML', yml: 'YAML',
+    html: 'HTML', css: 'CSS', scss: 'SCSS',
+    sql: 'SQL', md: 'Markdown', markdown: 'Markdown',
+    go: 'Go', rust: 'Rust', java: 'Java',
+    cpp: 'C++', c: 'C', cs: 'C#',
+    php: 'PHP', ruby: 'Ruby', swift: 'Swift',
+    kotlin: 'Kotlin', xml: 'XML', dockerfile: 'Dockerfile',
+    toml: 'TOML', ini: 'INI', env: 'ENV',
+  };
+  return labels[lang] ?? lang.toUpperCase();
+}
+
+const MAX_CODE_HEIGHT = 320; // px — beyond this, collapse with "show more"
+
+interface CodeBlockProps extends HTMLAttributes<HTMLPreElement> {
+  children?: ReactNode;
+  'data-language'?: string;
+}
+
+function CodeBlock({ children, 'data-language': dataLang, ...rest }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
+  const [isLong, setIsLong] = useState(false);
   const preRef = useRef<HTMLPreElement>(null);
+
+  // Detect if content exceeds max height after first render
+  useEffect(() => {
+    if (preRef.current && preRef.current.scrollHeight > MAX_CODE_HEIGHT + 40) {
+      setIsLong(true);
+    }
+  }, [children]);
 
   const handleCopy = async () => {
     const text = preRef.current?.textContent ?? '';
@@ -44,38 +77,111 @@ function CodeBlock({ children, ...rest }: HTMLAttributes<HTMLPreElement> & { chi
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 200);
+      window.setTimeout(() => setCopied(false), 1500);
     } catch (err) {
       console.error('Copy failed:', err);
     }
   };
 
+  const langLabel = dataLang ? getLangLabel(`language-${dataLang}`) : null;
+
   return (
-    <div className="group relative mb-4">
-      <pre
-        ref={preRef}
-        className="rounded-lg overflow-x-auto bg-bg-secondary p-4 pr-12"
-        {...rest}
+    <div className="group relative mb-4 rounded-lg overflow-hidden border border-border-default">
+      {/* Header bar: language label + copy button */}
+      <div className="flex items-center justify-between px-4 py-2 bg-[#1e2736] border-b border-white/10">
+        <span className="text-xs font-mono text-gray-400 select-none">
+          {langLabel ?? 'code'}
+        </span>
+        {/* Copy button — always visible on touch, hover-only on desktop */}
+        <button
+          type="button"
+          onClick={handleCopy}
+          aria-label={copied ? 'Скопировано' : 'Копировать код'}
+          title={copied ? 'Скопировано' : 'Копировать код'}
+          className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-gray-400 hover:text-white hover:bg-white/10 transition-colors md:opacity-0 md:group-hover:opacity-100 opacity-100"
+        >
+          {copied
+            ? <><Check className="w-3.5 h-3.5 text-green-400" /><span className="text-green-400">Скопировано</span></>
+            : <><Copy className="w-3.5 h-3.5" /><span>Копировать</span></>
+          }
+        </button>
+      </div>
+
+      {/* Code content — collapsible when long */}
+      <div
+        className="relative"
+        style={isLong && collapsed ? { maxHeight: MAX_CODE_HEIGHT, overflow: 'hidden' } : undefined}
       >
-        {children}
-      </pre>
-      <button
-        type="button"
-        onClick={handleCopy}
-        aria-label={copied ? 'Code copied' : 'Copy code'}
-        className="absolute top-2 right-2 p-1.5 rounded bg-white/90 dark:bg-gray-800/90 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity hover:bg-bg-secondary text-fg-secondary border-border-default"
-      >
-        {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-      </button>
+        <pre
+          ref={preRef}
+          className="overflow-x-auto bg-[#0d1117] p-4 text-sm leading-relaxed"
+          {...rest}
+        >
+          {children}
+        </pre>
+
+        {/* Fade gradient at bottom when collapsed */}
+        {isLong && collapsed && (
+          <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-[#0d1117] to-transparent pointer-events-none" />
+        )}
+      </div>
+
+      {/* Expand/collapse toggle */}
+      {isLong && (
+        <button
+          type="button"
+          onClick={() => setCollapsed(v => !v)}
+          className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-gray-400 hover:text-white bg-[#0d1117] hover:bg-[#161b22] border-t border-white/10 transition-colors"
+        >
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsed ? '' : 'rotate-180'}`} />
+          {collapsed ? 'Показать полностью' : 'Свернуть'}
+        </button>
+      )}
     </div>
   );
+}
+
+/**
+ * Converts bare URLs/domains written without a protocol into proper markdown
+ * links so ReactMarkdown / remark-gfm can pick them up.
+ *
+ * Handles patterns like:
+ *   drive2.ru/l/702101397327315764
+ *   t.me/jaecoo_j7_club
+ *   aliexpress.com/s/wiki-ssr/article/jaecoo-subwoofer
+ *
+ * Skips content inside backtick code spans and fenced code blocks,
+ * and skips URLs that already have a protocol.
+ */
+function preprocessLinks(text: string): string {
+  // Known TLDs — broad enough to cover real domains, narrow enough to avoid false positives
+  const TLD = '(?:com|ru|org|net|io|me|ai|dev|app|co|uk|de|fr|eu|nl|au|ca|jp|cn|info|biz|tv|club|store|shop|online|site|tech|pro|by|ua|kz|am|ge|ee|lt|lv|az|uz|kg|tj|tm|md|wiki|gov|edu|mil|int|museum|travel|jobs|mobi|tel|coop|aero|post|xxx|name|cat)';
+  // Regex: word chars / hyphens followed by .TLD, optionally with path/query
+  // Negative lookbehind: not already preceded by http(s):// or [
+  // Not inside backtick spans (handled by splitting on code blocks)
+  const bareUrlRe = new RegExp(
+    `(?<![/"'(\\[])\\b([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+${TLD}\\b(/[^\\s)\\]"'<>]*)?`,
+    'g'
+  );
+
+  // Split on fenced code blocks and inline code to avoid mangling code
+  const parts = text.split(/(```[\s\S]*?```|`[^`\n]+`)/g);
+  return parts.map((part, i) => {
+    // Odd indices are code blocks — leave untouched
+    if (i % 2 === 1) return part;
+    return part.replace(bareUrlRe, (match, _g1, _g2, offset, str) => {
+      // Skip if already preceded by :// (already has a protocol)
+      const before = str.slice(Math.max(0, offset - 8), offset);
+      if (before.includes('://')) return match;
+      return `https://${match}`;
+    });
+  }).join('');
 }
 
 const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
   className = '',
 }) => {
-  // UX-13: Re-render once highlight module is loaded.
   const [highlightReady, setHighlightReady] = useState(!!_rehypeHighlight);
 
   useEffect(() => {
@@ -87,6 +193,9 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     ? [[_rehypeHighlight, { detect: true, ignoreMissing: true }]]
     : [];
 
+  // Pre-process: upgrade bare domain URLs to https:// so remark-gfm autolinks them
+  const processedContent = preprocessLinks(content);
+
   return (
     <div className={`markdown-content ${className}`}>
       <ReactMarkdown
@@ -94,7 +203,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         rehypePlugins={rehypePlugins}
         components={{
           h1: ({ ...props }) => (
-            <h1 className="text-2xl font-bold mt-6 first:mt-0 mb-3 text-fg-primary" {...props} />
+            <h1 className="text-2xl font-bold mt-6 first:mt-0 mb-3 text-fg-primary border-b border-border-default pb-2" {...props} />
           ),
           h2: ({ ...props }) => (
             <h2 className="text-xl font-semibold mt-5 first:mt-0 mb-2 text-fg-primary" {...props} />
@@ -106,72 +215,90 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             <h4 className="text-base font-medium mt-3 first:mt-0 mb-2 text-fg-primary" {...props} />
           ),
           p: ({ ...props }) => (
-            <p className="mb-3 leading-relaxed text-fg-secondary" {...props} />
+            <p className="mb-3 last:mb-0 leading-relaxed text-fg-secondary" {...props} />
           ),
           ul: ({ ...props }) => (
-            <ul className="mb-3 list-disc ml-4 pl-5 space-y-1 text-fg-secondary" {...props} />
+            <ul className="mb-3 list-disc ml-5 space-y-1 text-fg-secondary" {...props} />
           ),
           ol: ({ ...props }) => (
-            <ol className="mb-3 list-decimal ml-4 pl-5 space-y-1 text-fg-secondary" {...props} />
+            <ol className="mb-3 list-decimal ml-5 space-y-1 text-fg-secondary" {...props} />
           ),
           li: ({ ...props }) => (
-            <li className="text-fg-secondary" {...props} />
+            <li className="text-fg-secondary leading-relaxed" {...props} />
           ),
-          a: ({ ...props }) => (
-            <a className="text-blue-600 dark:text-blue-400 hover:underline" {...props} />
+          // Links — open in new tab, show external icon
+          a: ({ href, children, ...props }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-0.5 text-blue-600 dark:text-blue-400 underline underline-offset-2 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+              {...props}
+            >
+              {children}
+              <ExternalLink className="w-3 h-3 flex-shrink-0 opacity-60" />
+            </a>
           ),
-          code: ({ className, children, ...props }) => {
-            const isCodeBlock = className && className.startsWith('language-');
-
-            if (isCodeBlock) {
+          // Inline code
+          code: ({ className: cls, children, ...props }) => {
+            const isBlock = cls && cls.startsWith('language-');
+            if (isBlock) {
               return (
-                <code className={`${className} hljs`} {...props}>
-                  {children}
-                </code>
-              );
-            } else {
-              const node = (props as { node?: { parent?: { tagName?: string } } }).node;
-              const parentIsPre = node?.parent?.tagName === 'pre';
-              if (parentIsPre) {
-                return (
-                  <code className="hljs" {...props}>
-                    {children}
-                  </code>
-                );
-              }
-              return (
-                <code
-                  className="py-0.5 px-1 bg-bg-secondary rounded text-sm font-mono text-fg-primary"
-                  {...props}
-                >
+                <code className={`${cls} hljs`} {...props}>
                   {children}
                 </code>
               );
             }
+            const node = (props as { node?: { parent?: { tagName?: string } } }).node;
+            if (node?.parent?.tagName === 'pre') {
+              return <code className="hljs" {...props}>{children}</code>;
+            }
+            return (
+              <code
+                className="py-0.5 px-1.5 bg-bg-muted rounded text-sm font-mono text-fg-primary border border-border-default"
+                {...props}
+              >
+                {children}
+              </code>
+            );
           },
-          pre: ({ children, ...props }) => <CodeBlock {...props}>{children}</CodeBlock>,
+          // Code block wrapper — pass language label down
+          pre: ({ children, ...props }) => {
+            // Extract language from the child <code> className
+            const codeChild = children as React.ReactElement<{ className?: string }> | null;
+            const codeCls = codeChild?.props?.className ?? '';
+            const langMatch = codeCls.match(/language-(\w+)/);
+            return (
+              <CodeBlock data-language={langMatch?.[1]} {...props}>
+                {children}
+              </CodeBlock>
+            );
+          },
           blockquote: ({ ...props }) => (
             <blockquote
-              className="mb-4 pl-4 border-l-4 border-border-strong italic text-fg-secondary"
+              className="mb-4 pl-4 border-l-4 border-accent/50 bg-accent-soft/30 rounded-r-md py-2 italic text-fg-secondary"
               {...props}
             />
           ),
           table: ({ ...props }) => (
-            <div className="markdown-table-wrapper mb-4 overflow-x-auto">
-              <table className="markdown-table w-full border-collapse" {...props} />
+            <div className="mb-4 overflow-x-auto rounded-lg border border-border-default">
+              <table className="w-full border-collapse text-sm" {...props} />
             </div>
           ),
           thead: ({ ...props }) => (
             <thead className="bg-bg-secondary" {...props} />
           ),
           th: ({ ...props }) => (
-            <th className="px-3 py-2 text-left font-semibold text-fg-primary border border-border-strong" {...props} />
+            <th className="px-4 py-2.5 text-left font-semibold text-fg-primary border-b border-border-default" {...props} />
           ),
           td: ({ ...props }) => (
-            <td className="px-3 py-2 text-fg-secondary border border-border-strong" {...props} />
+            <td className="px-4 py-2.5 text-fg-secondary border-b border-border-default last:border-b-0" {...props} />
+          ),
+          tr: ({ ...props }) => (
+            <tr className="hover:bg-bg-secondary/50 transition-colors" {...props} />
           ),
           hr: ({ ...props }) => (
-            <hr className="my-6 border-border-strong" {...props} />
+            <hr className="my-6 border-border-default" {...props} />
           ),
           strong: ({ ...props }) => (
             <strong className="font-semibold text-fg-primary" {...props} />
@@ -179,9 +306,24 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           em: ({ ...props }) => (
             <em className="italic text-fg-secondary" {...props} />
           ),
+          // Images — responsive, rounded, with alt text fallback
+          img: ({ src, alt, ...props }) => (
+            <span className="block my-3">
+              <img
+                src={src}
+                alt={alt ?? ''}
+                loading="lazy"
+                className="max-w-full rounded-lg border border-border-default shadow-sm"
+                {...props}
+              />
+              {alt && (
+                <span className="block mt-1 text-xs text-fg-muted text-center italic">{alt}</span>
+              )}
+            </span>
+          ),
         }}
       >
-        {content}
+        {processedContent}
       </ReactMarkdown>
     </div>
   );

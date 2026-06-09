@@ -1,9 +1,5 @@
 .markdown-content {
-  line-height: 1.6;
-}
-
-.markdown-content p {
-  margin-bottom: 0.75rem;
+  line-height: 1.7;
 }
 
 .markdown-content p:last-child {
@@ -15,50 +11,51 @@
   font-family: var(--font-mono);
 }
 
-.markdown-content pre {
-  margin: 1rem 0;
-}
-
-.markdown-content pre code {
-  display: block;
-  padding: 1rem;
-  overflow-x: auto;
-}
-
-.markdown-content ul,
-.markdown-content ol {
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.markdown-content li {
-  margin-top: 0.25rem;
-}
-
+/* Tables — use design-system tokens, no hardcoded hex */
 .markdown-content table {
   border-collapse: collapse;
   width: 100%;
-  margin: 1rem 0;
 }
 
 .markdown-content th,
 .markdown-content td {
-  border: 1px solid #e5e7eb;
-  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--color-border-default);
 }
 
-.dark .markdown-content th,
-.dark .markdown-content td {
-  border-color: #4b5563;
+.markdown-content tr:last-child td {
+  border-bottom: none;
 }
 
+/* Blockquote */
 .markdown-content blockquote {
-  margin: 1rem 0;
-  padding-left: 1rem;
-  border-left: 4px solid #d1d5db;
-  font-style: italic;
+  margin: 0.75rem 0;
 }
 
-.dark .markdown-content blockquote {
-  border-left-color: #4b5563;
+/* Lists — consistent spacing */
+.markdown-content ul,
+.markdown-content ol {
+  padding-left: 1.25rem;
+}
+
+.markdown-content li + .markdown-content li {
+  margin-top: 0.25rem;
+}
+
+/* Code blocks — handled entirely by the CodeBlock component,
+   but reset browser pre defaults just in case */
+.markdown-content pre {
+  margin: 0;
+}
+
+/* Inline code border inherits from component but we reinforce here */
+.markdown-content :not(pre) > code {
+  font-size: 0.85em;
+}
+
+@media print {
+  .markdown-content pre,
+  .markdown-content code {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
 }
