@@ -7,6 +7,8 @@ import {
   FileSpreadsheet,
   File as FileIcon,
   Trash2,
+  Download,
+  Copy,
 } from 'lucide-react';
 import { formatFileSize } from '../../lib/fileUtils';
 import { useFilePreviewStore } from '../../store/filePreviewStore';
@@ -20,6 +22,7 @@ interface FileRowProps {
   now: number;
   onExtend: (fileId: number) => Promise<void>;
   onDelete: (file: GlobalFile) => void;
+  onCopy: (file: GlobalFile) => void;
 }
 
 function renderFileIcon(mimeType: string | null) {
@@ -37,7 +40,7 @@ function renderFileIcon(mimeType: string | null) {
   return <FileText {...props} />;
 }
 
-export function FileRow({ file, now, onExtend, onDelete }: FileRowProps) {
+export function FileRow({ file, now, onExtend, onDelete, onCopy }: FileRowProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const setStoreSelectedFileId = useFilePreviewStore((s) => s.setSelectedFileId);
@@ -47,6 +50,11 @@ export function FileRow({ file, now, onExtend, onDelete }: FileRowProps) {
     navigate(`/chat/${file.sessionId}`);
     setStoreSelectedFileId(file.id);
     selectApplication('file_preview');
+  };
+
+  const handleDownload = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.open(`/api/sessions/${file.sessionId}/files/${file.id}/download`, '_blank');
   };
 
   return (
@@ -79,6 +87,22 @@ export function FileRow({ file, now, onExtend, onDelete }: FileRowProps) {
       </div>
 
       <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={handleDownload}
+          className="p-1.5 text-fg-secondary hover:bg-bg-secondary rounded"
+          title={t('fileManager.download')}
+        >
+          <Download className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onCopy(file)}
+          className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded"
+          title={t('fileManager.copyToChat')}
+        >
+          <Copy className="w-4 h-4" />
+        </button>
         <ExtendButton onExtend={() => onExtend(file.id)} />
         <button
           type="button"

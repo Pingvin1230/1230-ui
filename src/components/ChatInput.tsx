@@ -110,6 +110,38 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     return () => window.removeEventListener('chat:prefill', handler);
   }, []);
 
+  // Listen for add-file events from File Manager (copy file to current session)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const file = (e as CustomEvent<SessionFile>).detail;
+      // Add to attached files as already uploaded (ready status)
+      const localId = crypto.randomUUID();
+      setAttachedFiles((prev) => {
+        const remainingSlots = MAX_FILES_PER_MESSAGE - prev.length;
+        if (remainingSlots <= 0) {
+          setFileWarning(t('chat.tooManyFiles'));
+          return prev;
+        }
+        return [...prev, {
+          localId,
+          id: file.id,
+          filename: file.filename,
+          size: file.size,
+          path: file.path,
+          status: 'ready',
+        }];
+      });
+      // Also add to session files list
+      setSessionFiles((prev) => {
+        const next = [...prev, file];
+        onSessionFilesChange?.(next);
+        return next;
+      });
+    };
+    window.addEventListener('chat:addFile', handler);
+    return () => window.removeEventListener('chat:addFile', handler);
+  }, [t, onSessionFilesChange]);
+
   // Notify parent about attached files presence (for navigation guard)
   useEffect(() => {
     onAttachedFilesChange?.(attachedFiles.length > 0);

@@ -54,6 +54,7 @@ export interface GlobalFile {
   expiresAt: number | null;
   extendedCount: number;
   source: 'user' | 'agent';
+  path?: string;
 }
 
 export interface FileStats {
@@ -694,6 +695,17 @@ export const api = {
     const res = await fetch(`${API_BASE}/api/files/${fileId}/extend`, { method: 'PATCH' });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || i18n.t('api.failedToExtendFile'));
+    return data;
+  },
+
+  async copyFile(fileId: number, targetSessionId: string): Promise<GlobalFile> {
+    const res = await fetch(`${API_BASE}/api/files/${fileId}/copy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetSessionId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || i18n.t('api.failedToCopyFile'));
     return data;
   },
 

@@ -325,6 +325,7 @@
     "failedToDeleteFile": "Failed to delete file",
     "failedToListFiles": "Failed to list files",
     "failedToExtendFile": "Failed to extend file",
+    "failedToCopyFile": "Failed to copy file",
     "failedToFetchApplications": "Failed to fetch applications",
     "failedToUpdateApplication": "Failed to update application"
   },
@@ -499,6 +500,12 @@
     },
     "search": "Search files...",
     "extend": "Extend by 30 days",
+    "download": "Download file",
+    "copy": "Copy to session",
+    "copyToChat": "Copy to chat",
+    "copyToSession": "Copy to session",
+    "selectSession": "Select session",
+    "copySuccess": "File copied successfully",
     "delete": "Delete file",
     "deleteConfirm": {
       "title": "Delete file?",

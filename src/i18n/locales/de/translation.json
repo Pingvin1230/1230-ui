@@ -325,6 +325,7 @@
     "failedToDeleteFile": "Datei konnte nicht gelöscht werden",
     "failedToListFiles": "Dateien konnten nicht aufgelistet werden",
     "failedToExtendFile": "Dateiverlängerung fehlgeschlagen",
+    "failedToCopyFile": "Dateikopie fehlgeschlagen",
     "failedToFetchApplications": "Anwendungen konnten nicht geladen werden",
     "failedToUpdateApplication": "Anwendung konnte nicht aktualisiert werden"
   },
@@ -499,6 +500,12 @@
     },
     "search": "Dateien suchen...",
     "extend": "Um 30 Tage verlängern",
+    "download": "Datei herunterladen",
+    "copy": "In Sitzung kopieren",
+    "copyToChat": "In Chat",
+    "copyToSession": "In Sitzung kopieren",
+    "selectSession": "Sitzung auswählen",
+    "copySuccess": "Datei erfolgreich kopiert",
     "delete": "Datei löschen",
     "deleteConfirm": {
       "title": "Datei löschen?",

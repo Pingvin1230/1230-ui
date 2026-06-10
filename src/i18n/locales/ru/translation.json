@@ -330,6 +330,7 @@
     "failedToDeleteFile": "Не удалось удалить файл",
     "failedToListFiles": "Не удалось получить список файлов",
     "failedToExtendFile": "Не удалось продлить срок файла",
+    "failedToCopyFile": "Не удалось скопировать файл",
     "failedToFetchApplications": "Не удалось загрузить приложения",
     "failedToUpdateApplication": "Не удалось обновить приложение"
   },
@@ -505,6 +506,12 @@
     },
     "search": "Поиск файлов...",
     "extend": "Продлить на 30 дней",
+    "download": "Скачать файл",
+    "copy": "Копировать в сессию",
+    "copyToChat": "В чат",
+    "copyToSession": "Копировать в сессию",
+    "selectSession": "Выберите сессию",
+    "copySuccess": "Файл успешно скопирован",
     "delete": "Удалить файл",
     "deleteConfirm": {
       "title": "Удалить файл?",

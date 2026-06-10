@@ -21,6 +21,7 @@ interface FileListProps {
   onFilterChange: (value: FilterKey) => void;
   onExtend: (fileId: number) => Promise<void>;
   onDelete: (file: GlobalFile) => void;
+  onCopy: (file: GlobalFile) => void;
 }
 
 const IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
@@ -46,6 +47,7 @@ export function FileList({
   onFilterChange,
   onExtend,
   onDelete,
+  onCopy,
 }: FileListProps) {
   const { t } = useTranslation();
 
@@ -157,6 +159,7 @@ export function FileList({
               now={now}
               onExtend={onExtend}
               onDelete={onDelete}
+              onCopy={onCopy}
             />
           ))}
         </div>

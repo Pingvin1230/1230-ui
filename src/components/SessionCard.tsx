@@ -41,6 +41,8 @@ export function SessionCard({
     disabled: bulkMode || !isMobile,
   });
 
+  const { ref: swipeRef, translateX: swipeTranslateX, swiping: swipeSwiping } = swipe;
+
   const handleClick = (e: React.MouseEvent) => {
     if (longPressHandledRef.current) {
       e.preventDefault();
@@ -78,9 +80,9 @@ export function SessionCard({
       )}
 
       <div
-        ref={swipe.ref}
-        className={`group transform-gpu ${swipe.swiping ? '' : 'transition-transform duration-200 ease-out'}`}
-        style={{ transform: `translateX(${swipe.translateX}px)` }}
+        ref={swipeRef}
+        className={`group transform-gpu ${swipeSwiping ? '' : 'transition-transform duration-200 ease-out'}`}
+        style={{ transform: `translateX(${swipeTranslateX}px)` }}
       >
         <div className={`flex items-center border-b border-border-default transition-colors ${
           isSelected ? 'bg-bg-secondary' : 'bg-bg-primary hover:bg-bg-secondary'

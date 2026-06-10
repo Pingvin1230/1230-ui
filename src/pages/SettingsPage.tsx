@@ -193,7 +193,6 @@ export function SettingsPage() {
   }, [t]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data-fetch on mount; setState inside async callback, not directly in effect body
     loadProviders();
     loadModels();
   }, [loadProviders, loadModels]);

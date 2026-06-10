@@ -5,11 +5,13 @@
  *   GET    /api/files              — list all files across all sessions
  *   PATCH  /api/files/:fileId/extend — extend file expiration
  *   DELETE /api/files/:fileId      — delete file globally (disk + DB)
+ *   POST   /api/files/:fileId/copy — copy file to another session
  */
 
 import { Router } from 'express';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { uiDb, db } from '../db/connections.js';
 import config from '../config.js';
@@ -176,6 +178,111 @@ router.delete('/:fileId', (req, res) => {
   } catch (err) {
     console.error('Failed to delete global file:', err);
     res.status(500).json({ error: 'Failed to delete file' });
+  }
+});
+
+// ── POST /api/files/:fileId/copy ────────────────────────────────────────────
+// Copy a file from one session to another.
+// Creates a physical copy of the file and a new DB record.
+router.post('/:fileId/copy', (req, res) => {
+  const fileId = parseInt(req.params.fileId, 10);
+  const { targetSessionId } = req.body;
+
+  if (!Number.isInteger(fileId)) {
+    return res.status(400).json({ error: 'fileId must be an integer' });
+  }
+
+  if (!targetSessionId) {
+    return res.status(400).json({ error: 'targetSessionId is required' });
+  }
+
+  // Get source file
+  const sourceFile = uiDb.prepare('SELECT * FROM session_files WHERE id = ?').get(fileId);
+  if (!sourceFile) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+
+  // Check target session exists
+  const targetSession = db.prepare('SELECT id FROM sessions WHERE id = ?').get(targetSessionId);
+  if (!targetSession) {
+    return res.status(404).json({ error: 'Target session not found' });
+  }
+
+  // Determine source file path
+  let sourcePath;
+  if (sourceFile.source === 'agent') {
+    sourcePath = sourceFile.stored_name;
+  } else {
+    sourcePath = path.join(uploadsDir, sourceFile.session_id, sourceFile.stored_name);
+  }
+
+  // Check source file exists on disk
+  if (!fs.existsSync(sourcePath)) {
+    return res.status(404).json({ error: 'Source file not found on disk' });
+  }
+
+  // Generate new stored name
+  const ext = path.extname(sourceFile.stored_name).toLowerCase();
+  const newStoredName = `${crypto.randomUUID()}${ext}`;
+
+  // Create target directory
+  const targetDir = path.join(uploadsDir, targetSessionId);
+  try {
+    fs.mkdirSync(targetDir, { recursive: true });
+  } catch (err) {
+    console.error('Failed to create target directory:', err);
+    return res.status(500).json({ error: 'Failed to create upload directory' });
+  }
+
+  const targetPath = path.join(targetDir, newStoredName);
+
+  // Copy file
+  try {
+    fs.copyFileSync(sourcePath, targetPath);
+  } catch (err) {
+    console.error('Failed to copy file:', err);
+    return res.status(500).json({ error: 'Failed to copy file' });
+  }
+
+  // Calculate expiration
+  const now = Date.now();
+  const expiresAt = config.fileRetentionDays > 0
+    ? now + (config.fileRetentionDays * 24 * 60 * 60 * 1000)
+    : null;
+
+  // Create new DB record
+  try {
+    const result = uiDb.prepare(`
+      INSERT INTO session_files (session_id, filename, stored_name, mime_type, size, uploaded_at, expires_at, source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'user')
+    `).run(
+      targetSessionId,
+      sourceFile.filename,
+      newStoredName,
+      sourceFile.mime_type,
+      sourceFile.size,
+      now,
+      expiresAt
+    );
+
+    const newFile = uiDb.prepare('SELECT * FROM session_files WHERE id = ?').get(result.lastInsertRowid);
+
+    res.status(201).json({
+      id: newFile.id,
+      sessionId: newFile.session_id,
+      filename: newFile.filename,
+      mimeType: newFile.mime_type,
+      size: newFile.size,
+      uploadedAt: newFile.uploaded_at,
+      expiresAt: newFile.expires_at,
+      source: newFile.source,
+      path: targetPath,
+    });
+  } catch (err) {
+    console.error('Failed to create file record:', err);
+    // Clean up copied file
+    try { fs.unlinkSync(targetPath); } catch {}
+    return res.status(500).json({ error: 'Failed to create file record' });
   }
 });
 

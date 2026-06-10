@@ -325,6 +325,7 @@
     "failedToDeleteFile": "Error al eliminar el archivo",
     "failedToListFiles": "Error al listar los archivos",
     "failedToExtendFile": "Error al extender el archivo",
+    "failedToCopyFile": "Error al copiar el archivo",
     "failedToFetchApplications": "Error al obtener las aplicaciones",
     "failedToUpdateApplication": "Error al actualizar la aplicación"
   },
@@ -499,6 +500,12 @@
     },
     "search": "Buscar archivos...",
     "extend": "Extender 30 días",
+    "download": "Descargar archivo",
+    "copy": "Copiar a sesión",
+    "copyToChat": "Al chat",
+    "copyToSession": "Copiar a sesión",
+    "selectSession": "Seleccionar sesión",
+    "copySuccess": "Archivo copiado correctamente",
     "delete": "Eliminar archivo",
     "deleteConfirm": {
       "title": "¿Eliminar archivo?",

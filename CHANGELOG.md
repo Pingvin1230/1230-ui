@@ -67,10 +67,11 @@ Global file management across all sessions. View all files, check disk usage, ex
 
 #### Backend — Global files API
 
-- **`routes/globalFiles.js` (new)** — three endpoints mounted at `/api/files`:
+- **`routes/globalFiles.js` (new)** — four endpoints mounted at `/api/files`:
   - `GET /api/files` — list all files across all sessions. Joins with `sessions` table to get session titles. Returns `{ files: GlobalFile[], stats: { totalFiles, totalSize, expiringSoon } }`. Session title fallback: uses first user message (preview) if title is null, truncated to 70 chars. Shows "Deleted session" if session no longer exists.
   - `PATCH /api/files/:fileId/extend` — extends file expiration by `fileRetentionDays`. Increments `extended_count`. Returns `{ success: true, expiresAt: number }`.
   - `DELETE /api/files/:fileId` — deletes file globally (from disk + DB). Handles both user and agent files.
+  - `POST /api/files/:fileId/copy` — copies file to target session. Creates physical copy on disk and new DB record. Returns new file object with `path` for immediate use in chat.
 - **`app.js`** — mounts `globalFilesRouter` at `/api/files`.
 - **`db/seed.js`** — `seedStarterApplications()` now seeds `file_manager` application (FolderOpen icon, enabled, sort_order 1) alongside `file_preview`.
 
@@ -79,7 +80,7 @@ Global file management across all sessions. View all files, check disk usage, ex
 - **`src/applications/file-manager/FileManagerApp.tsx` (new)** — main component registered as `file_manager` in the application registry. Fetches all files via `api.getGlobalFiles()`, manages sort/filter/search state, renders stats bar and file list.
 - **`src/applications/file-manager/FileStatsBar.tsx` (new)** — top bar showing total files count, total size (formatted), and "expiring soon" count (files expiring within 7 days, highlighted in orange).
 - **`src/applications/file-manager/FileList.tsx` (new)** — sortable and filterable file list with search. Controls: sort dropdown (name/date/size/expires), order toggle (asc/desc), filter dropdown (all/expiring/images/code/documents), search input.
-- **`src/applications/file-manager/FileRow.tsx` (new)** — single file row with icon, filename, session title, size, expiration badge, and action buttons. Click navigates to session and opens File Preview app with the selected file.
+- **`src/applications/file-manager/FileRow.tsx` (new)** — single file row with icon, filename, session title, size, expiration badge, and action buttons. Click navigates to session and opens File Preview app with the selected file. Action buttons: Download (gray), Copy to chat (green), Extend (blue), Delete (red).
 - **`src/applications/file-manager/ExpirationBadge.tsx` (new)** — color-coded expiration indicator:
   - 🟢 Green (> 14 days): "15 days left"
   - 🟡 Yellow (7-14 days): "10 days left"
@@ -93,13 +94,15 @@ Global file management across all sessions. View all files, check disk usage, ex
   - `getGlobalFiles(params?)` — fetches all files with optional sort/order/filter/search params.
   - `extendFile(fileId)` — extends file expiration.
   - `deleteGlobalFile(fileId)` — deletes file globally.
+  - `copyFile(fileId, targetSessionId)` — copies file to target session, returns new file with `path`.
 - **New types** in `src/types/api.ts`:
-  - `GlobalFile` interface — `id`, `sessionId`, `sessionTitle`, `filename`, `mimeType`, `size`, `uploadedAt`, `expiresAt`, `extendedCount`, `source`.
+  - `GlobalFile` interface — `id`, `sessionId`, `sessionTitle`, `filename`, `mimeType`, `size`, `uploadedAt`, `expiresAt`, `extendedCount`, `source`, `path`.
   - `FileStats` interface — `totalFiles`, `totalSize`, `expiringSoon`.
+- **Integration with ChatInput** — `chat:addFile` custom event allows File Manager to add copied files directly to the chat input area. Files appear as attached and can be sent to the agent immediately.
 
-#### i18n — 20 keys × 4 languages
+#### i18n — 25 keys × 4 languages
 
-`fileManager.title`, `fileManager.stats.files`, `fileManager.stats.size`, `fileManager.stats.expiringSoon`, `fileManager.sort.label`, `fileManager.sort.name`, `fileManager.sort.date`, `fileManager.sort.size`, `fileManager.sort.expires`, `fileManager.filter.label`, `fileManager.filter.all`, `fileManager.filter.expiring`, `fileManager.filter.images`, `fileManager.filter.code`, `fileManager.filter.documents`, `fileManager.search`, `fileManager.extend`, `fileManager.delete`, `fileManager.deleteConfirm.title`, `fileManager.deleteConfirm.message`, `fileManager.deleteConfirm.warning`, `fileManager.empty.noFiles`, `fileManager.empty.noFilesDesc`, `fileManager.empty.noMatch`, `fileManager.empty.noSearch`, `fileManager.expiration.expired`, `fileManager.expiration.today`, `fileManager.expiration.daysLeft`, `fileManager.expiration.hoursLeft`, `fileManager.expiration.never`, `fileManager.toast.extended`, `fileManager.toast.deleted`, `fileManager.toast.extendFailed`, `fileManager.toast.deleteFailed`, `fileManager.deletedSession`.
+`fileManager.title`, `fileManager.stats.files`, `fileManager.stats.size`, `fileManager.stats.expiringSoon`, `fileManager.sort.label`, `fileManager.sort.name`, `fileManager.sort.date`, `fileManager.sort.size`, `fileManager.sort.expires`, `fileManager.filter.label`, `fileManager.filter.all`, `fileManager.filter.expiring`, `fileManager.filter.images`, `fileManager.filter.code`, `fileManager.filter.documents`, `fileManager.search`, `fileManager.extend`, `fileManager.download`, `fileManager.copy`, `fileManager.copyToChat`, `fileManager.copyToSession`, `fileManager.selectSession`, `fileManager.copySuccess`, `fileManager.delete`, `fileManager.deleteConfirm.title`, `fileManager.deleteConfirm.message`, `fileManager.deleteConfirm.warning`, `fileManager.empty.noFiles`, `fileManager.empty.noFilesDesc`, `fileManager.empty.noMatch`, `fileManager.empty.noSearch`, `fileManager.expiration.expired`, `fileManager.expiration.today`, `fileManager.expiration.daysLeft`, `fileManager.expiration.hoursLeft`, `fileManager.expiration.never`, `fileManager.toast.extended`, `fileManager.toast.deleted`, `fileManager.toast.extendFailed`, `fileManager.toast.deleteFailed`, `fileManager.deletedSession`.
 
 All four locales: en, ru, es, de.
 

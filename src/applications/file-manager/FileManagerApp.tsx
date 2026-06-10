@@ -6,12 +6,13 @@ import type { GlobalFile } from '../../lib/api';
 import { FileStatsBar } from './FileStatsBar';
 import { FileList } from './FileList';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import type { ApplicationComponentProps } from '../types';
 
 type SortKey = 'name' | 'date' | 'size' | 'expires';
 type SortOrder = 'asc' | 'desc';
 type FilterKey = 'all' | 'expiring' | 'images' | 'code' | 'documents';
 
-export function FileManagerApp() {
+export function FileManagerApp({ sessionId }: ApplicationComponentProps) {
   const { t } = useTranslation();
   const [files, setFiles] = useState<GlobalFile[]>([]);
   const [stats, setStats] = useState({ totalFiles: 0, totalSize: 0, expiringSoon: 0 });
@@ -82,6 +83,19 @@ export function FileManagerApp() {
     setDeleteTarget(null);
   }, []);
 
+  const handleCopy = useCallback(async (file: GlobalFile) => {
+    if (!sessionId) return;
+    try {
+      const copiedFile = await api.copyFile(file.id, sessionId);
+      // Dispatch event to add file to ChatInput
+      window.dispatchEvent(new CustomEvent('chat:addFile', { detail: copiedFile }));
+      // Refresh files list to show the new copy
+      fetchFiles();
+    } catch {
+      // Error handled silently
+    }
+  }, [sessionId, fetchFiles]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -132,6 +146,7 @@ export function FileManagerApp() {
         onFilterChange={setFilter}
         onExtend={handleExtend}
         onDelete={handleDelete}
+        onCopy={handleCopy}
       />
       <DeleteConfirmModal
         file={deleteTarget}
