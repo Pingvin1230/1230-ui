@@ -23,6 +23,8 @@ import modelsRouter     from './routes/models.js';
 import assistantsRouter from './routes/assistants.js';
 import providersRouter  from './routes/providers.js';
 import likesRouter      from './routes/likes.js';
+import applicationsRouter from './routes/applications.js';
+import globalFilesRouter  from './routes/globalFiles.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -93,6 +95,8 @@ app.use('/api/models',      modelsRouter);
 app.use('/api/assistants',  assistantsRouter);
 app.use('/api/providers',   providersRouter);
 app.use('/api/like',        likesRouter);
+app.use('/api/applications', applicationsRouter);
+app.use('/api/files',        globalFilesRouter);
 
 // ── SPA fallback ───────────────────────────────────────────────────────────
 app.get('/{*path}', (req, res) => {

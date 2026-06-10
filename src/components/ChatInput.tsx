@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback, useMemo, forwardRef, useImperativeHandle, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Paperclip, X, FileText, Image as ImageIcon, AlertCircle, Loader2, Plus, ShieldAlert, Send, Square, FileStack, ChevronDown, User, Bot } from 'lucide-react';
+import { Paperclip, X, FileText, Image as ImageIcon, AlertCircle, Loader2, Plus, ShieldAlert, Send, Square } from 'lucide-react';
 import { api, type SessionFile } from '../lib/api';
 import { useChatInputStore } from '../store/chatInputStore';
+import { formatFileSize } from '../lib/fileUtils';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const MAX_FILES_PER_MESSAGE = 5;
@@ -23,13 +24,6 @@ function isAllowedFileType(name: string): boolean {
   return ALLOWED_FILE_EXTENSIONS.has(getFileExtension(name));
 }
 
-function formatFileSize(bytes: number): string {
-  if (!bytes) return '';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
 function getFileIcon(name: string) {
   const ext = getFileExtension(name);
   if (['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(ext)) return ImageIcon;
@@ -46,95 +40,7 @@ type AttachedFile = {
   error?: string;
 };
 
-function SessionFilesBar({ files }: { files: SessionFile[] }) {
-  const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
-  const userFiles = files.filter(f => f.source !== 'agent');
-  const agentFiles = files.filter(f => f.source === 'agent');
 
-  const label = t('chat.sessionFilesCount', {
-    count: files.length,
-    defaultValue_one: '{{count}} файл в сессии',
-    defaultValue_other: '{{count}} файлов в сессии',
-    defaultValue: `${files.length} ${files.length === 1 ? 'файл' : 'файлов'} в сессии`,
-  });
-
-  return (
-    <div className="mb-2 relative">
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        className={`flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg border transition-colors text-xs ${
-          open
-            ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-            : 'border-border-default bg-bg-secondary text-fg-secondary hover:border-blue-200 dark:hover:border-blue-800 hover:text-fg-primary'
-        }`}
-        aria-expanded={open}
-      >
-        <FileStack className="w-3.5 h-3.5 flex-shrink-0" />
-        <span className="flex-1 text-left truncate">{label}</span>
-        {/* Source breakdown badges */}
-        <span className="flex items-center gap-1.5 flex-shrink-0">
-          {userFiles.length > 0 && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
-              <User className="w-2.5 h-2.5" />
-              {userFiles.length}
-            </span>
-          )}
-          {agentFiles.length > 0 && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
-              <Bot className="w-2.5 h-2.5" />
-              {agentFiles.length}
-            </span>
-          )}
-        </span>
-        <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-
-      {open && (
-        <div className="absolute bottom-full mb-1 left-0 right-0 z-20 rounded-lg border border-border-default bg-bg-primary shadow-xl overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between px-3 py-2 bg-bg-secondary border-b border-border-default">
-            <span className="text-xs font-medium text-fg-secondary">{t('chat.sessionFilesTitle', { defaultValue: 'Файлы сессии' })}</span>
-            <button type="button" onClick={() => setOpen(false)} className="p-0.5 rounded text-fg-muted hover:text-fg-primary">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          {/* File list */}
-          <div className="max-h-48 overflow-y-auto py-1">
-            {files.map(file => {
-              const isAgent = file.source === 'agent';
-              const ext = file.filename.split('.').pop()?.toLowerCase() ?? '';
-              const isImage = ['png','jpg','jpeg','gif','webp'].includes(ext);
-              return (
-                <div key={file.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-bg-secondary transition-colors">
-                  {isImage
-                    ? <ImageIcon className="w-4 h-4 text-fg-muted flex-shrink-0" />
-                    : <FileText className="w-4 h-4 text-fg-muted flex-shrink-0" />
-                  }
-                  <span className="text-xs text-fg-primary truncate flex-1 min-w-0" title={file.filename}>
-                    {file.filename}
-                  </span>
-                  <span className="text-xs text-fg-muted flex-shrink-0">{formatFileSize(file.size)}</span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
-                    isAgent
-                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                      : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                  }`}>
-                    {isAgent
-                      ? t('chat.fileSourceAgent', { defaultValue: 'агент' })
-                      : t('chat.fileSourceUser', { defaultValue: 'вы' })
-                    }
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export interface ChatInputHandle {
   getAttachedFiles: () => Array<{ id?: number; path?: string; filename: string }>;
@@ -160,7 +66,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [fileWarning, setFileWarning] = useState<string | null>(null);
-  const [sessionFiles, setSessionFiles] = useState<SessionFile[]>([]);
+  const [, setSessionFiles] = useState<SessionFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dragCounterRef = useRef(0);
@@ -365,7 +271,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      className="relative"
+      className="relative min-h-[50px] flex flex-col justify-center border-t border-border-default bg-bg-primary"
     >
       {isDraggingFile && (
         <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-blue-500/10 dark:bg-blue-400/10 border-2 border-dashed border-blue-500 rounded-lg">
@@ -375,9 +281,9 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           </div>
         </div>
       )}
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto w-full px-3">
         {isSessionBlocked ? (
-          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+          <div className="py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <ShieldAlert className="w-5 h-5 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" />
               <div>
@@ -400,7 +306,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         ) : (
           <>
             {attachedFiles.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-2">
+              <div className="flex flex-wrap gap-2 pt-2">
                 {attachedFiles.map((file) => {
                   const Icon = file.status === 'uploading' ? Loader2
                     : file.status === 'error' ? AlertCircle
@@ -432,16 +338,11 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
               </div>
             )}
             {fileWarning && (
-              <div className="mb-2 text-xs text-amber-700 dark:text-amber-300">
+              <div className="pt-1 text-xs text-amber-700 dark:text-amber-300">
                 {fileWarning}
               </div>
             )}
-            {sessionFiles.length > 0 && (
-              <SessionFilesBar
-                files={sessionFiles}
-              />
-            )}
-            <div className="flex gap-2 items-end">
+            <div className="flex gap-2 items-center py-2">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -456,7 +357,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 disabled={sending}
                 aria-label={t('chat.attachFile')}
                 title={t('chat.attachFile')}
-                className="p-2 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg border border-border-default bg-bg-secondary text-fg-secondary hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
+                className="h-[34px] w-[34px] flex-shrink-0 inline-flex items-center justify-center rounded-lg border border-border-default bg-bg-secondary text-fg-secondary hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
               >
                 <Paperclip className="w-4 h-4" />
               </button>
@@ -466,7 +367,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 onChange={(e) => {
                   setInput(e.target.value);
                   e.target.style.height = 'auto';
-                  e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 180)}px`;
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
@@ -477,14 +378,14 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 placeholder={t('chat.typeMessage')}
                 disabled={sending}
                 rows={1}
-                className="flex-1 px-4 py-2 rounded-lg border border-border-default bg-bg-secondary text-fg-primary focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 resize-none overflow-y-auto"
+                className="flex-1 px-3 py-[7px] rounded-lg border border-border-default bg-bg-secondary text-fg-primary focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 resize-none overflow-y-auto leading-[20px]"
               />
               {sending ? (
                 <button
                   type="button"
                   onClick={onStop}
                   aria-label={t('chat.stopGenerating')}
-                  className="px-4 py-2 min-h-[44px] inline-flex items-center gap-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
+                  className="h-[34px] flex-shrink-0 px-3 inline-flex items-center gap-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors text-sm"
                 >
                   <Square className="w-3.5 h-3.5 fill-current" />
                   {t('common.stop')}
@@ -495,7 +396,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                   onClick={handleSend}
                   disabled={!input.trim() && !attachedFiles.some((f) => f.status === 'ready')}
                   aria-label={t('chat.sendMessage')}
-                  className="px-4 py-2 min-h-[44px] inline-flex items-center gap-1.5 rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="h-[34px] flex-shrink-0 px-3 inline-flex items-center gap-1.5 rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
                 >
                   <Send className="w-3.5 h-3.5" />
                   {t('common.send')}

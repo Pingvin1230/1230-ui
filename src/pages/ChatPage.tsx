@@ -4,14 +4,14 @@ import { useTranslation } from 'react-i18next';
 import { api, type ChatMessage, type ChatError } from '../lib/api';
 import type { Message, Session } from '../types/api';
 import MarkdownRenderer from '../components/MarkdownRenderer';
-import ToolCall from '../components/ToolCall';
+
 import { AgentFileGroup } from '../components/AgentFileCard';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { Copy, Check, RefreshCw, Bot, User, X, ChevronRight, Trash2, Pencil, Loader2, Square, ChevronDown, AlertCircle, Paperclip } from 'lucide-react';
+import { Copy, Check, ChevronDown, AlertCircle } from 'lucide-react';
 import { useChatInputStore } from '../store/chatInputStore';
 import type { ChatInputHandle } from '../components/ChatInput';
 import { NoMessagesIllustration } from '../assets/illustrations';
-import { formatTimeAgo, formatFullDateTime } from '../lib/time';
+
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useNotifications } from '../hooks/useNotifications';
 import { useNotificationsStore } from '../store/notificationsStore';
@@ -29,11 +29,11 @@ export function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
-  const [processStatus, setProcessStatus] = useState<'thinking' | 'generating' | 'executing_tool'>('thinking');
-  const [executingTool, setExecutingTool] = useState<string | null>(null);
+  const [, setProcessStatus] = useState<'thinking' | 'generating' | 'executing_tool'>('thinking');
+  const [, setExecutingTool] = useState<string | null>(null);
   const [activeToolCalls, setActiveToolCalls] = useState<Map<string, { toolName: string; label?: string }>>(new Map());
   const [completedToolCalls, setCompletedToolCalls] = useState<Array<{ id: string; toolName: string; label?: string }>>([]);
-  const [showToolCallHistory, setShowToolCallHistory] = useState(false);
+
   const [streamingContent, setStreamingContent] = useState('');
   const [error, setError] = useState<ChatError | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -55,27 +55,61 @@ export function ChatPage() {
   const setChatActive = useChatInputStore((s) => s.setActiveSession);
   const setChatSending = useChatInputStore((s) => s.setSending);
   const setChatBlocked = useChatInputStore((s) => s.setSessionBlocked);
+  const setNavMeta = useChatInputStore((s) => s.setNavSessionMeta);
+  const setSessionActions = useChatInputStore((s) => s.setSessionActions);
   const inputHasText = useChatInputStore((s) => s.hasAttachedFiles);
-  // #35: track session file count for the header indicator
-  const sessionFiles = useChatInputStore((s) => s.sessionFiles);
-  const sessionFileCount = sessionFiles?.length ?? 0;
 
   useEffect(() => {
     setChatActive(id ?? null);
-    return () => setChatActive(null);
-  }, [id, setChatActive]);
+    return () => {
+      setChatActive(null);
+      setNavMeta(null);
+      setSessionActions(null);
+    };
+  }, [id, setChatActive, setNavMeta, setSessionActions]);
 
   useEffect(() => { setChatSending(sending); }, [sending, setChatSending]);
   useEffect(() => { setChatBlocked(isSessionBlocked); }, [isSessionBlocked, setChatBlocked]);
+  // Sync session metadata to navbar store whenever session loads or title changes
+  useEffect(() => {
+    if (!session) return;
+    setNavMeta({
+      title: session.title,
+      model: session.model,
+      assistantName: session.assistant?.name ?? null,
+      assistantIcon: session.assistant?.icon ?? null,
+    });
+  }, [session, setNavMeta]);
+
+  // Register session actions for Navbar to invoke
+  useEffect(() => {
+    setSessionActions({
+      onStartEditTitle: () => {
+        // Navbar handles its own edit state; this is a no-op placeholder
+      },
+      onSaveTitle: async (title: string) => {
+        if (!id || !title.trim()) return;
+        try {
+          const updated = await api.updateSessionTitle(id, title.trim());
+          setSession(updated);
+          setNavMeta({
+            title: updated.title,
+            model: updated.model,
+            assistantName: updated.assistant?.name ?? null,
+            assistantIcon: updated.assistant?.icon ?? null,
+          });
+        } catch (err) {
+          console.error('Failed to update title:', err);
+        }
+      },
+      onDeleteSession: handleDeleteSession,
+      onStop: handleStop,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, setSessionActions]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<number | null>(null);
   const [retryTrigger, setRetryTrigger] = useState(0);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [editingTitle, setEditingTitle] = useState('');
-  const [isSavingTitle, setIsSavingTitle] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const titleInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   // ChatInput is rendered by Layout (sibling of MobileNav). We reach it via
@@ -194,7 +228,6 @@ export function ChatPage() {
   async function handleDeleteSession() {
     if (!id) return;
     try {
-      setIsDeleting(true);
       await api.deleteSession(id);
       navigate('/sessions');
     } catch (err) {
@@ -204,32 +237,7 @@ export function ChatPage() {
         message: t('chat.failedToDeleteSession'),
         retryable: false,
       });
-      setIsDeleting(false);
-      setConfirmDelete(false);
     }
-  }
-
-  async function handleSaveTitle() {
-    if (!id || !editingTitle.trim()) {
-      setIsEditingTitle(false);
-      return;
-    }
-    try {
-      setIsSavingTitle(true);
-      const updatedSession = await api.updateSessionTitle(id, editingTitle.trim());
-      setSession(updatedSession);
-      setIsEditingTitle(false);
-    } catch (err) {
-      console.error('Failed to update title:', err);
-    } finally {
-      setIsSavingTitle(false);
-    }
-  }
-
-  function handleStartEditTitle() {
-    setEditingTitle(session?.title || '');
-    setIsEditingTitle(true);
-    setTimeout(() => titleInputRef.current?.focus(), 0);
   }
 
   const locationState = location.state as { initialMessage?: string } | null;
@@ -419,7 +427,7 @@ export function ChatPage() {
         setIsWaitingForResponse(false);
         setActiveToolCalls(new Map());
         setCompletedToolCalls([]);
-        setShowToolCallHistory(false);
+
         setExecutingTool(null);
         const latencyMs = streamStartedAtRef.current ? Date.now() - streamStartedAtRef.current : undefined;
         streamStartedAtRef.current = null;
@@ -572,140 +580,10 @@ export function ChatPage() {
 
   return (
     <div ref={scrollContainerRef} className="flex-1 min-h-0 flex flex-col relative overflow-y-auto">
-      <div className="px-3 sm:px-4 py-3 border-b border-border-default bg-bg-primary">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <nav className="flex items-center gap-1.5 min-w-0 flex-1 basis-full sm:basis-auto" aria-label="Breadcrumb">
-            <Link
-              to="/sessions"
-              className="text-sm text-fg-muted hover:text-blue-600 dark:hover:text-blue-400 flex-shrink-0"
-            >
-              {t('chat.breadcrumbsSessions')}
-            </Link>
-            <ChevronRight className="w-3.5 h-3.5 text-fg-muted flex-shrink-0" />
-
-            {isEditingTitle ? (
-              <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                <input
-                  ref={titleInputRef}
-                  type="text"
-                  value={editingTitle}
-                  onChange={(e) => setEditingTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveTitle();
-                    if (e.key === 'Escape') setIsEditingTitle(false);
-                  }}
-                  disabled={isSavingTitle}
-                  className="text-base md:text-lg font-semibold text-fg-primary bg-transparent border-b-2 border-blue-500 outline-none min-w-0 flex-1 disabled:opacity-50"
-                  placeholder={t('chat.sessionTitlePlaceholder')}
-                />
-                <button
-                  type="button"
-                  onClick={handleSaveTitle}
-                  disabled={isSavingTitle || !editingTitle.trim()}
-                  className="p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 flex-shrink-0"
-                  aria-label={t('chat.saveTitle')}
-                >
-                  {isSavingTitle ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsEditingTitle(false)}
-                  disabled={isSavingTitle}
-                  className="p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-fg-muted hover:bg-bg-secondary disabled:opacity-50 flex-shrink-0"
-                  aria-label={t('chat.cancelEditing')}
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <>
-                <h1 className="text-base md:text-lg font-semibold text-fg-primary truncate min-w-0">
-                  {session?.title || t('common.session')}
-                </h1>
-                <button
-                  type="button"
-                  onClick={handleStartEditTitle}
-                  className="p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-fg-muted hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex-shrink-0"
-                  aria-label={t('chat.editTitle')}
-                  title={t('chat.editTitle')}
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-              </>
-            )}
-          </nav>
-
-          <div className="flex items-center gap-1 flex-shrink-0 ml-auto sm:ml-0">
-            {/* Stop button in header — visible during generation so user doesn't need to scroll down */}
-            {sending && (
-              <button
-                type="button"
-                onClick={handleStop}
-                className="flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-medium transition-colors"
-                aria-label={t('chat.stopGenerating')}
-              >
-                <Square className="w-3 h-3 fill-current" />
-                {t('common.stop')}
-              </button>
-            )}
-            {confirmDelete ? (
-              <>
-                <button
-                  type="button"
-                  onClick={handleDeleteSession}
-                  disabled={isDeleting}
-                  className="px-3 py-2 min-h-[44px] bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors disabled:opacity-50 flex items-center gap-1"
-                >
-                  {isDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                  {t('chat.deleteConfirm')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmDelete(false)}
-                  disabled={isDeleting}
-                  className="px-3 py-2 min-h-[44px] bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-fg-primary text-sm rounded transition-colors disabled:opacity-50"
-                >
-                  {t('common.cancel')}
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(true)}
-                disabled={isDeleting}
-                className="p-1.5 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded text-fg-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
-                aria-label={t('chat.deleteSession')}
-                title={t('chat.deleteSession')}
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2 text-sm text-fg-muted mt-1 flex-wrap">
-          {session?.assistant && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-bg-secondary text-fg-secondary">
-              {session.assistant.icon && <span aria-hidden="true">{session.assistant.icon}</span>}
-              <span className="truncate max-w-[120px]">{session.assistant.name}</span>
-            </span>
-          )}
-          <span>{session?.model}</span>
-          {/* #35: file count indicator */}
-          {sessionFileCount > 0 && (
-            <span
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-bg-secondary text-fg-secondary"
-              title={t('chat.sessionFilesBar', { count: sessionFileCount })}
-            >
-              <Paperclip className="w-3 h-3" />
-              {sessionFileCount}
-            </span>
-          )}
-        </div>
-      </div>
 
       <div>
-        <div className="max-w-4xl mx-auto p-3 sm:p-4 space-y-3">
-          {messages.length === 0 && (
+          <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 space-y-3">
+            {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <NoMessagesIllustration className="w-20 h-20 mb-4 text-fg-muted" />
               <h2 className="text-lg font-semibold text-fg-primary mb-1">
@@ -734,188 +612,160 @@ export function ChatPage() {
               </div>
             </div>
           )}
-          {messages.map((msg) => {
-            if (msg.role === 'tool' && msg.toolName) {
-              return (
-                <ToolCall
-                  key={msg.id}
-                  toolName={msg.toolName}
-                  content={msg.content || ''}
-                  timestamp={msg.timestamp}
-                />
-              );
-            }
+          {(() => {
+            const items: React.ReactNode[] = [];
 
-            if (msg.role === 'assistant' && (!msg.content || msg.content.trim() === '') && (!msg.agentFiles || msg.agentFiles.length === 0)) {
-              return null;
-            }
+            // Split messages into turn-blocks: each block starts with a user message
+            // (or the implicit first turn). All tool calls within a block are
+            // collected and rendered as a single collapsible row before the
+            // final assistant message of that block.
+            type Block = { user: typeof messages[0] | null; tools: typeof messages; assistant: typeof messages[0] | null };
+            const blocks: Block[] = [];
+            let cur: Block = { user: null, tools: [], assistant: null };
 
-            if (msg.role === 'user') {
-              return (
-                <div key={msg.id} className="flex flex-row-reverse gap-3 group">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-700 dark:text-blue-300">
-                    <User className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0 relative rounded-lg p-3 sm:p-4 pb-2 bg-bg-secondary border-2 border-blue-500 text-fg-primary">
-                    <MarkdownRenderer content={msg.content || ''} className="user-message" />
-                    <div className="flex items-center justify-between mt-1.5">
-                      <div className="text-xs text-fg-muted" title={formatFullDateTime(msg.timestamp)}>
-                        {formatTimeAgo(msg.timestamp)}
+            for (const msg of messages) {
+              if (msg.role === 'user') {
+                if (cur.user || cur.tools.length || cur.assistant) blocks.push(cur);
+                cur = { user: msg, tools: [], assistant: null };
+              } else if (msg.role === 'tool') {
+                cur.tools.push(msg);
+              } else if (msg.role === 'assistant') {
+                if (cur.assistant) {
+                  // intermediate empty assistant — skip
+                  if (!cur.assistant.content?.trim() && !cur.assistant.agentFiles?.length) {
+                    // discard
+                  } else {
+                    blocks.push(cur);
+                    cur = { user: null, tools: [], assistant: msg };
+                    continue;
+                  }
+                }
+                cur.assistant = msg;
+              }
+            }
+            blocks.push(cur);
+
+            for (const block of blocks) {
+              // User bubble
+              if (block.user) {
+                const m = block.user;
+                items.push(
+                  <div key={m.id} className="flex justify-end group">
+                    <div className="max-w-[75%] min-w-0">
+                      <div className="px-3 py-2 rounded-2xl rounded-tr-sm bg-white dark:bg-gray-800 text-fg-primary text-sm shadow-sm">
+                        <MarkdownRenderer content={m.content || ''} className="user-message" />
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleCopyMessage(msg.id, msg.content || '')}
-                        aria-label={copiedMessageId === msg.id ? t('chat.messageCopied') : t('chat.copyMessage')}
-                        title={copiedMessageId === msg.id ? t('chat.messageCopied') : t('chat.copyMessage')}
-                        className="p-1 inline-flex items-center justify-center rounded text-fg-muted opacity-60 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 transition-opacity hover:bg-bg-secondary"
-                      >
-                        {copiedMessageId === msg.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
+                      <div className="flex justify-end mt-1 px-1">
+                        <button type="button" onClick={() => handleCopyMessage(m.id, m.content || '')}
+                          aria-label={copiedMessageId === m.id ? t('chat.messageCopied') : t('chat.copyMessage')}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md bg-bg-secondary text-fg-muted hover:text-fg-primary">
+                          {copiedMessageId === m.id ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            }
+                );
+              }
 
-            return (
-              <div key={msg.id} className="flex gap-3 group">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-bg-muted flex items-center justify-center text-fg-secondary">
-                  <Bot className="w-4 h-4" />
-                </div>
-                <div className="flex-1 min-w-0 relative rounded-lg p-3 sm:p-4 pb-2 bg-bg-primary border border-border-default text-fg-primary">
-                  <MarkdownRenderer content={msg.content || ''} className="assistant-message" />
-                  {msg.agentFiles && msg.agentFiles.length > 0 && id && (
-                    <div className="mt-2 space-y-2">
-                      <AgentFileGroup files={msg.agentFiles} sessionId={id} />
+              // All tool calls for this turn — one collapsed row
+              if (block.tools.length > 0) {
+                const groupKey = `tool-group-${block.tools[0].id}`;
+                items.push(
+                  <details key={groupKey} className="group">
+                    <summary className="flex items-center gap-1.5 cursor-pointer list-none text-xs text-fg-muted hover:text-fg-secondary transition-colors w-fit">
+                      <svg className="w-3 h-3 transition-transform group-open:rotate-90 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                      {t('chat.completedTools', { count: block.tools.length })}
+                    </summary>
+                    <div className="mt-1 ml-4 space-y-0.5">
+                      {block.tools.map(tc => (
+                        <div key={tc.id} className="flex items-center gap-1.5 text-xs text-fg-muted">
+                          <Check className="w-3 h-3 text-green-500 flex-shrink-0" />
+                          <span className="font-mono">{tc.toolName}</span>
+                        </div>
+                      ))}
                     </div>
-                  )}
-                  <div className="flex items-center justify-between mt-2 gap-2">
-                    {/* Timestamp — always visible. Latency/tokens hidden until hover */}
-                    <div className="flex items-center gap-2 text-xs text-fg-muted min-w-0">
-                      <span title={formatFullDateTime(msg.timestamp)} className="flex-shrink-0">
-                        {formatTimeAgo(msg.timestamp)}
-                      </span>
-                      {msg.latencyMs !== undefined && (
-                        <span className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                          · {(msg.latencyMs / 1000).toFixed(1)}s
-                          {msg.tokenCount !== undefined && ` · ${msg.tokenCount} tok`}
-                        </span>
+                  </details>
+                );
+              }
+
+              // Assistant message
+              if (block.assistant) {
+                const m = block.assistant;
+                if (m.content?.trim() || m.agentFiles?.length) {
+                  items.push(
+                    <div key={m.id} className="group">
+                      <div className="text-sm text-fg-primary">
+                        <MarkdownRenderer content={m.content || ''} className="assistant-message" />
+                      </div>
+                      {m.agentFiles && m.agentFiles.length > 0 && id && (
+                        <div className="mt-2 space-y-1">
+                          <AgentFileGroup files={m.agentFiles} sessionId={id} />
+                        </div>
                       )}
+                      <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {m.latencyMs !== undefined && (
+                          <span className="text-xs text-fg-muted mr-1">{(m.latencyMs / 1000).toFixed(1)}s</span>
+                        )}
+                        <button type="button" onClick={() => handleCopyMessage(m.id, m.content || '')}
+                          aria-label={copiedMessageId === m.id ? t('chat.messageCopied') : t('chat.copyMessage')}
+                          className="p-1 rounded-md bg-bg-secondary text-fg-muted hover:text-fg-primary transition-colors">
+                          {copiedMessageId === m.id ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+                        </button>
+                      </div>
                     </div>
-                    {/* Action buttons: visible on mobile, hover-only on desktop */}
-                    <div className="flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity flex-shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleCopyMessage(msg.id, msg.content || '')}
-                        aria-label={copiedMessageId === msg.id ? t('chat.messageCopied') : t('chat.copyMessage')}
-                        title={copiedMessageId === msg.id ? t('chat.messageCopied') : t('chat.copyMessage')}
-                        className="p-1.5 inline-flex items-center justify-center rounded text-fg-muted hover:bg-bg-secondary hover:text-fg-primary transition-colors"
-                      >
-                        {copiedMessageId === msg.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleRetry}
-                        disabled={sending}
-                        aria-label={t('chat.regenerateResponse')}
-                        title={t('chat.regenerateResponse')}
-                        className="p-1.5 inline-flex items-center justify-center rounded text-fg-muted hover:bg-bg-secondary hover:text-fg-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                  );
+                }
+              }
+            }
+            return items;
+          })()}
 
           {activeToolCalls.size > 0 && (
-            <div key="active-tools" className="max-w-3xl space-y-2">
+            <div key="active-tools" className="space-y-1">
               {Array.from(activeToolCalls.entries()).map(([tcId, tc]) => (
-                <div
-                  key={tcId}
-                  className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 overflow-hidden"
-                >
-                  <div className="flex items-center justify-between px-4 py-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                      <span className="text-xs font-mono px-2 py-0.5 bg-blue-200 dark:bg-blue-700 rounded text-blue-900 dark:text-blue-100">
-                        {tc.toolName}
-                      </span>
-                      {tc.label && (
-                        <span className="text-xs text-blue-600 dark:text-blue-400">{tc.label}</span>
-                      )}
-                    </div>
-                  </div>
+                <div key={tcId} className="flex items-center gap-2 text-xs text-fg-muted">
+                  <div className="w-1.5 h-1.5 bg-fg-muted rounded-full animate-pulse flex-shrink-0" />
+                  <span className="font-mono">{tc.toolName}</span>
+                  {tc.label && <span>{tc.label}</span>}
                 </div>
               ))}
             </div>
           )}
 
           {completedToolCalls.length > 0 && (
-            <div key="completed-tools" className="max-w-3xl">
-              <button
-                type="button"
-                onClick={() => setShowToolCallHistory(prev => !prev)}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border-default bg-bg-secondary hover:bg-bg-muted transition-colors text-sm text-fg-secondary"
-              >
-                <span className={`transition-transform ${showToolCallHistory ? 'rotate-45' : ''}`}>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                </span>
+            <details key="completed-tools" className="group">
+              <summary className="flex items-center gap-1.5 cursor-pointer list-none text-xs text-fg-muted hover:text-fg-secondary transition-colors w-fit">
+                <svg className="w-3 h-3 transition-transform group-open:rotate-90 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
                 {t('chat.completedTools', { count: completedToolCalls.length })}
-              </button>
-
-              {showToolCallHistory && (
-                <div className="mt-2 space-y-1">
-                  {completedToolCalls.map(tc => (
-                    <div
-                      key={tc.id}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs text-fg-muted"
-                    >
-                      <Check className="w-3.5 h-3.5 text-green-500" />
-                      <span className="font-mono px-1.5 py-0.5 rounded bg-bg-muted">{tc.toolName}</span>
-                      {tc.label && <span>{tc.label}</span>}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+              </summary>
+              <div className="mt-1 ml-4 space-y-0.5">
+                {completedToolCalls.map(tc => (
+                  <div key={tc.id} className="flex items-center gap-1.5 text-xs text-fg-muted">
+                    <Check className="w-3 h-3 text-green-500 flex-shrink-0" />
+                    <span className="font-mono">{tc.toolName}</span>
+                    {tc.label && <span>{tc.label}</span>}
+                  </div>
+                ))}
+              </div>
+            </details>
           )}
 
           {streamingContent && (
-            <div key="streaming" className="flex gap-3">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-bg-muted flex items-center justify-center text-fg-secondary">
-                <Bot className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0 rounded-lg p-3 sm:p-4 bg-bg-primary border border-border-default text-fg-primary">
-                <MarkdownRenderer content={streamingContent} className="assistant-message" />
-                {/* Blinking cursor at end of stream */}
-                <span className="inline-block w-0.5 h-4 bg-fg-primary align-middle ml-0.5 animate-[blink_1s_step-end_infinite]" aria-hidden="true" />
-              </div>
+            <div key="streaming" className="text-sm text-fg-primary">
+              <MarkdownRenderer content={streamingContent} className="assistant-message" />
+              <span className="inline-block w-0.5 h-4 bg-fg-primary align-middle ml-0.5 animate-[blink_1s_step-end_infinite]" aria-hidden="true" />
             </div>
           )}
-          
+
           {isWaitingForResponse && !streamingContent && activeToolCalls.size === 0 && (
-            <div key="waiting" className="max-w-3xl">
-              <div className="bg-bg-primary rounded-lg p-3 sm:p-4 border border-border-default">
-                <div className="flex items-center gap-2 text-fg-muted">
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                  </div>
-                  <span className="text-sm">
-                    {processStatus === 'thinking' 
-                      ? t('chat.agentThinking') 
-                      : processStatus === 'executing_tool' && executingTool
-                        ? t('chat.executingTool', { toolName: executingTool })
-                        : t('chat.generatingResponse')}
-                  </span>
-                </div>
-              </div>
+            <div key="waiting" className="flex items-center gap-1.5 py-1">
+              <div className="w-1.5 h-1.5 bg-fg-muted rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="w-1.5 h-1.5 bg-fg-muted rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <div className="w-1.5 h-1.5 bg-fg-muted rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
             </div>
           )}
           

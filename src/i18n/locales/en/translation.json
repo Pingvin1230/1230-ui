@@ -65,6 +65,7 @@
     "startConversation": "Start a conversation",
     "startConversationDesc": "Send a message to get a response from Hermes.",
     "messageCopied": "Message copied",
+    "fileCopied": "Copied",
     "copyMessage": "Copy message",
     "regenerateResponse": "Regenerate response",
     "agentThinking": "Agent is thinking...",
@@ -260,7 +261,11 @@
     "daysAgo_other": "{{count}}d ago",
     "timeFormatHm": "{{h}}h {{m}}m",
     "timeFormatMs": "{{m}}m {{s}}s",
-    "timeFormatS": "{{s}}s"
+    "timeFormatS": "{{s}}s",
+    "navStyleLabel": "Desktop navigation",
+    "navStyleDesc": "Choose how to navigate on desktop",
+    "navStyleSidebar": "Sidebar",
+    "navStyleBottombar": "Bottom bar"
   },
   "errors": {
     "content_moderation": "Request blocked",
@@ -318,7 +323,10 @@
     "failedToRestoreAssistant": "Failed to restore assistant",
     "failedToUploadFile": "Failed to upload file",
     "failedToDeleteFile": "Failed to delete file",
-    "failedToListFiles": "Failed to list files"
+    "failedToListFiles": "Failed to list files",
+    "failedToExtendFile": "Failed to extend file",
+    "failedToFetchApplications": "Failed to fetch applications",
+    "failedToUpdateApplication": "Failed to update application"
   },
   "errorBoundary": {
     "title": "An error occurred",
@@ -431,5 +439,88 @@
     "depthQuick": "Quick",
     "depthStandard": "Standard",
     "depthThorough": "Thorough"
+  },
+  "applications": {
+    "title": "Applications",
+    "subtitle": "{{enabled}} of {{total}} applications enabled",
+    "manage": "Applications",
+    "backToSettings": "Back to Settings",
+    "noApplications": "No applications available",
+    "selectApplication": "Select an application",
+    "enabled": "enabled",
+    "disabled": "disabled",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "infoText": "Applications add extra features to the chat view. Enable or disable them here and control their display order.",
+    "filePreviewComing": "File Preview coming soon",
+    "filePreviewDesc": "Inline previews of session files will appear here in the next update.",
+    "selectSession": "Select a session to preview files",
+    "showApplications": "Show applications",
+    "hideApplications": "Hide applications",
+    "settingsDesc": "Manage applications shown in the chat view"
+  },
+  "filePreview": {
+    "title": "File Preview",
+    "noSession": "Select a session to preview files",
+    "noFiles": "No files in this session",
+    "loading": "Loading files...",
+    "error": "Failed to load file",
+    "retry": "Retry",
+    "download": "Download",
+    "unsupported": "Preview not available for this file type",
+    "pdfNotSupported": "Your browser does not support PDF preview"
+  },
+  "fileManager": {
+    "title": "File Manager",
+    "unknownSession": "Unknown session",
+    "deletedSession": "Session deleted",
+    "error": "Failed to load files",
+    "stats": {
+      "files": "{{count}} file",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files",
+      "size": "{{size}}",
+      "expiringSoon": "{{count}} expiring soon"
+    },
+    "sort": {
+      "label": "Sort",
+      "name": "Name",
+      "date": "Date",
+      "size": "Size",
+      "expires": "Expiration"
+    },
+    "filter": {
+      "label": "Filter",
+      "all": "All files",
+      "expiring": "Expiring soon",
+      "images": "Images",
+      "code": "Code",
+      "documents": "Documents"
+    },
+    "search": "Search files...",
+    "extend": "Extend by 30 days",
+    "delete": "Delete file",
+    "deleteConfirm": {
+      "title": "Delete file?",
+      "message": "Are you sure you want to delete {{filename}}?",
+      "warning": "This action cannot be undone."
+    },
+    "empty": {
+      "noFiles": "No files yet",
+      "noFilesDesc": "Upload files in a chat session to see them here.",
+      "noMatch": "No files match your filter",
+      "noSearch": "No files found for '{{query}}'"
+    },
+    "expiration": {
+      "expired": "Expired",
+      "today": "Today",
+      "daysLeft": "{{count}} day left",
+      "daysLeft_one": "{{count}} day left",
+      "daysLeft_other": "{{count}} days left",
+      "hoursLeft": "{{count}} hour left",
+      "hoursLeft_one": "{{count}} hour left",
+      "hoursLeft_other": "{{count}} hours left",
+      "never": "Never expires"
+    }
   }
 }

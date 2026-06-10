@@ -66,6 +66,7 @@
     "startConversation": "Начните разговор",
     "startConversationDesc": "Отправьте сообщение, чтобы получить ответ от Hermes.",
     "messageCopied": "Сообщение скопировано",
+    "fileCopied": "Скопировано",
     "copyMessage": "Копировать сообщение",
     "regenerateResponse": "Перегенерировать ответ",
     "agentThinking": "Агент думает...",
@@ -265,7 +266,11 @@
     "daysAgo_many": "{{count}} д. назад",
     "timeFormatHm": "{{h}} ч. {{m}} мин.",
     "timeFormatMs": "{{m}} мин. {{s}} с.",
-    "timeFormatS": "{{s}} с."
+    "timeFormatS": "{{s}} с.",
+    "navStyleLabel": "Навигация на десктопе",
+    "navStyleDesc": "Выберите способ навигации на большом экране",
+    "navStyleSidebar": "Боковая панель",
+    "navStyleBottombar": "Нижняя панель"
   },
   "errors": {
     "content_moderation": "Запрос заблокирован",
@@ -323,7 +328,10 @@
     "failedToRestoreAssistant": "Не удалось восстановить помощника",
     "failedToUploadFile": "Не удалось загрузить файл",
     "failedToDeleteFile": "Не удалось удалить файл",
-    "failedToListFiles": "Не удалось получить список файлов"
+    "failedToListFiles": "Не удалось получить список файлов",
+    "failedToExtendFile": "Не удалось продлить срок файла",
+    "failedToFetchApplications": "Не удалось загрузить приложения",
+    "failedToUpdateApplication": "Не удалось обновить приложение"
   },
   "errorBoundary": {
     "title": "Произошла ошибка",
@@ -436,5 +444,91 @@
     "depthQuick": "Быстро",
     "depthStandard": "Стандартно",
     "depthThorough": "Тщательно"
+  },
+  "applications": {
+    "title": "Приложения",
+    "subtitle": "Включено {{enabled}} из {{total}}",
+    "manage": "Приложения",
+    "backToSettings": "Назад к настройкам",
+    "noApplications": "Приложения отсутствуют",
+    "selectApplication": "Выберите приложение",
+    "enabled": "включено",
+    "disabled": "отключено",
+    "moveUp": "Переместить вверх",
+    "moveDown": "Переместить вниз",
+    "infoText": "Приложения добавляют дополнительные функции к чату. Включайте, отключайте и управляйте порядком отображения.",
+    "filePreviewComing": "Предпросмотр файлов скоро",
+    "filePreviewDesc": "Предпросмотр файлов сессии появится здесь в следующем обновлении.",
+    "selectSession": "Выберите сессию для предпросмотра файлов",
+    "showApplications": "Показать приложения",
+    "hideApplications": "Скрыть приложения",
+    "settingsDesc": "Управление приложениями, отображаемыми в чате"
+  },
+  "filePreview": {
+    "title": "Предпросмотр файлов",
+    "noSession": "Выберите сессию для предпросмотра файлов",
+    "noFiles": "В этой сессии нет файлов",
+    "loading": "Загрузка файлов...",
+    "error": "Не удалось загрузить файл",
+    "retry": "Повторить",
+    "download": "Скачать",
+    "unsupported": "Предпросмотр недоступен для этого типа файлов",
+    "pdfNotSupported": "Ваш браузер не поддерживает предпросмотр PDF"
+  },
+  "fileManager": {
+    "title": "Менеджер файлов",
+    "unknownSession": "Неизвестная сессия",
+    "deletedSession": "Сессия удалена",
+    "error": "Не удалось загрузить файлы",
+    "stats": {
+      "files": "{{count}} файл",
+      "files_one": "{{count}} файл",
+      "files_few": "{{count}} файла",
+      "files_many": "{{count}} файлов",
+      "size": "{{size}}",
+      "expiringSoon": "{{count}} истекает скоро"
+    },
+    "sort": {
+      "label": "Сортировка",
+      "name": "Имя",
+      "date": "Дата",
+      "size": "Размер",
+      "expires": "Истечение"
+    },
+    "filter": {
+      "label": "Фильтр",
+      "all": "Все файлы",
+      "expiring": "Истекают скоро",
+      "images": "Изображения",
+      "code": "Код",
+      "documents": "Документы"
+    },
+    "search": "Поиск файлов...",
+    "extend": "Продлить на 30 дней",
+    "delete": "Удалить файл",
+    "deleteConfirm": {
+      "title": "Удалить файл?",
+      "message": "Вы уверены, что хотите удалить {{filename}}?",
+      "warning": "Это действие нельзя отменить."
+    },
+    "empty": {
+      "noFiles": "Файлов пока нет",
+      "noFilesDesc": "Загрузите файлы в чате, чтобы увидеть их здесь.",
+      "noMatch": "Нет файлов, соответствующих фильтру",
+      "noSearch": "Файлы по запросу '{{query}}' не найдены"
+    },
+    "expiration": {
+      "expired": "Истёк",
+      "today": "Сегодня",
+      "daysLeft": "{{count}} день осталось",
+      "daysLeft_one": "{{count}} день осталось",
+      "daysLeft_few": "{{count}} дня осталось",
+      "daysLeft_many": "{{count}} дней осталось",
+      "hoursLeft": "{{count}} час остался",
+      "hoursLeft_one": "{{count}} час остался",
+      "hoursLeft_few": "{{count}} часа осталось",
+      "hoursLeft_many": "{{count}} часов осталось",
+      "never": "Бессрочно"
+    }
   }
 }

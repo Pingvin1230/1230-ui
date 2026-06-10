@@ -17,10 +17,50 @@ import { initSchema } from './db/migrate.js';
 initSchema(uiDb);
 
 // 3. Seed starter data
-import { seedStarterAssistants } from './db/seed.js';
+import { seedStarterAssistants, seedStarterApplications } from './db/seed.js';
 seedStarterAssistants(uiDb);
+seedStarterApplications(uiDb);
 
-// 4. Start HTTP server
+// 4. Cleanup expired files (Task #38)
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadsDir = path.join(__dirname, 'data', 'uploads');
+
+function cleanupExpiredFiles() {
+  if (config.fileRetentionDays <= 0) return;
+
+  const now = Date.now();
+  const expired = uiDb.prepare(`
+    SELECT id, session_id, stored_name, source FROM session_files
+    WHERE expires_at IS NOT NULL AND expires_at < ?
+  `).all(now);
+
+  for (const file of expired) {
+    try {
+      if (file.source === 'agent') {
+        fs.unlinkSync(file.stored_name);
+      } else {
+        fs.unlinkSync(path.join(uploadsDir, file.session_id, file.stored_name));
+      }
+    } catch (err) {
+      if (err.code !== 'ENOENT') console.warn('Failed to delete expired file:', err);
+    }
+    uiDb.prepare('DELETE FROM session_files WHERE id = ?').run(file.id);
+  }
+
+  if (expired.length > 0) {
+    console.log(`Cleaned up ${expired.length} expired file(s)`);
+  }
+}
+
+cleanupExpiredFiles();
+setInterval(cleanupExpiredFiles, 60 * 60 * 1000);
+
+// 5. Start HTTP server
 import app from './app.js';
 import { closeAll } from './db/connections.js';
 

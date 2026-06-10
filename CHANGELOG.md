@@ -2,6 +2,387 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.1] - 2026-06-10 (Applications architecture, File Preview, File Manager, file retention)
+
+### File Preview Application (Task #37)
+
+Inline file preview for all session files. Accessible from the Applications pane on the Sessions page.
+
+#### Backend
+
+- **`routes/files.js`** — new endpoint `GET /api/sessions/:id/files/:fileId/content` serves file content inline (`Content-Disposition: inline`) for browser rendering. Unlike `/download` which forces attachment, this lets the browser render images, PDFs, and text directly.
+- **Filename encoding fix** — `fixFilenameEncoding()` helper recovers double-encoded UTF-8 filenames (mojibake) in `rowToFile()`. Some browsers send UTF-8 bytes that get re-encoded, causing "Снимок" → "Ð¡Ð½Ð¸Ð¼Ð¾Ðº". Applied to all file listing endpoints.
+
+#### Frontend
+
+- **`src/applications/file-preview/FilePreviewApp.tsx` (new)** — main component registered as `file_preview` in the application registry. Fetches session files via `api.listSessionFiles(sessionId)`, auto-selects the first file, renders file list and preview area.
+- **`src/applications/file-preview/FileList.tsx` (new)** — horizontal pill bar showing all files in the session. Each pill: icon + filename + size. Active file highlighted in blue. Scrollable horizontally for many files.
+- **`src/applications/file-preview/FilePreview.tsx` (new)** — mimeType router that detects file type and delegates to the appropriate viewer component. Uses a switch statement (React 19 compatible).
+- **9 viewer components** in `src/applications/file-preview/viewers/`:
+  - **`ImageViewer.tsx`** — `<img>` for `image/*` (png, jpg, jpeg, gif, webp). Fit-to-container with `object-contain`.
+  - **`MarkdownViewer.tsx`** — reuses existing `MarkdownRenderer` for `.md` files. Fetches content via `api.getFileContent()`.
+  - **`CodeViewer.tsx`** — `highlight.js` + `<pre>` for code files (py, js, ts, jsx, tsx, sh, sql, xml, yml, yaml, css). No line numbers.
+  - **`JSONViewer.tsx`** — `highlight.js` (language: json) + pretty-print with 2-space indent.
+  - **`TextViewer.tsx`** — `<pre>` monospace for `txt`, `log`.
+  - **`CSVViewer.tsx`** — parses CSV with `papaparse` library, renders as `<table>` with headers.
+  - **`HTMLViewer.tsx`** — sandboxed `<iframe>` with `sandbox="allow-scripts"` for `.html` files.
+  - **`PDFViewer.tsx`** — `<iframe>` or `<embed>` for `.pdf`. Fallback message with download button if browser doesn't support PDF embedding.
+  - **`UnsupportedViewer.tsx`** — icon + filename + size + download button for unsupported types.
+- **`src/store/filePreviewStore.ts` (new)** — Zustand store for cross-component file selection. `selectedFileId` state allows Navbar file dropdown to open a specific file in the preview pane.
+- **Navbar file dropdown integration** — clickable file items in the Navbar's session files dropdown set `selectedFileId` in the store and open the Applications pane if closed.
+- **New API methods** in `src/lib/api.ts`:
+  - `getFileContentUrl(sessionId, fileId)` — returns URL for inline file content.
+  - `getFileContent(sessionId, fileId)` — fetches file content as text for code/markdown/JSON viewers.
+
+#### New dependency
+
+- **`papaparse ^5.5.3`** + **`@types/papaparse ^5.5.2`** — robust CSV parsing with header detection, escaping, and different delimiters. +3 KB gzip.
+
+#### i18n — 15 keys × 4 languages
+
+`filePreview.title`, `filePreview.noSession`, `filePreview.noFiles`, `filePreview.error`, `filePreview.retry`, `filePreview.download`, `filePreview.unsupported`, `filePreview.loading`, `filePreview.expired`, `filePreview.today`, `filePreview.daysLeft`, `filePreview.hoursLeft`, `filePreview.never`, `filePreview.extend`, `filePreview.extendFailed`.
+
+All four locales: en, ru, es, de.
+
+#### Files changed
+
+`routes/files.js`, `src/applications/file-preview/FilePreviewApp.tsx`, `src/applications/file-preview/FileList.tsx`, `src/applications/file-preview/FilePreview.tsx`, `src/applications/file-preview/viewers/` (9 viewers), `src/applications/file-preview/index.ts`, `src/store/filePreviewStore.ts`, `src/applications/registry.ts`, `src/components/Navbar.tsx`, `src/lib/api.ts`, `src/i18n/locales/{en,ru,es,de}/translation.json`, `package.json`, `package-lock.json`.
+
+---
+
+### File Manager Application (Task #38)
+
+Global file management across all sessions. View all files, check disk usage, extend file lifetime, delete files, and navigate to the session where a file was used.
+
+#### Backend — File retention policy
+
+- **`db/migrate.js`** — idempotent migrations add two columns to `session_files`:
+  - `expires_at INTEGER` — epoch ms timestamp when file expires. `NULL` means "never expires" (technical capability, no UI to set this).
+  - `extended_count INTEGER NOT NULL DEFAULT 0` — tracks how many times the file has been extended.
+- **`config.js`** — new `fileRetentionDays` config read from `FILE_RETENTION_DAYS` environment variable (default 30). Set to 0 to disable auto-deletion.
+- **`.env.example`** — added `FILE_RETENTION_DAYS=30` with documentation.
+- **Auto-set expiration on upload** — `routes/files.js` POST endpoint now sets `expires_at = uploaded_at + (fileRetentionDays * 24 * 60 * 60 * 1000)` when inserting into `session_files`.
+- **Startup cleanup** — `server.js` calls `cleanupExpiredFiles()` on startup, which deletes all files with `expires_at < now()` from disk and database. Handles both user files (path: `data/uploads/<session_id>/<stored_name>`) and agent files (path: `stored_name` as absolute path).
+- **Periodic cleanup** — `setInterval(cleanupExpiredFiles, 60 * 60 * 1000)` runs every hour to remove expired files without requiring a server restart.
+
+#### Backend — Global files API
+
+- **`routes/globalFiles.js` (new)** — three endpoints mounted at `/api/files`:
+  - `GET /api/files` — list all files across all sessions. Joins with `sessions` table to get session titles. Returns `{ files: GlobalFile[], stats: { totalFiles, totalSize, expiringSoon } }`. Session title fallback: uses first user message (preview) if title is null, truncated to 70 chars. Shows "Deleted session" if session no longer exists.
+  - `PATCH /api/files/:fileId/extend` — extends file expiration by `fileRetentionDays`. Increments `extended_count`. Returns `{ success: true, expiresAt: number }`.
+  - `DELETE /api/files/:fileId` — deletes file globally (from disk + DB). Handles both user and agent files.
+- **`app.js`** — mounts `globalFilesRouter` at `/api/files`.
+- **`db/seed.js`** — `seedStarterApplications()` now seeds `file_manager` application (FolderOpen icon, enabled, sort_order 1) alongside `file_preview`.
+
+#### Frontend
+
+- **`src/applications/file-manager/FileManagerApp.tsx` (new)** — main component registered as `file_manager` in the application registry. Fetches all files via `api.getGlobalFiles()`, manages sort/filter/search state, renders stats bar and file list.
+- **`src/applications/file-manager/FileStatsBar.tsx` (new)** — top bar showing total files count, total size (formatted), and "expiring soon" count (files expiring within 7 days, highlighted in orange).
+- **`src/applications/file-manager/FileList.tsx` (new)** — sortable and filterable file list with search. Controls: sort dropdown (name/date/size/expires), order toggle (asc/desc), filter dropdown (all/expiring/images/code/documents), search input.
+- **`src/applications/file-manager/FileRow.tsx` (new)** — single file row with icon, filename, session title, size, expiration badge, and action buttons. Click navigates to session and opens File Preview app with the selected file.
+- **`src/applications/file-manager/ExpirationBadge.tsx` (new)** — color-coded expiration indicator:
+  - 🟢 Green (> 14 days): "15 days left"
+  - 🟡 Yellow (7-14 days): "10 days left"
+  - 🟠 Orange (1-7 days): "5 days left"
+  - 🔴 Red (< 1 day): "12 hours left" or "Expired"
+  - ⚪ Gray (∞): "Never expires"
+- **`src/applications/file-manager/ExtendButton.tsx` (new)** — button to extend file lifetime by `fileRetentionDays`. Shows loading spinner while extending. Optimistic update on success.
+- **`src/applications/file-manager/DeleteConfirmModal.tsx` (new)** — confirmation dialog for file deletion. Shows filename and warning that action cannot be undone.
+- **Integration with File Preview** — clicking a file in File Manager navigates to `/chat/:sessionId` and sets `selectedFileId` in `filePreviewStore`, which triggers File Preview app to open the selected file.
+- **New API methods** in `src/lib/api.ts`:
+  - `getGlobalFiles(params?)` — fetches all files with optional sort/order/filter/search params.
+  - `extendFile(fileId)` — extends file expiration.
+  - `deleteGlobalFile(fileId)` — deletes file globally.
+- **New types** in `src/types/api.ts`:
+  - `GlobalFile` interface — `id`, `sessionId`, `sessionTitle`, `filename`, `mimeType`, `size`, `uploadedAt`, `expiresAt`, `extendedCount`, `source`.
+  - `FileStats` interface — `totalFiles`, `totalSize`, `expiringSoon`.
+
+#### i18n — 20 keys × 4 languages
+
+`fileManager.title`, `fileManager.stats.files`, `fileManager.stats.size`, `fileManager.stats.expiringSoon`, `fileManager.sort.label`, `fileManager.sort.name`, `fileManager.sort.date`, `fileManager.sort.size`, `fileManager.sort.expires`, `fileManager.filter.label`, `fileManager.filter.all`, `fileManager.filter.expiring`, `fileManager.filter.images`, `fileManager.filter.code`, `fileManager.filter.documents`, `fileManager.search`, `fileManager.extend`, `fileManager.delete`, `fileManager.deleteConfirm.title`, `fileManager.deleteConfirm.message`, `fileManager.deleteConfirm.warning`, `fileManager.empty.noFiles`, `fileManager.empty.noFilesDesc`, `fileManager.empty.noMatch`, `fileManager.empty.noSearch`, `fileManager.expiration.expired`, `fileManager.expiration.today`, `fileManager.expiration.daysLeft`, `fileManager.expiration.hoursLeft`, `fileManager.expiration.never`, `fileManager.toast.extended`, `fileManager.toast.deleted`, `fileManager.toast.extendFailed`, `fileManager.toast.deleteFailed`, `fileManager.deletedSession`.
+
+All four locales: en, ru, es, de.
+
+#### Files changed
+
+`db/migrate.js`, `db/seed.js`, `config.js`, `server.js`, `app.js`, `routes/globalFiles.js`, `routes/files.js`, `src/applications/file-manager/FileManagerApp.tsx`, `src/applications/file-manager/FileStatsBar.tsx`, `src/applications/file-manager/FileList.tsx`, `src/applications/file-manager/FileRow.tsx`, `src/applications/file-manager/ExpirationBadge.tsx`, `src/applications/file-manager/ExtendButton.tsx`, `src/applications/file-manager/DeleteConfirmModal.tsx`, `src/applications/file-manager/index.ts`, `src/applications/registry.ts`, `src/lib/api.ts`, `src/types/api.ts`, `src/i18n/locales/{en,ru,es,de}/translation.json`, `.env.example`.
+
+---
+
+### Bug fixes and improvements
+
+- **Russian filenames in File Manager** — `fixFilenameEncoding()` applied to `routes/globalFiles.js` to recover double-encoded UTF-8 filenames (same fix as in Task #37).
+- **Session title display** — File Manager now shows session preview (first user message, truncated to 70 chars) when session title is null, matching the behavior of SessionsPage. Shows "Deleted session" if session no longer exists.
+- **File filter bug** — fixed `emptyMessage` logic in `FileList.tsx` to check `filteredAndSorted.length > 0` before showing "No files match" message. Previously showed empty state even when files were found.
+- **File Preview integration** — fixed `useEffect` in `FilePreviewApp.tsx` to depend on `files` array, ensuring the store-selected file is opened after files are loaded.
+- **Expired file cleanup** — `cleanupExpiredFiles()` in `server.js` now handles both user files (path: `data/uploads/<session_id>/<stored_name>`) and agent files (path: `stored_name` as absolute path). Runs on startup and every hour via `setInterval`.
+
+---
+
+### Applications Architecture (Task #36)
+
+The Sessions page can now be split into a two-pane workspace on desktop (≥ 1024 px):
+- **Left pane** — Chat with the agent (unchanged, always visible).
+- **Right pane** — Applications area with an extensible plugin system.
+
+On mobile the applications pane is hidden and chat occupies the full width.
+
+#### Backend
+
+- **`db/migrate.js`** — idempotent `CREATE TABLE IF NOT EXISTS applications` with columns: `id`, `key` (unique), `name`, `icon`, `description`, `enabled`, `sort_order`, `desktop_only`, `config` (JSON), `created_at`, `updated_at`. Index on `(enabled DESC, sort_order ASC)`.
+- **`db/seed.js`** — `seedStarterApplications()` seeds the first application: `file_preview` (Eye icon, enabled, sort_order 0). Safe to call on every startup — exits early if the table is non-empty.
+- **`server.js`** — calls `seedStarterApplications(uiDb)` after `seedStarterAssistants`.
+- **`routes/applications.js` (new)** — two endpoints:
+  - `GET /api/applications` — list all applications. Optional `?enabled=1` filter. Ordered by `sort_order ASC`.
+  - `PATCH /api/applications/:id` — update metadata: `enabled`, `sortOrder`, `name`, `icon`, `description`, `config`. Returns updated application object.
+- **`app.js`** — mounts `applicationsRouter` at `/api/applications`.
+
+#### Frontend — Application system
+
+- **`src/types/api.ts`** — new `Application` interface: `id`, `key`, `name`, `icon`, `description`, `enabled`, `sortOrder`, `desktopOnly`, `config`, `createdAt`, `updatedAt`.
+- **`src/lib/api.ts`** — `getApplications(enabledOnly?)` and `updateApplication(id, patch)`.
+- **`src/applications/types.ts` (new)** — `ApplicationComponentProps { sessionId, config }` and `ApplicationComponent` type. Every application component receives the same props.
+- **`src/applications/registry.ts` (new)** — `applicationRegistry: Record<string, ApplicationComponent>` maps `key` → React component. Adding a new application = one import + one registry entry. No changes to layout, selector, or settings code.
+- **`src/applications/placeholder/PlaceholderApp.tsx` (new)** — stub component for File Preview (task #37). Shows "File Preview coming soon" with an Eye icon.
+- **`src/store/applicationsStore.ts` (new)** — Zustand store: `fetchApplications()`, `selectApplication(key)`, `updateApplication(id, patch)`. Auto-selects first enabled application on fetch. `selectedKey` persisted globally in `localStorage` (`hermes-selected-application`).
+
+#### Frontend — Split layout
+
+- **`src/components/Layout.tsx`** — when `activeSessionId` exists and `appsPaneVisible` is true, `<main>` renders a flex row with two panes (50/50). CSS breakpoint `lg:` (1024 px) controls applications pane visibility — not JS `useMobile()`, so it works correctly on foldables in desktop mode. Chat pane: `flex flex-col overflow-hidden`. Applications pane: `hidden lg:flex lg:flex-col lg:border-l`.
+- **`src/components/ApplicationsPane.tsx` (new)** — right-side container:
+  - Pill selector (horizontal scrollable row of icon + name tabs). Active tab: blue background. Inactive: muted text.
+  - Icon resolved dynamically from `lucide-react` by the application's `icon` field.
+  - Content area renders the selected application's component from the registry.
+  - Loading spinner, empty state ("No applications"), and fallback state handled.
+- **`src/store/appsPaneStore.ts` (new)** — Zustand store for pane visibility. `visible` defaults to `false` (pane hidden). Persisted in `localStorage` (`hermes-apps-pane-visible`).
+
+#### Frontend — Navbar toggle
+
+- **`src/components/Navbar.tsx`** — new button (PanelRightOpen / PanelRightClose) placed to the right of the Delete button, separated by a divider. Hidden on mobile (CSS `hidden lg:flex`). Clicking toggles `appsPaneVisible` in `appsPaneStore`. Active state highlighted in blue.
+
+#### Frontend — Management page
+
+- **`src/pages/ApplicationsPage.tsx` (new)** — standalone page at `/applications`:
+  - Header with back-to-settings link.
+  - List of all applications sorted by `sort_order`.
+  - Each row: icon, name, description, key badge, up/down reorder buttons, toggle switch (enabled/disabled).
+  - Disabled applications rendered at 50% opacity.
+  - Info text at the bottom explaining the purpose.
+- **`src/App.tsx`** — new route `/applications` (lazy-loaded).
+- **`src/pages/SettingsPage.tsx`** — new "Applications" section block (same style as Assistants section) with link to `/applications`.
+
+#### i18n — 11 keys × 4 languages
+
+`applications.title`, `applications.subtitle`, `applications.manage`, `applications.backToSettings`, `applications.noApplications`, `applications.selectApplication`, `applications.enabled`, `applications.disabled`, `applications.moveUp`, `applications.moveDown`, `applications.infoText`, `applications.filePreviewComing`, `applications.filePreviewDesc`, `applications.selectSession`, `applications.showApplications`, `applications.hideApplications`, `applications.settingsDesc`.
+
+Plus `api.failedToFetchApplications`, `api.failedToUpdateApplication`.
+
+All four locales: en, ru, es, de.
+
+#### Files changed
+
+`db/migrate.js`, `db/seed.js`, `server.js`, `app.js`, `routes/applications.js`, `src/types/api.ts`, `src/lib/api.ts`, `src/applications/types.ts`, `src/applications/registry.ts`, `src/applications/placeholder/PlaceholderApp.tsx`, `src/store/applicationsStore.ts`, `src/store/appsPaneStore.ts`, `src/components/ApplicationsPane.tsx`, `src/components/Layout.tsx`, `src/components/Navbar.tsx`, `src/pages/ApplicationsPage.tsx`, `src/pages/SettingsPage.tsx`, `src/App.tsx`, `src/i18n/locales/{en,ru,es,de}/translation.json`.
+
+No new npm dependencies.
+
+#### Verification
+
+`npm run lint` clean, `npm run typecheck` clean, `npm test` 22/22 pass, `npm run build` OK.
+
+---
+
+### Navbar — session context bar
+
+The per-session header block (session title, model badge, assistant badge, file count, delete) that previously occupied a fixed strip at the top of the chat area has been relocated into the global Navbar, freeing the full viewport height for the message thread.
+
+#### Store (`src/store/chatInputStore.ts`)
+
+- New `NavSessionMeta` interface: `{ title, model, assistantName, assistantIcon }`.
+- New `SessionActions` interface: `{ onStartEditTitle, onSaveTitle, onDeleteSession, onStop }` — callbacks registered by `ChatPage` so `Navbar` can invoke session operations without being in the same React subtree.
+- Both stored in `chatInputStore` as `navSessionMeta` / `sessionActions`; cleared on session unmount.
+
+#### ChatPage (`src/pages/ChatPage.tsx`)
+
+- Removed the entire header `<div>` (breadcrumb, title `<h1>`, badges, Stop, Delete).
+- On load and title save: writes `NavSessionMeta` to store via `setNavMeta`.
+- Registers `SessionActions` in store via `setSessionActions`.
+- Removed state now owned by Navbar: `isEditingTitle`, `editingTitle`, `isSavingTitle`, `isDeleting`, `confirmDelete`, `titleInputRef`.
+- Removed unused imports: `X`, `ChevronRight`, `Trash2`, `Pencil`, `Loader2`, `Square`, `Paperclip`, `formatTimeAgo`, `formatFullDateTime`.
+
+#### Navbar (`src/components/Navbar.tsx`) — full rewrite
+
+- Height `h-16` → `h-[50px]` (unified with ChatInput and MobileNav).
+- Layout: `[brand] | [title ✏️] — flex-1 — [badges][files][🗑️] | [🔍][●][U]`; brand and global controls in normal flow with a `flex-1` spacer, no absolute positioning.
+- Title editing and delete-confirm state owned in Navbar; calls `sessionActions` for API operations.
+- Stop button removed from Navbar (stays in ChatInput).
+- `NavSessionFilesBar` — compact pill matching badge size; dropdown fixed with `click` listener + 1-tick `setTimeout` to avoid race; `overflow-visible` on centre container to prevent clipping.
+
+#### New utility: `src/lib/fileUtils.ts`
+
+- `formatFileSize` extracted from ChatInput and shared with NavSessionFilesBar.
+
+#### ChatInput (`src/components/ChatInput.tsx`)
+
+- `SessionFilesBar` and its imports removed.
+- External padding wrapper removed — ChatInput owns its own `min-h-[50px]` and `px-3`.
+- Buttons resized to `h-[34px]` to fit within the 50 px bar; textarea `py-[7px] leading-[20px]` = 34 px at one line, grows upward.
+
+### Layout — unified 50 px bar heights
+
+- `Navbar`: `h-[50px]`.
+- `MobileNav`: `h-[50px]` on `<ul>`; `py-2` removed from nav links.
+- `ChatInput` wrapper: `min-h-[50px]`; outer `p-3/p-4` padding removed from Layout.
+- `Layout` `bottomPad` updated: 110 px (chat + mobilenav) / 50 px (no chat).
+
+### MobileNav — active-tab pattern (`src/components/MobileNav.tsx`)
+
+- Active tab: pill `bg-accent/10 text-accent` with icon + label; width fits content.
+- Inactive tabs: icon only `w-9 h-9`.
+- Tab list: `max-w-4xl mx-auto` matches chat content width; items `flex-1` within that bound.
+- `/chat/:id` route highlights the **Sessions** tab as the parent section (via `useLocation`).
+
+### Sessions page — pin / archive buttons (`src/components/SessionCard.tsx`)
+
+- Removed `md:opacity-0 md:group-hover:opacity-100` — buttons were unreachable due to broken `group` scope.
+- Pin and archive moved to **row 3**, right-aligned via `justify-between`.
+- Pin: yellow star when active; grey outline when inactive.
+- Archive: always grey.
+- Removed separate right-side action column introduced in previous iteration.
+
+### Chat page — minimalist message rendering (`src/pages/ChatPage.tsx`)
+
+Complete visual overhaul of the message thread. Goal: clean reading flow, no decorative chrome.
+
+#### Removed
+- Avatar icons (Bot / User circles) — both sides.
+- Borders and non-page backgrounds on assistant messages.
+- Blue border on user messages.
+- Timestamps on all messages.
+- Regenerate (retry) button.
+- `processStatus` / `executingTool` display in the waiting indicator.
+
+#### User messages
+- Right-aligned (`flex justify-end`), max 75 % width.
+- Bubble: `bg-white dark:bg-gray-800`, `rounded-2xl rounded-tr-sm`, `shadow-sm` — stands out from page background without colour accent.
+- Copy button appears on hover only (`opacity-0 group-hover:opacity-100`), styled as a small `bg-bg-secondary` pill.
+
+#### Assistant messages
+- Left-aligned, no wrapper box — plain text on page background.
+- Copy button + optional latency (`Xs`) appear on hover in a `bg-bg-secondary` pill.
+
+#### Streaming
+- Plain `<div>` with blinking cursor; no border or background.
+
+#### Waiting indicator
+- Three small grey bouncing dots; no card wrapper.
+
+#### Tool calls — turn-based grouping
+Messages are pre-processed into **turn blocks** (user → tools → assistant) before rendering. All `role === 'tool'` messages within a turn — regardless of tool name — are collapsed into a single `<details>` row:
+
+```
+▶ используется N инструментов   (click to expand)
+  ✓ web_search
+  ✓ read_file
+  ✓ web_search
+```
+
+- Works for both live streaming (via `completedToolCalls`) and historical messages (via turn-block pre-processing).
+- Active tool calls during streaming: single line per active tool with a pulsing dot.
+- `showToolCallHistory` state removed — replaced by native `<details>`.
+- `ToolCall` component updated: no border/background, plain `<details>` with `▶ toolName` summary and `<pre>` body.
+
+#### Removed imports / state
+`ToolCall` component import, `Bot`, `User`, `RefreshCw` Lucide icons, `formatTimeAgo`, `formatFullDateTime`, `processStatus`, `executingTool`, `showToolCallHistory`.
+
+### Sessions page — list redesign
+
+#### Motivation
+Card-based layout with borders, backgrounds and coloured badges was visually heavy. Goal: plain list like a mail client or Finder — focus on content, not decoration.
+
+#### `navPageContext` — generic Navbar page slot
+
+- New `NavPageContext` / `NavPageAction` interfaces in `chatInputStore.ts`.
+- `setNavPageContext(ctx)` / `setNavPageContext(null)` registered on mount/unmount.
+- `SessionsPage` registers `title = "Sessions"` + two actions: **Archived** (toggle) and **Select** (bulk mode).
+- `Navbar` renders them in the centre zone using the same `[title] — flex-1 — [actions]` pattern as chat: active action gets `bg-accent/10 text-accent` pill, inactive gets muted text.
+- Page header (`<h1>`, counts, Eye/CheckSquare/Plus buttons) removed from `SessionsPage` entirely.
+
+#### `SessionCard` (`src/components/SessionCard.tsx`) — full rewrite
+
+**Layout:**
+```
+[★ pin] [🗂 archive]   ←  always-visible action buttons (right side)
+Title                           ассистент · модель · N · 2ч
+Preview text one line…
+```
+
+- No card box, no border-radius, no background — plain row with `border-b border-border-default`.
+- Row gets `bg-bg-primary` explicitly so the mobile swipe-reveal red layer doesn't bleed through.
+- Hover: `bg-bg-secondary` on the row.
+- Meta string (assistant · model · message count · time) rendered inline on the right of the title row; hidden on mobile (time only shown).
+- Preview indented to align with title (accounts for absent pin icon).
+- `py-3.5` vertical padding for comfortable row height.
+
+**Actions:**
+- Pin and archive buttons always visible on the right — no `opacity-0 group-hover:opacity-100`.
+- Duplicate pin icon in title row removed (was showing twice for pinned sessions).
+- Archived sessions show only the unarchive button (no pin).
+
+**Swipe-to-delete — mobile only:**
+- Red reveal layer and `useSwipe` hook now conditional on `useMobile()`.
+- On desktop: no red layer, swipe disabled; bulk mode is the delete path.
+- On mobile: swipe-left + long-press behaviour unchanged.
+
+**Group headers:**
+- Removed `<hr>` line, star/archive icons, `uppercase tracking-wide`.
+- Plain `text-xs text-fg-muted` label, `sticky top-0 bg-bg-secondary`, minimal `py-1.5` padding.
+
+#### Removed from `SessionsPage`
+- `Plus`, `Star`, `Archive`, `Eye`, `CheckSquare` imports (now in `SessionCard` or gone).
+- `total` read reference (used only in removed header).
+- Page header JSX block entirely.
+
+### User menu — consolidated controls
+
+Moved from Sidebar bottom bar into the Navbar user dropdown (between Settings and Logout):
+
+- **Theme toggle** (Sun/Moon) — switches light/dark mode
+- **Notifications toggle** (Bell/BellOff) — enables/disables browser notifications
+- **Like button** (Heart) — sends a like; turns pink after sending; cooldown-aware. Positioned near the bottom of the menu (above GitHub/copyright) to avoid accidental clicks
+- **GitHub link** — below Like
+- **Copyright** — below GitHub
+
+`Navbar.tsx` now owns `isDarkMode/toggleDarkMode` (via `useThemeStore`) and `notificationsEnabled/toggleNotifications` (via `useNotificationsStore`) and the full like state machine (`idle → sending → sent/cooldown`).
+
+### Sidebar — removed entirely
+
+Navigation is now exclusively through `MobileNav` (bottom bar, all devices).
+
+#### Deleted files
+- `src/components/Sidebar.tsx`
+- `src/store/sidebarStore.ts`
+- `src/store/navStyleStore.ts`
+
+#### `Layout.tsx`
+- Removed `Sidebar`, `useSidebarStore`, `useNavStyleStore`, `useBottomNav` logic.
+- `ChatInput` is now always `fixed` above `MobileNav` (`bottom: calc(50px + safe-area)`, `z-[55]`) on all devices.
+- `MobileNav` is always `fixed bottom-0` — no device gate.
+- `bottomPad` on `<main>`: `110px` in chat (ChatInput + MobileNav), `50px` otherwise.
+
+#### `Navbar.tsx`
+- Removed `isSidebarOpen`/`setIsSidebarOpen` props and hamburger button.
+- Removed `useNavStyleStore` import.
+- `Navbar` is now a zero-argument component.
+- Apps pane toggle (`PanelRight`) restored in `sessionControls` — `hidden lg:flex`, highlights blue when pane is open.
+
+#### `MobileNav.tsx`
+- Removed `useMobile`, `useNavStyleStore` imports.
+- Removed `!isMobile && navStyle !== 'bottombar'` early-return guard — nav always renders.
+
+#### `SettingsPage.tsx`
+- Removed "Desktop Navigation Style" setting block (Sidebar / Bottom bar toggle).
+- Removed `useNavStyleStore`, `useSidebarStore`, `PanelLeft`, `AlignJustify` imports and variables.
+
 ## [0.9.0] - 2026-06-09 (v0.9.0 release — Tasks #23 and #24 + code audit + UX sprint + mobile layout overhaul + chat UX improvements)
 
 ### UX sprint — Dashboard and Sessions redesign

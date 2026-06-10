@@ -128,6 +128,22 @@ export function initSchema(uiDb) {
     }
   }
 
+  // session_files: expires_at, extended_count (Task #38)
+  if (!sessionFilesColumns.has('expires_at')) {
+    try {
+      uiDb.exec('ALTER TABLE session_files ADD COLUMN expires_at INTEGER');
+    } catch (err) {
+      console.warn(`Failed to add column session_files.expires_at: ${err.message}`);
+    }
+  }
+  if (!sessionFilesColumns.has('extended_count')) {
+    try {
+      uiDb.exec('ALTER TABLE session_files ADD COLUMN extended_count INTEGER NOT NULL DEFAULT 0');
+    } catch (err) {
+      console.warn(`Failed to add column session_files.extended_count: ${err.message}`);
+    }
+  }
+
   // providers: description, signup_url, auth_type
   const existingColumns = new Set(
     uiDb.prepare('PRAGMA table_info(providers)').all().map((c) => c.name)
@@ -147,6 +163,25 @@ export function initSchema(uiDb) {
       }
     }
   }
+
+  // ── applications table (Task #36) ─────────────────────────────────────
+  uiDb.exec(`
+    CREATE TABLE IF NOT EXISTS applications (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      key           TEXT    NOT NULL UNIQUE,
+      name          TEXT    NOT NULL,
+      icon          TEXT,
+      description   TEXT,
+      enabled       INTEGER NOT NULL DEFAULT 1,
+      sort_order    INTEGER NOT NULL DEFAULT 0,
+      desktop_only  INTEGER NOT NULL DEFAULT 1,
+      config        TEXT,
+      created_at    INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000),
+      updated_at    INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000)
+    );
+    CREATE INDEX IF NOT EXISTS idx_applications_enabled_order
+      ON applications(enabled DESC, sort_order ASC);
+  `);
 
   console.log('UI DB tables initialized');
 }

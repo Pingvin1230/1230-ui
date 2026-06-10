@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
-import { Plus, MessageSquare, Sparkles, Loader2, SearchX, Star, Archive, Trash2, CheckSquare, Eye } from 'lucide-react';
+import { Sparkles, Loader2, SearchX, Archive, Trash2, Eye, CheckSquare } from 'lucide-react';
 import type { Session } from '../types/api';
 import { useSearchStore } from '../store/searchStore';
 import { useSessionsSortStore } from '../store/sessionsSortStore';
+import { useChatInputStore } from '../store/chatInputStore';
 import { NoSessionsIllustration } from '../assets/illustrations';
 import { Modal } from '../components/Modal';
 import { SessionCard } from '../components/SessionCard';
@@ -81,7 +82,7 @@ function flattenGrouped(grouped: Record<string, Session[]>): ListItem[] {
 export function SessionsPage() {
   const { t } = useTranslation();
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [total, setTotal] = useState(0);
+  const [, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +97,7 @@ export function SessionsPage() {
   const query = useSearchStore((s) => s.query);
   const setQuery = useSearchStore((s) => s.setQuery);
   const location = useLocation();
+  const setNavPageContext = useChatInputStore((s) => s.setNavPageContext);
 
   // Infinite scroll sentinel — must be declared before any early returns
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -115,6 +117,32 @@ export function SessionsPage() {
       setLoading(false);
     }
   }, [sortMode, t]);
+
+  // Register page context in Navbar
+  useEffect(() => {
+    setNavPageContext({
+      title: t('sessions.title'),
+        actions: [
+        {
+          label: t('sessions.archived'),
+          icon: <Eye className="w-3.5 h-3.5" />,
+          active: showArchived,
+          onClick: () => {
+            const next = !showArchived;
+            setShowArchived(next);
+            loadSessions(next);
+          },
+        },
+        {
+          label: t('common.select'),
+          icon: <CheckSquare className="w-3.5 h-3.5" />,
+          active: bulkMode,
+          onClick: () => { setBulkMode(v => !v); setSelectedIds(new Set()); },
+        },
+      ],
+    });
+    return () => setNavPageContext(null);
+  }, [t, showArchived, bulkMode, setNavPageContext, loadSessions]);
 
   useEffect(() => {
     let cancelled = false;
@@ -244,32 +272,13 @@ export function SessionsPage() {
 
   if (loading) {
     return (
-      <div className="p-3 sm:p-4 md:p-6 max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-              <MessageSquare className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{t('sessions.title')}</h1>
-            </div>
+      <div className="max-w-4xl mx-auto border-t border-border-default">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="border-b border-border-default px-3 sm:px-4 py-3.5 animate-pulse">
+            <div className="h-4 bg-bg-muted rounded w-1/2 mb-1.5" />
+            <div className="h-3 bg-bg-muted rounded w-3/4" />
           </div>
-        </div>
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-bg-primary border border-border-default rounded-lg p-4 animate-pulse">
-              <div className="flex-1">
-                <div className="h-5 bg-bg-muted rounded w-3/4 mb-2" />
-                <div className="flex gap-2 mb-3">
-                  <div className="h-4 bg-bg-muted rounded w-20" />
-                  <div className="h-4 bg-bg-muted rounded w-16" />
-                </div>
-                <div className="h-4 bg-bg-muted rounded w-full mb-1" />
-                <div className="h-4 bg-bg-muted rounded w-2/3" />
-              </div>
-            </div>
-          ))}
-        </div>
+        ))}
       </div>
     );
   }
@@ -309,58 +318,6 @@ export function SessionsPage() {
   return (
     <div className="flex-1 min-h-0 overflow-y-auto">
     <div className="p-3 sm:p-4 md:p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6 flex-shrink-0 gap-2">
-        {/* Title */}
-        <div className="min-w-0">
-          <h1 className="text-xl md:text-2xl font-semibold text-fg-primary truncate">{t('sessions.title')}</h1>
-          {hasSessions && (
-            <p className="text-sm text-fg-muted truncate">
-              {t('common.showingOfTotal', { showing: sessions.length, total })}
-            </p>
-          )}
-        </div>
-        {/* Actions */}
-        <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
-          <button
-            onClick={() => {
-              const next = !showArchived;
-              setShowArchived(next);
-              loadSessions(next);
-            }}
-            className={`flex items-center gap-1.5 min-h-[44px] min-w-[44px] md:min-w-0 md:px-3 md:py-2 rounded-lg transition-colors text-sm font-medium ${
-              showArchived
-                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                : 'text-fg-secondary hover:bg-bg-secondary'
-            }`}
-            aria-label={t('sessions.toggleArchived')}
-            title={t('sessions.archived')}
-          >
-            <Eye className="w-4 h-4" />
-            <span className="hidden md:inline">{t('sessions.archived')}</span>
-          </button>
-          <button
-            onClick={() => { setBulkMode(!bulkMode); setSelectedIds(new Set()); }}
-            className={`flex items-center gap-1.5 min-h-[44px] min-w-[44px] md:min-w-0 md:px-3 md:py-2 rounded-lg transition-colors text-sm font-medium ${
-              bulkMode
-                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                : 'text-fg-secondary hover:bg-bg-secondary'
-            }`}
-            aria-label={t('sessions.selectSessions')}
-            title={t('common.select')}
-          >
-            <CheckSquare className="w-4 h-4" />
-            <span className="hidden md:inline">{t('common.select')}</span>
-          </button>
-          <Link
-            to="/new"
-            className="flex items-center gap-2 min-h-[44px] px-3 md:px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
-            aria-label={t('common.newSession')}
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">{t('common.newSession')}</span>
-          </Link>
-        </div>
-      </div>
 
       {bulkMode && selectedIds.size > 0 && (
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
@@ -447,30 +404,19 @@ export function SessionsPage() {
               {t('sessions.searchInfo', { filtered: filteredSessions.length, total: sessions.length })}
             </p>
           )}
-          <div>
+          <div className="border-t border-border-default">
             {flatItems.map((item) => {
               if (item.type === 'header') {
-                const isPinned = item.name === 'Pinned';
-                const isArchived = item.name === 'Archived';
-                const groupName = isPinned
-                  ? t('sessions.pinned')
-                  : isArchived
-                    ? t('sessions.archived')
-                    : item.name === 'Today'
-                      ? t('sessions.today')
-                      : item.name === 'Yesterday'
-                        ? t('sessions.yesterday')
-                        : item.name === 'This Week'
-                          ? t('sessions.thisWeek')
-                          : t('sessions.older');
+                const groupName =
+                  item.name === 'Pinned' ? t('sessions.pinned')
+                  : item.name === 'Archived' ? t('sessions.archived')
+                  : item.name === 'Today' ? t('sessions.today')
+                  : item.name === 'Yesterday' ? t('sessions.yesterday')
+                  : item.name === 'This Week' ? t('sessions.thisWeek')
+                  : t('sessions.older');
                 return (
-                  <div key={item.key} className="flex items-center gap-3 py-3 sticky top-0 bg-bg-secondary z-10">
-                    {isPinned && <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />}
-                    {isArchived && <Archive className="w-3.5 h-3.5 text-fg-muted flex-shrink-0" />}
-                    <h2 className="text-xs font-medium text-fg-muted whitespace-nowrap flex-shrink-0">
-                      {groupName}
-                    </h2>
-                    <hr className="flex-1 border-border-default" />
+                  <div key={item.key} className="sticky top-0 z-10 bg-bg-secondary px-3 sm:px-4 py-1.5">
+                    <span className="text-xs text-fg-muted font-medium">{groupName}</span>
                   </div>
                 );
               }

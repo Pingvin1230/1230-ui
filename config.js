@@ -21,6 +21,7 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().optional(),
   LIKES_WEBHOOK_URL: z.string().url().optional(),
   LIKES_COOLDOWN_SEC: z.coerce.number().int().positive().default(3600),
+  FILE_RETENTION_DAYS: z.coerce.number().int().min(0).default(30),
 });
 
 function validateConfig() {
@@ -35,6 +36,7 @@ function validateConfig() {
     CORS_ORIGINS: process.env.CORS_ORIGINS,
     LIKES_WEBHOOK_URL: process.env.LIKES_WEBHOOK_URL,
     LIKES_COOLDOWN_SEC: process.env.LIKES_COOLDOWN_SEC,
+    FILE_RETENTION_DAYS: process.env.FILE_RETENTION_DAYS,
   };
 
   const parsed = envSchema.safeParse(raw);
@@ -119,6 +121,7 @@ function validateConfig() {
       : ['http://localhost:3001'],
     likesWebhookUrl: cfg.LIKES_WEBHOOK_URL || null,
     likesCooldownSec: cfg.LIKES_COOLDOWN_SEC,
+    fileRetentionDays: cfg.FILE_RETENTION_DAYS,
     scripts,
   };
 }

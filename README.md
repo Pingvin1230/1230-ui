@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Pingvin1230/1230-ui/actions/workflows/ci.yml/badge.svg)](https://github.com/Pingvin1230/1230-ui/actions/workflows/ci.yml)
 
-> **Status:** `v0.9.0` — Mobile layout overhaul (fixed scroll, sidebar overlay, MobileNav on foldables) · Chat UX improvements (clickable links, code block language labels, streaming cursor, Stop in header, prompt suggestions) · Session file indicators · Onboarding banner · Jargon-free UI terminology · File upload & agent file download · Assistants Phase 2 · Backend modularization.
+> **Status:** `v0.9.1` — Applications architecture (split-pane workspace, extensible application registry, settings management) · File Preview (inline preview for images, code, markdown, PDF, CSV, HTML) · File Manager (global file management, retention policy, auto-cleanup) · Chat UX improvements (toggle applications pane, 50/50 layout) · Mobile layout overhaul (fixed scroll, sidebar overlay, MobileNav on foldables) · Session file indicators · Onboarding banner · Jargon-free UI terminology · File upload & agent file download · Assistants Phase 2 · Backend modularization.
 
 Modern web interface for managing sessions and interacting with [Hermes Agent](https://github.com/anthropics/hermes-agent) through a browser.
 
@@ -10,6 +10,10 @@ Modern web interface for managing sessions and interacting with [Hermes Agent](h
 
 - **Dashboard** — quick chat, recent sessions, Hermes API status
 - **Session Management** — create, rename, pin, archive, delete, bulk actions, **swipe-to-delete** (mobile), **long-press to enter bulk mode** (mobile)
+- **Applications Pane** — split-pane workspace on desktop (≥ 1024 px) with chat on the left and applications on the right. Extensible plugin system: add new applications by registering a React component. Toggle pane visibility from Navbar. Hidden on mobile. Manage applications from Settings page (enable/disable, reorder).
+- **File Preview** — inline preview for all session files in the Applications pane. Supports images (png, jpg, gif, webp), code files (py, js, ts, jsx, tsx, sh, sql, xml, yml, yaml, css) with syntax highlighting, markdown, JSON, CSV (as table), HTML (sandboxed iframe), PDF. Click file in Navbar dropdown to open preview.
+- **File Manager** — global file management across all sessions. View all files with disk usage stats, sort by name/date/size/expiration, filter by type (images, code, documents, expiring soon). Extend file lifetime to prevent auto-deletion. Delete files globally. Click file to navigate to session and open in File Preview.
+- **File Retention Policy** — automatic cleanup of expired files. Configurable via `FILE_RETENTION_DAYS` environment variable (default 30 days). Files expire after N days from upload. Expired files deleted on startup and every hour. Extend individual files to keep them longer.
 - **Real-time Chat** — streaming responses, markdown rendering, syntax highlighting, tool calls visualization
 - **File Attachments** — attach files to a chat message via the paperclip button or by dragging them onto the chat area. Allowed: `.txt .md .py .js .ts .jsx .tsx .json .csv .yml .yaml .log .html .css .xml .sh .sql .pdf .png .jpg .jpeg .gif .webp`. Limits: 50 MB per file, 5 files per message. Files live in `data/uploads/<session_id>/` and are cleaned up automatically when the session is deleted.
 - **Agent File Download** — when the agent creates or writes a file and mentions its absolute path in the response (e.g. `` `/tmp/report.md` ``), a download card appears directly inside the assistant message with the filename, size, and a Download button. Multiple files from one message are grouped in a collapsible container. Download cards persist across page reloads. If the file is deleted from disk, the endpoint returns `404` with a clear message.

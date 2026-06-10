@@ -65,3 +65,17 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
 }
+
+export interface Application {
+  id: number;
+  key: string;
+  name: string;
+  icon: string | null;
+  description: string | null;
+  enabled: number;
+  sortOrder: number;
+  desktopOnly: number;
+  config: Record<string, unknown>;
+  createdAt: number;
+  updatedAt: number;
+}

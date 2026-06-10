@@ -31,6 +31,7 @@ import { fileURLToPath } from 'url';
 import { apiLimiter } from '../middleware/security.js';
 import { getMimeTypeForPath, ALLOWED_EXTENSIONS } from '../db/fileTypes.js';
 import { db, uiDb } from '../db/connections.js';
+import config from '../config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -100,11 +101,31 @@ const upload = multer({
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * Fixes double-encoded UTF-8 filenames (mojibake).
+ * Some browsers/upload paths send UTF-8 bytes that get re-encoded as UTF-8.
+ * E.g. "Снимок" → "Ð¡Ð½Ð¸Ð¼Ð¾Ðº" in the DB.
+ */
+function fixFilenameEncoding(name) {
+  if (!name) return name;
+  try {
+    // If the string contains characters in the Ð/Ñ range (U+00C0–U+00FF),
+    // it's likely double-encoded UTF-8.
+    if (/[\u00C0-\u00FF]/.test(name)) {
+      return Buffer.from(name, 'latin1').toString('utf8');
+    }
+  } catch {
+    // ignore — return original
+  }
+  return name;
+}
+
 function rowToFile(row, projectRootAbs) {
   return {
     id: row.id,
     sessionId: row.session_id,
-    filename: row.filename,
+    filename: fixFilenameEncoding(row.filename),
     storedName: row.stored_name,
     mimeType: row.mime_type,
     size: row.size,
@@ -185,12 +206,15 @@ router.post('/:id/files', apiLimiter, (req, res) => {
     }
 
     const uploadedAt = Date.now();
+    const expiresAt = config.fileRetentionDays > 0
+      ? uploadedAt + (config.fileRetentionDays * 24 * 60 * 60 * 1000)
+      : null;
     let row;
     try {
       const result = uiDb
         .prepare(
-          `INSERT INTO session_files (session_id, filename, stored_name, mime_type, size, uploaded_at, source)
-           VALUES (?, ?, ?, ?, ?, ?, 'user')`
+          `INSERT INTO session_files (session_id, filename, stored_name, mime_type, size, uploaded_at, expires_at, source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'user')`
         )
         .run(
           sessionId,
@@ -198,7 +222,8 @@ router.post('/:id/files', apiLimiter, (req, res) => {
           storedName,
           req.file.mimetype || null,
           req.file.size,
-          uploadedAt
+          uploadedAt,
+          expiresAt
         );
       row = uiDb
         .prepare('SELECT * FROM session_files WHERE id = ?')
@@ -231,6 +256,49 @@ router.get('/:id/files', (req, res) => {
     console.error('Failed to list session files:', err);
     res.status(500).json({ error: 'Failed to list files' });
   }
+});
+
+// ── GET /api/sessions/:id/files/:fileId/content ─────────────────────────────
+//
+// Task #37: serves file content inline (Content-Disposition: inline) for preview.
+// Unlike /download which forces attachment, this lets the browser render if possible.
+router.get('/:id/files/:fileId/content', (req, res) => {
+  const sessionId = req.params.id;
+  const fileId    = parseInt(req.params.fileId, 10);
+  if (!sessionId) return res.status(400).json({ error: 'Session id is required' });
+  if (!Number.isInteger(fileId)) return res.status(400).json({ error: 'fileId must be an integer' });
+
+  let row;
+  try {
+    row = uiDb
+      .prepare('SELECT * FROM session_files WHERE id = ?')
+      .get(fileId);
+  } catch (err) {
+    console.error('Failed to fetch session_files row:', err);
+    return res.status(500).json({ error: 'Failed to fetch file content' });
+  }
+
+  if (!row || row.session_id !== sessionId) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+
+  const source = row.source || 'user';
+  let absolutePath;
+  if (source === 'agent') {
+    absolutePath = row.stored_name;
+  } else {
+    absolutePath = path.join(uploadsDir, row.session_id, row.stored_name);
+  }
+
+  if (!fs.existsSync(absolutePath)) {
+    return res.status(404).json({ error: 'File no longer available' });
+  }
+
+  const stat = fs.statSync(absolutePath);
+  res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
+  res.setHeader('Content-Length', stat.size);
+  res.setHeader('Content-Disposition', `inline; filename="${row.filename}"`);
+  fs.createReadStream(absolutePath).pipe(res);
 });
 
 // ── GET /api/sessions/:id/files/:fileId/download ────────────────────────────

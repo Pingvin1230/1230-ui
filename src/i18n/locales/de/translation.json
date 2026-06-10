@@ -65,6 +65,7 @@
     "startConversation": "Unterhaltung beginnen",
     "startConversationDesc": "Senden Sie eine Nachricht, um eine Antwort von Hermes zu erhalten.",
     "messageCopied": "Nachricht kopiert",
+    "fileCopied": "Kopiert",
     "copyMessage": "Nachricht kopieren",
     "regenerateResponse": "Antwort neu generieren",
     "agentThinking": "Agent denkt nach…",
@@ -260,7 +261,11 @@
     "daysAgo_other": "vor {{count}} Tagen",
     "timeFormatHm": "{{h}} Std. {{m}} Min.",
     "timeFormatMs": "{{m}} Min. {{s}} Sek.",
-    "timeFormatS": "{{s}} Sek."
+    "timeFormatS": "{{s}} Sek.",
+    "navStyleLabel": "Desktop-Navigation",
+    "navStyleDesc": "Wähle die Navigationsart auf dem Desktop",
+    "navStyleSidebar": "Seitenleiste",
+    "navStyleBottombar": "Untere Leiste"
   },
   "errors": {
     "content_moderation": "Anfrage blockiert",
@@ -318,7 +323,10 @@
     "failedToRestoreAssistant": "Assistent konnte nicht wiederhergestellt werden",
     "failedToUploadFile": "Datei konnte nicht hochgeladen werden",
     "failedToDeleteFile": "Datei konnte nicht gelöscht werden",
-    "failedToListFiles": "Dateien konnten nicht aufgelistet werden"
+    "failedToListFiles": "Dateien konnten nicht aufgelistet werden",
+    "failedToExtendFile": "Dateiverlängerung fehlgeschlagen",
+    "failedToFetchApplications": "Anwendungen konnten nicht geladen werden",
+    "failedToUpdateApplication": "Anwendung konnte nicht aktualisiert werden"
   },
   "errorBoundary": {
     "title": "Ein Fehler ist aufgetreten",
@@ -431,5 +439,88 @@
     "depthQuick": "Schnell",
     "depthStandard": "Standard",
     "depthThorough": "Gründlich"
+  },
+  "applications": {
+    "title": "Anwendungen",
+    "subtitle": "{{enabled}} von {{total}} Anwendungen aktiviert",
+    "manage": "Anwendungen",
+    "backToSettings": "Zurück zu Einstellungen",
+    "noApplications": "Keine Anwendungen verfügbar",
+    "selectApplication": "Wählen Sie eine Anwendung",
+    "enabled": "aktiviert",
+    "disabled": "deaktiviert",
+    "moveUp": "Nach oben",
+    "moveDown": "Nach unten",
+    "infoText": "Anwendungen fügen der Chat-Ansicht zusätzliche Funktionen hinzu. Aktivieren oder deaktivieren Sie sie hier und steuern Sie die Anzeigereihenfolge.",
+    "filePreviewComing": "Dateivorschau kommt bald",
+    "filePreviewDesc": "Inline-Vorschauen von Sitzungsdateien werden hier im nächsten Update erscheinen.",
+    "selectSession": "Wählen Sie eine Sitzung, um Dateien vorzuschauen",
+    "showApplications": "Anwendungen anzeigen",
+    "hideApplications": "Anwendungen ausblenden",
+    "settingsDesc": "Anwendungen in der Chat-Ansicht verwalten"
+  },
+  "filePreview": {
+    "title": "Dateivorschau",
+    "noSession": "Wählen Sie eine Sitzung, um Dateien vorzuschauen",
+    "noFiles": "Keine Dateien in dieser Sitzung",
+    "loading": "Dateien laden...",
+    "error": "Datei konnte nicht geladen werden",
+    "retry": "Wiederholen",
+    "download": "Herunterladen",
+    "unsupported": "Vorschau für diesen Dateityp nicht verfügbar",
+    "pdfNotSupported": "Ihr Browser unterstützt keine PDF-Vorschau"
+  },
+  "fileManager": {
+    "title": "Dateimanager",
+    "unknownSession": "Unbekannte Sitzung",
+    "deletedSession": "Sitzung gelöscht",
+    "error": "Dateien konnten nicht geladen werden",
+    "stats": {
+      "files": "{{count}} Datei",
+      "files_one": "{{count}} Datei",
+      "files_other": "{{count}} Dateien",
+      "size": "{{size}}",
+      "expiringSoon": "{{count}} läuft bald ab"
+    },
+    "sort": {
+      "label": "Sortieren",
+      "name": "Name",
+      "date": "Datum",
+      "size": "Größe",
+      "expires": "Ablauf"
+    },
+    "filter": {
+      "label": "Filter",
+      "all": "Alle Dateien",
+      "expiring": "Bald ablaufend",
+      "images": "Bilder",
+      "code": "Code",
+      "documents": "Dokumente"
+    },
+    "search": "Dateien suchen...",
+    "extend": "Um 30 Tage verlängern",
+    "delete": "Datei löschen",
+    "deleteConfirm": {
+      "title": "Datei löschen?",
+      "message": "Sind Sie sicher, dass Sie {{filename}} löschen möchten?",
+      "warning": "Diese Aktion kann nicht rückgängig gemacht werden."
+    },
+    "empty": {
+      "noFiles": "Noch keine Dateien",
+      "noFilesDesc": "Laden Sie Dateien in einer Chat-Sitzung hoch, um sie hier zu sehen.",
+      "noMatch": "Keine Dateien entsprechen Ihrem Filter",
+      "noSearch": "Keine Dateien für '{{query}}' gefunden"
+    },
+    "expiration": {
+      "expired": "Abgelaufen",
+      "today": "Heute",
+      "daysLeft": "{{count}} Tag übrig",
+      "daysLeft_one": "{{count}} Tag übrig",
+      "daysLeft_other": "{{count}} Tage übrig",
+      "hoursLeft": "{{count}} Stunde übrig",
+      "hoursLeft_one": "{{count}} Stunde übrig",
+      "hoursLeft_other": "{{count}} Stunden übrig",
+      "never": "Läuft nie ab"
+    }
   }
 }

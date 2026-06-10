@@ -4,12 +4,13 @@ import { Link } from 'react-router-dom';
 import i18n from '../i18n';
 import { api } from '../lib/api';
 import { formatRelativeTimestamp } from '../lib/time';
-import { Download, Wrench, Loader2, CheckCircle, XCircle, AlertTriangle, Sun, Moon, Bell, BellOff, Calendar, MessageCircle, Heart, ArrowRight } from 'lucide-react';
+import { Download, Wrench, Loader2, CheckCircle, XCircle, AlertTriangle, Sun, Moon, Bell, BellOff, Calendar, MessageCircle, Heart, ArrowRight, Grid3X3 } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { useThemeStore } from '../store/themeStore';
 import { useNotificationsStore } from '../store/notificationsStore';
 import { useSessionsSortStore } from '../store/sessionsSortStore';
 import { useHermesStatusStore } from '../store/hermesStatusStore';
+
 
 const LIKE_STORAGE_KEY = 'hermes-1230-last-like';
 const LIKE_DEFAULT_COOLDOWN_SEC = 3600;
@@ -57,6 +58,7 @@ export function SettingsPage() {
   const hermesVersion = useHermesStatusStore((s) => s.version);
   const hermesLatestVersion = useHermesStatusStore((s) => s.latestVersion);
   const hermesUpdateAvailable = useHermesStatusStore((s) => s.updateAvailable);
+
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -419,6 +421,26 @@ export function SettingsPage() {
                 className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-border-default bg-bg-primary hover:bg-bg-secondary text-fg-secondary rounded-lg transition-colors min-h-[44px]"
               >
                 {t('assistants.manage')}
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          </div>
+
+          {/* Applications Section */}
+          <div className="bg-bg-primary border border-border-default rounded-lg">
+            <div className="px-4 py-3 border-b border-border-default flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-fg-primary">{t('applications.title')}</h3>
+                <p className="text-xs text-fg-muted mt-0.5">
+                  {t('applications.settingsDesc', { defaultValue: 'Manage applications shown in the chat view' })}
+                </p>
+              </div>
+              <Link
+                to="/applications"
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-border-default bg-bg-primary hover:bg-bg-secondary text-fg-secondary rounded-lg transition-colors min-h-[44px]"
+              >
+                <Grid3X3 className="w-3.5 h-3.5" />
+                {t('applications.manage')}
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>

@@ -65,6 +65,7 @@
     "startConversation": "Iniciar una conversación",
     "startConversationDesc": "Envía un mensaje para obtener una respuesta de Hermes.",
     "messageCopied": "Mensaje copiado",
+    "fileCopied": "Copiado",
     "copyMessage": "Copiar mensaje",
     "regenerateResponse": "Regenerar respuesta",
     "agentThinking": "El agente está pensando...",
@@ -260,7 +261,11 @@
     "daysAgo_other": "hace {{count}}d",
     "timeFormatHm": "{{h}}h {{m}}m",
     "timeFormatMs": "{{m}}m {{s}}s",
-    "timeFormatS": "{{s}}s"
+    "timeFormatS": "{{s}}s",
+    "navStyleLabel": "Navegación en escritorio",
+    "navStyleDesc": "Elige cómo navegar en escritorio",
+    "navStyleSidebar": "Barra lateral",
+    "navStyleBottombar": "Barra inferior"
   },
   "errors": {
     "content_moderation": "Solicitud bloqueada",
@@ -318,7 +323,10 @@
     "failedToRestoreAssistant": "Error al restaurar el asistente",
     "failedToUploadFile": "Error al subir el archivo",
     "failedToDeleteFile": "Error al eliminar el archivo",
-    "failedToListFiles": "Error al listar los archivos"
+    "failedToListFiles": "Error al listar los archivos",
+    "failedToExtendFile": "Error al extender el archivo",
+    "failedToFetchApplications": "Error al obtener las aplicaciones",
+    "failedToUpdateApplication": "Error al actualizar la aplicación"
   },
   "errorBoundary": {
     "title": "Ocurrió un error",
@@ -431,5 +439,88 @@
     "depthQuick": "Rápido",
     "depthStandard": "Estándar",
     "depthThorough": "Detallado"
+  },
+  "applications": {
+    "title": "Aplicaciones",
+    "subtitle": "{{enabled}} de {{total}} aplicaciones habilitadas",
+    "manage": "Aplicaciones",
+    "backToSettings": "Volver a Configuración",
+    "noApplications": "No hay aplicaciones disponibles",
+    "selectApplication": "Seleccione una aplicación",
+    "enabled": "habilitado",
+    "disabled": "deshabilitado",
+    "moveUp": "Mover arriba",
+    "moveDown": "Mover abajo",
+    "infoText": "Las aplicaciones añaden funciones adicionales a la vista del chat. Habilítelas, deshabilítelas y controle su orden de visualización aquí.",
+    "filePreviewComing": "Vista previa de archivos próximamente",
+    "filePreviewDesc": "Las vistas previas de los archivos de sesión aparecerán aquí en la próxima actualización.",
+    "selectSession": "Seleccione una sesión para previsualizar archivos",
+    "showApplications": "Mostrar aplicaciones",
+    "hideApplications": "Ocultar aplicaciones",
+    "settingsDesc": "Gestionar aplicaciones mostradas en la vista del chat"
+  },
+  "filePreview": {
+    "title": "Vista previa de archivos",
+    "noSession": "Seleccione una sesión para previsualizar archivos",
+    "noFiles": "No hay archivos en esta sesión",
+    "loading": "Cargando archivos...",
+    "error": "Error al cargar el archivo",
+    "retry": "Reintentar",
+    "download": "Descargar",
+    "unsupported": "Vista previa no disponible para este tipo de archivo",
+    "pdfNotSupported": "Su navegador no admite la vista previa de PDF"
+  },
+  "fileManager": {
+    "title": "Gestor de archivos",
+    "unknownSession": "Sesión desconocida",
+    "deletedSession": "Sesión eliminada",
+    "error": "Error al cargar los archivos",
+    "stats": {
+      "files": "{{count}} archivo",
+      "files_one": "{{count}} archivo",
+      "files_other": "{{count}} archivos",
+      "size": "{{size}}",
+      "expiringSoon": "{{count}} por expirar"
+    },
+    "sort": {
+      "label": "Ordenar",
+      "name": "Nombre",
+      "date": "Fecha",
+      "size": "Tamaño",
+      "expires": "Expiración"
+    },
+    "filter": {
+      "label": "Filtrar",
+      "all": "Todos los archivos",
+      "expiring": "Expiran pronto",
+      "images": "Imágenes",
+      "code": "Código",
+      "documents": "Documentos"
+    },
+    "search": "Buscar archivos...",
+    "extend": "Extender 30 días",
+    "delete": "Eliminar archivo",
+    "deleteConfirm": {
+      "title": "¿Eliminar archivo?",
+      "message": "¿Está seguro de que desea eliminar {{filename}}?",
+      "warning": "Esta acción no se puede deshacer."
+    },
+    "empty": {
+      "noFiles": "Aún no hay archivos",
+      "noFilesDesc": "Suba archivos en una sesión de chat para verlos aquí.",
+      "noMatch": "Ningún archivo coincide con su filtro",
+      "noSearch": "No se encontraron archivos para '{{query}}'"
+    },
+    "expiration": {
+      "expired": "Expirado",
+      "today": "Hoy",
+      "daysLeft": "{{count}} día restante",
+      "daysLeft_one": "{{count}} día restante",
+      "daysLeft_other": "{{count}} días restantes",
+      "hoursLeft": "{{count}} hora restante",
+      "hoursLeft_one": "{{count}} hora restante",
+      "hoursLeft_other": "{{count}} horas restantes",
+      "never": "Sin expiración"
+    }
   }
 }

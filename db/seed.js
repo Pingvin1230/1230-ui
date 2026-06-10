@@ -1,8 +1,8 @@
 /**
  * db/seed.js
  *
- * Seeds starter assistants on first run (when the assistants table is empty).
- * Safe to call on every startup — exits early if any assistants already exist.
+ * Seeds starter assistants and applications on first run.
+ * Safe to call on every startup — exits early if data already exists.
  */
 
 /**
@@ -56,5 +56,35 @@ export function seedStarterAssistants(uiDb) {
     console.log(`Seeded ${starters.length} starter assistant(s).`);
   } catch (err) {
     console.warn(`Failed to seed starter assistants: ${err.message}`);
+  }
+}
+
+/**
+ * Seeds the starter applications (file_preview, file_manager) on startup.
+ * Safe to call on every startup — skips if already exists.
+ * @param {import('better-sqlite3').Database} uiDb
+ */
+export function seedStarterApplications(uiDb) {
+  try {
+    const insert = uiDb.prepare(`
+      INSERT OR IGNORE INTO applications (key, name, icon, description, enabled, sort_order, desktop_only, config)
+      VALUES (?, ?, ?, ?, ?, ?, ?, '{}')
+    `);
+
+    const filePreviewExists = uiDb.prepare("SELECT id FROM applications WHERE key = 'file_preview'").get();
+    if (!filePreviewExists) {
+      insert.run('file_preview', 'File Preview', 'Eye', 'Preview session files inline', 1, 0, 1);
+    }
+
+    const fileManagerExists = uiDb.prepare("SELECT id FROM applications WHERE key = 'file_manager'").get();
+    if (!fileManagerExists) {
+      insert.run('file_manager', 'File Manager', 'FolderOpen', 'Manage all session files', 1, 1, 1);
+    }
+
+    if (!filePreviewExists || !fileManagerExists) {
+      console.log('Seeded starter application(s).');
+    }
+  } catch (err) {
+    console.warn(`Failed to seed starter applications: ${err.message}`);
   }
 }

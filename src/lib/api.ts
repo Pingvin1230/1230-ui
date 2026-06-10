@@ -1,5 +1,5 @@
 import i18n from '../i18n';
-import type { Assistant, Session, Message } from '../types/api';
+import type { Assistant, Session, Message, Application } from '../types/api';
 
 const API_BASE = '';
 
@@ -41,6 +41,25 @@ export interface SessionFile {
   uploadedAt: number;
   path: string;
   source?: 'user' | 'agent';
+}
+
+export interface GlobalFile {
+  id: number;
+  sessionId: string;
+  sessionTitle: string | null;
+  filename: string;
+  mimeType: string | null;
+  size: number;
+  uploadedAt: number;
+  expiresAt: number | null;
+  extendedCount: number;
+  source: 'user' | 'agent';
+}
+
+export interface FileStats {
+  totalFiles: number;
+  totalSize: number;
+  expiringSoon: number;
 }
 
 export const api = {
@@ -552,6 +571,18 @@ export const api = {
     }
   },
 
+  getFileContentUrl(sessionId: string, fileId: number): string {
+    return `/api/sessions/${sessionId}/files/${fileId}/content`;
+  },
+
+  async getFileContent(sessionId: string, fileId: number): Promise<string> {
+    const res = await fetch(this.getFileContentUrl(sessionId, fileId), {
+      credentials: 'include',
+    });
+    if (!res.ok) throw new Error(`Failed to fetch file content: ${res.status}`);
+    return res.text();
+  },
+
   async getAssistants(includeArchived = false): Promise<{ assistants: Assistant[] }> {
     const res = await fetch(`${API_BASE}/api/assistants?include_archived=${includeArchived ? 1 : 0}`);
     if (!res.ok) throw new Error(i18n.t('api.failedToFetchAssistants'));
@@ -622,5 +653,55 @@ export const api = {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || i18n.t('api.failedToDuplicateAssistant'));
     return data;
+  },
+
+  // --- Applications ---
+
+  async getApplications(enabledOnly = false): Promise<{ applications: Application[] }> {
+    const qs = enabledOnly ? '?enabled=1' : '';
+    const res = await fetch(`${API_BASE}/api/applications${qs}`);
+    if (!res.ok) throw new Error(i18n.t('api.failedToFetchApplications'));
+    return res.json();
+  },
+
+  async updateApplication(id: number, patch: Partial<Application>): Promise<{ application: Application }> {
+    const body: Record<string, unknown> = {};
+    if (patch.enabled !== undefined) body.enabled = patch.enabled;
+    if (patch.sortOrder !== undefined) body.sortOrder = patch.sortOrder;
+    if (patch.name !== undefined) body.name = patch.name;
+    if (patch.icon !== undefined) body.icon = patch.icon;
+    if (patch.description !== undefined) body.description = patch.description;
+    if (patch.config !== undefined) body.config = patch.config;
+    const res = await fetch(`${API_BASE}/api/applications/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || i18n.t('api.failedToUpdateApplication'));
+    return data;
+  },
+
+  // --- Global file management (Task #38) ---
+
+  async getGlobalFiles(): Promise<{ files: GlobalFile[]; stats: FileStats }> {
+    const res = await fetch(`${API_BASE}/api/files`);
+    if (!res.ok) throw new Error(i18n.t('api.failedToListFiles'));
+    return res.json();
+  },
+
+  async extendFile(fileId: number): Promise<{ success: boolean; expiresAt: number }> {
+    const res = await fetch(`${API_BASE}/api/files/${fileId}/extend`, { method: 'PATCH' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || i18n.t('api.failedToExtendFile'));
+    return data;
+  },
+
+  async deleteGlobalFile(fileId: number): Promise<void> {
+    const res = await fetch(`${API_BASE}/api/files/${fileId}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 204) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || i18n.t('api.failedToDeleteFile'));
+    }
   },
 };

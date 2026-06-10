@@ -1,7 +1,7 @@
 # 1230-UI — Tasks and Progress
 
-**Last updated:** 2026-06-09 (Tasks #35, #28, #29, #17 shipped; mobile layout overhaul + chat UX improvements also complete — see CHANGELOG)
-**Current version:** 0.9.0
+**Last updated:** 2026-06-10 (Tasks #36, #37, #38 shipped — applications architecture, file preview, file manager; all v1.0.0 requirements met)
+**Current version:** 0.9.1
 **Release target:** v1.0.0 — friendly web interface for non-technical Hermes Agent users
 
 ---
@@ -22,48 +22,7 @@ Everything in **🚨 Required for v1.0.0 release** must be done before tagging v
 
 ## 🚨 Required for v1.0.0 release
 
-Tasks that must ship with v1.0.0. Ordered roughly by user-impact priority within each group.
-
-### User-facing features (UX-critical for non-tech users)
-
-#### ✅ 35. Session-level file visualisation (shipped 2026-06-09)
-- ✅ ChatPage header: `📎 N` badge next to the model name (uses existing `chatInputStore.sessionFiles`)
-- ✅ SessionCard (Sessions list): `📎 N` badge in row 3 alongside message count
-- ✅ Backend `GET /api/sessions` returns `fileCount` via single GROUP BY subquery
-- ✅ `Session` type gains `fileCount?: number`
-- ✅ i18n: `chat.sessionFilesCount` × 4 languages
-
----
-
-### Release infrastructure
-
-#### ✅ 17. CI/CD Pipeline (shipped 2026-06-09)
-- ✅ GitHub Actions CI: lint → typecheck → test → build on every PR/push to main (shipped in v0.7.0)
-- ✅ `release.yml` — triggered on `v*.*.*` tag: full CI pass → creates `1230-ui-vX.Y.Z.tar.gz` → extracts CHANGELOG section → publishes GitHub Release with archive attached
-- ✅ CI status badge added to README
-- ⏳ Deferred: auto-deploy to staging server on merge to main
-
----
-
-### Code cleanup (carried from old "Known Issues")
-
-#### ✅ 28. UX-3 — Remove technical jargon from UI (shipped 2026-06-09)
-- ✅ "Model Providers" → "AI Services" / "Сервисы ИИ" (`settings.modelProviders`)
-- ✅ "API key" → "Access key" / "Ключ доступа" (`providers.apiKeyLabel`)
-- ✅ "Provider Keys" page title → "Service Keys" (`providers.title`)
-- ✅ All related i18n strings updated × 4 languages
-- ⏳ Deferred: per-provider one-line description (sourced from `list_bundled_providers.py`) — low priority, post-1.0
-
----
-
-#### ✅ 29. UX-7 — Onboarding / welcome flow (shipped 2026-06-09)
-- ✅ Detected via `allModels.length === 0 && sessions.length === 0` (reuses existing `loadData()` data — no extra API call)
-- ✅ Dismissable banner on Dashboard with 3 numbered steps (Key → Zap → MessageCircle icons)
-- ✅ "Add service key →" button links to `/settings/providers`
-- ✅ Dismiss state persisted in `localStorage.onboarding_dismissed`
-- ✅ Not shown once user has sessions or models configured
-- ✅ Works in dark/light themes and on mobile
-- ✅ i18n: 10 new `dashboard.onboarding*` keys × 4 languages
+All required tasks for v1.0.0 have been completed. Ready to tag v1.0.0.
 
 ---
 
@@ -253,6 +212,108 @@ Tasks that were considered and explicitly rejected. Kept for reference so we don
 ## ✅ Completed (history)
 
 Done features, kept for reference. Organized by release / category. Last release at the top.
+
+### v0.9.1 — Applications Architecture + File Preview (2026-06-10)
+
+#### Task #36 — Sessions page split layout with applications architecture
+- ✅ **Backend:** `applications` table (idempotent migration in `db/migrate.js`)
+- ✅ **Backend:** `GET /api/applications` (+ `?enabled` filter), `PATCH /api/applications/:id`
+- ✅ **Backend:** Seed `file_preview` application on startup
+- ✅ **Frontend:** Split layout inside `<main>` — 50/50 on desktop (≥ 1024 px), chat-only on mobile
+- ✅ **Frontend:** `<ApplicationsPane />` — pill selector (icon + name tabs) + rendered application component
+- ✅ **Frontend:** Application registry (`src/applications/registry.ts`) — `key → React component` map
+- ✅ **Frontend:** `ApplicationComponentProps { sessionId, config }` contract
+- ✅ **Frontend:** Zustand store `applicationsStore` — fetch, select (global via localStorage), update
+- ✅ **Frontend:** Placeholder `PlaceholderApp` for File Preview (task #37)
+- ✅ **Frontend:** `/applications` standalone management page (toggle enabled, reorder with up/down buttons)
+- ✅ **Frontend:** Settings section "Applications" with link to `/applications`
+- ✅ **Frontend:** Toggle button in Navbar (PanelRightOpen/PanelRightClose) — hidden on mobile, state persisted in localStorage
+- ✅ **i18n:** `applications.*` keys × 4 languages (en, ru, es, de)
+
+**New files:** `routes/applications.js`, `src/applications/types.ts`, `src/applications/registry.ts`, `src/applications/placeholder/PlaceholderApp.tsx`, `src/store/applicationsStore.ts`, `src/store/appsPaneStore.ts`, `src/components/ApplicationsPane.tsx`, `src/pages/ApplicationsPage.tsx`.
+**Changed files:** `db/migrate.js`, `db/seed.js`, `server.js`, `app.js`, `src/types/api.ts`, `src/lib/api.ts`, `src/components/Layout.tsx`, `src/components/Navbar.tsx`, `src/pages/SettingsPage.tsx`, `src/App.tsx`, i18n locales (×4).
+
+**Bundle impact:** `ApplicationsPage` chunk 4.40 KB gzip (lazy). No change to other chunks.
+
+#### Task #37 — File Preview application
+- ✅ **Backend:** `GET /api/sessions/:id/files/:fileId/content` — inline file serving (`Content-Disposition: inline`)
+- ✅ **Backend:** Filename encoding fix — recovers double-encoded UTF-8 (mojibake) in `rowToFile()`
+- ✅ **Frontend:** `FilePreviewApp` — main component with file list, auto-select, empty/loading/error states
+- ✅ **Frontend:** `FileList` — horizontal pill bar with icon + filename + size
+- ✅ **Frontend:** `FilePreview` — mimeType router (switch-based, React 19 compatible)
+- ✅ **Frontend:** 9 viewers: `ImageViewer`, `MarkdownViewer`, `CodeViewer`, `JSONViewer`, `TextViewer`, `CSVViewer`, `HTMLViewer`, `PDFViewer`, `UnsupportedViewer`
+- ✅ **Frontend:** Navbar file dropdown — clickable items open preview pane (desktop only)
+- ✅ **Frontend:** `filePreviewStore` — cross-component state for navbar → preview communication
+- ✅ **i18n:** `filePreview.*` keys × 4 languages (en, ru, es, de)
+- ✅ **New dependency:** `papaparse` + `@types/papaparse` (CSV parsing)
+
+**New files:** `src/applications/file-preview/FilePreviewApp.tsx`, `src/applications/file-preview/FileList.tsx`, `src/applications/file-preview/FilePreview.tsx`, `src/applications/file-preview/viewers/` (9 viewers), `src/applications/file-preview/index.ts`, `src/store/filePreviewStore.ts`.
+**Changed files:** `routes/files.js`, `src/lib/api.ts`, `src/applications/registry.ts`, `src/components/Navbar.tsx`, i18n locales (×4).
+
+**Bundle impact:** `file-preview` chunk ~8 KB gzip (lazy). `papaparse` +3 KB gzip.
+
+#### Task #38 — File Manager application
+- ✅ **Backend:** Migration: `expires_at`, `extended_count` columns in `session_files`
+- ✅ **Backend:** Config: `FILE_RETENTION_DAYS` in `.env` (default 30)
+- ✅ **Backend:** Auto-set `expires_at` on file upload
+- ✅ **Backend:** `GET /api/files` — list all files across sessions (with session title/preview join)
+- ✅ **Backend:** `PATCH /api/files/:fileId/extend` — extend expiration (+FILE_RETENTION_DAYS)
+- ✅ **Backend:** `DELETE /api/files/:fileId` — delete file globally (disk + DB)
+- ✅ **Backend:** Startup cleanup: delete expired files on server start
+- ✅ **Backend:** Periodic cleanup: `setInterval(cleanupExpiredFiles, 60 * 60 * 1000)` — runs every hour
+- ✅ **Backend:** Handles both user files and agent files in cleanup
+- ✅ **Frontend:** `FileManagerApp` — main component (desktop-only, in Applications pane)
+- ✅ **Frontend:** `FileStatsBar` — total files, total size, expiring soon count
+- ✅ **Frontend:** `FileList` — sortable table (name, date, size, expiration), filter (all/expiring/images/code/documents), search
+- ✅ **Frontend:** `FileRow` — icon + filename + session title + size + expiration badge + actions
+- ✅ **Frontend:** `ExpirationBadge` — color-coded expiration indicator (green/yellow/orange/red/gray)
+- ✅ **Frontend:** `ExtendButton` — extend file lifetime (+30 days) with optimistic update
+- ✅ **Frontend:** `DeleteConfirmModal` — confirmation dialog
+- ✅ **Frontend:** Integration with File Preview: click file → navigate to session + open File Preview
+- ✅ **Frontend:** Empty state, loading state, error state
+- ✅ **Frontend:** Registry update: `file_manager: FileManagerApp`
+- ✅ **Backend:** Seed `file_manager` application in `db/seed.js`
+- ✅ **i18n:** `fileManager.*` keys × 4 languages (en, ru, es, de)
+
+**New files:** `routes/globalFiles.js`, `src/applications/file-manager/FileManagerApp.tsx`, `src/applications/file-manager/FileStatsBar.tsx`, `src/applications/file-manager/FileList.tsx`, `src/applications/file-manager/FileRow.tsx`, `src/applications/file-manager/ExpirationBadge.tsx`, `src/applications/file-manager/ExtendButton.tsx`, `src/applications/file-manager/DeleteConfirmModal.tsx`, `src/applications/file-manager/index.ts`.
+**Changed files:** `db/migrate.js`, `db/seed.js`, `config.js`, `server.js`, `app.js`, `routes/files.js`, `src/lib/api.ts`, `src/types/api.ts`, `src/applications/registry.ts`, `.env.example`, i18n locales (×4).
+
+**Bug fixes:**
+- ✅ Russian filenames in File Manager — `fixFilenameEncoding()` applied to `routes/globalFiles.js`
+- ✅ Session title display — shows preview (first user message) when title is null, "Deleted session" if session deleted
+- ✅ File filter bug — fixed `emptyMessage` logic in `FileList.tsx`
+- ✅ File Preview integration — fixed `useEffect` dependency on `files` array
+
+### v0.9.0 — Required tasks shipped (2026-06-09)
+
+#### Task #35 — Session-level file visualisation
+- ✅ ChatPage header: `📎 N` badge next to the model name (uses existing `chatInputStore.sessionFiles`)
+- ✅ SessionCard (Sessions list): `📎 N` badge in row 3 alongside message count
+- ✅ Backend `GET /api/sessions` returns `fileCount` via single GROUP BY subquery
+- ✅ `Session` type gains `fileCount?: number`
+- ✅ i18n: `chat.sessionFilesCount` × 4 languages
+
+#### Task #17 — CI/CD Pipeline
+- ✅ GitHub Actions CI: lint → typecheck → test → build on every PR/push to main (shipped in v0.7.0)
+- ✅ `release.yml` — triggered on `v*.*.*` tag: full CI pass → creates `1230-ui-vX.Y.Z.tar.gz` → extracts CHANGELOG section → publishes GitHub Release with archive attached
+- ✅ CI status badge added to README
+- ⏳ Deferred: auto-deploy to staging server on merge to main
+
+#### Task #28 — UX-3: Remove technical jargon from UI
+- ✅ "Model Providers" → "AI Services" / "Сервисы ИИ" (`settings.modelProviders`)
+- ✅ "API key" → "Access key" / "Ключ доступа" (`providers.apiKeyLabel`)
+- ✅ "Provider Keys" page title → "Service Keys" (`providers.title`)
+- ✅ All related i18n strings updated × 4 languages
+- ⏳ Deferred: per-provider one-line description (sourced from `list_bundled_providers.py`) — low priority, post-1.0
+
+#### Task #29 — UX-7: Onboarding / welcome flow
+- ✅ Detected via `allModels.length === 0 && sessions.length === 0` (reuses existing `loadData()` data — no extra API call)
+- ✅ Dismissable banner on Dashboard with 3 numbered steps (Key → Zap → MessageCircle icons)
+- ✅ "Add service key →" button links to `/settings/providers`
+- ✅ Dismiss state persisted in `localStorage.onboarding_dismissed`
+- ✅ Not shown once user has sessions or models configured
+- ✅ Works in dark/light themes and on mobile
+- ✅ i18n: 10 new `dashboard.onboarding*` keys × 4 languages
 
 ### v0.9.0 — File Upload to Session (2026-06-08)
 
@@ -502,13 +563,13 @@ Task #23 implemented end-to-end. User can now attach one or more files to a chat
 
 ## 📊 Project Metrics
 
-- **Lines of Code:** ~1 900 (backend, modular) + ~3 700 (frontend)
+- **Lines of Code:** ~2 000 (backend, modular) + ~4 200 (frontend)
 - **TypeScript:** 100% coverage on frontend
 - **Test Coverage:** 22 tests (security + time utilities); backend routes not yet covered
-- **Bundle Size (gzip):** ChatPage 183 KB · Sessions 80 KB · rehype-highlight 53 KB (lazy) · Settings 22 KB · index 66 KB
-- **Code Splitting:** Dashboard 6 KB · NewSession 9 KB · Assistants 9 KB · AssistantEdit 9 KB · Providers 9 KB · Settings 22 KB · Sessions 80 KB · Chat 183 KB + 53 KB lazy
-- **i18n:** ~230 strings × 4 languages (en, ru, es, de)
-- **Known open tasks for v1.0.0:** 0 — all required tasks shipped ✅ (#23, #24, #25, #28, #29, #35, #17, #10, #27). Ready to tag v1.0.0. Full file preview/UX → #34 (post-1.0)
+- **Bundle Size (gzip):** ChatPage 183 KB · Sessions 80 KB · rehype-highlight 53 KB (lazy) · Settings 22 KB · index 66 KB · file-preview ~8 KB (lazy)
+- **Code Splitting:** Dashboard 6 KB · NewSession 9 KB · Assistants 9 KB · AssistantEdit 9 KB · Providers 9 KB · Applications 4 KB · Settings 22 KB · Sessions 80 KB · Chat 183 KB + 53 KB lazy · file-preview 8 KB (lazy)
+- **i18n:** ~240 strings × 4 languages (en, ru, es, de)
+- **Known open tasks for v1.0.0:** 0 — all required tasks shipped ✅ (#36, #37, #38). Ready to tag v1.0.0.
 
 ---
 
@@ -541,6 +602,7 @@ journalctl -u hermes-api -f   # Hermes API logs
 ```
 1230-ui/
 ├── src/                    # React frontend
+│   ├── applications/       # Application plugins (file-preview, placeholder)
 │   ├── components/         # UI components
 │   ├── pages/              # Pages (lazy-loaded)
 │   ├── store/              # Zustand stores

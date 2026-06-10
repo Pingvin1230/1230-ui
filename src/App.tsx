@@ -13,6 +13,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ de
 const ProvidersPage = lazy(() => import('./pages/ProvidersPage').then((m) => ({ default: m.ProvidersPage })));
 const AssistantsPage = lazy(() => import('./pages/AssistantsPage').then((m) => ({ default: m.AssistantsPage })));
 const AssistantEditPage = lazy(() => import('./pages/AssistantEditPage').then((m) => ({ default: m.AssistantEditPage })));
+const ApplicationsPage = lazy(() => import('./pages/ApplicationsPage').then((m) => ({ default: m.ApplicationsPage })));
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
                 <Route path="assistants" element={<AssistantsPage />} />
                 <Route path="assistants/new" element={<AssistantEditPage />} />
                 <Route path="assistants/:id" element={<AssistantEditPage />} />
+                <Route path="applications" element={<ApplicationsPage />} />
               </Route>
             </Routes>
           </Suspense>
