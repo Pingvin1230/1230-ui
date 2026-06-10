@@ -32,25 +32,17 @@ Modern web interface for managing sessions and interacting with [Hermes Agent](h
 ## Screenshots
 
 <p align="center">
-  <img src="screenshots/1230UI Home light.png" alt="Home (light mode)" width="640"/>
+  <img src="screenshots/1230UI Home light.png" alt="Home" width="640"/>
   <br/>
-  <img src="screenshots/1230UI Sessions light.png" alt="Sessions list (light mode)" width="640"/>
-  <br/>
-  <img src="screenshots/1230UI Session light.png" alt="Session chat (light mode)" width="640"/>
+  <img src="screenshots/1230UI Session light.png" alt="Session chat with split-pane workspace" width="640"/>
   <br/>
   <img src="screenshots/1230UI Session File Preview light.png" alt="File Preview application" width="640"/>
   <br/>
   <img src="screenshots/1230UI Session File Manager light.png" alt="File Manager application" width="640"/>
-  <br/>
-  <img src="screenshots/1230UI New Session light.png" alt="New Session (light mode)" width="640"/>
-  <br/>
-  <img src="screenshots/1230UI Settings light.png" alt="Settings (light mode)" width="640"/>
-  <br/>
-  <img src="screenshots/1230UI Edit Assistant light.png" alt="Edit Assistant (light mode)" width="640"/>
 </p>
 
 <p align="center">
-  <em>Home with Quick Chat and Recent Sessions, Sessions list grouped by date, Session chat with split-pane workspace, File Preview application (inline preview for images, code, markdown, PDF, CSV, HTML), File Manager application (global file management with retention policy), New Session with Assistants, Settings, and Edit Assistant.</em>
+  <em>Home with Quick Chat, Session chat with split-pane workspace (chat + applications), File Preview (inline preview for images, code, markdown, PDF, CSV, HTML), and File Manager (global file management with retention policy).</em>
 </p>
 
 ## Quick Start
