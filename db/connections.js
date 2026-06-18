@@ -38,6 +38,7 @@ import config from '../config.js';
 
 const HERMES_DB_PATH = config.hermesDbPath;
 const UI_DB_PATH = config.uiDbPath;
+const isTest = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
 
 let db, uiDb, hermesDbWrite;
 
@@ -46,8 +47,11 @@ try {
   db = new Database(HERMES_DB_PATH, { readonly: true });
   console.log(`Connected to Hermes DB: ${HERMES_DB_PATH}`);
 } catch (error) {
-  console.error(`Failed to connect to Hermes DB: ${error}`);
-  process.exit(1);
+  if (!isTest) {
+    console.error(`Failed to connect to Hermes DB: ${error}`);
+    process.exit(1);
+  }
+  console.warn(`[db] Hermes DB not opened in test mode: ${error}`);
 }
 
 // ── Hermes DB (writable, non-critical) ────────────────────────────────────
@@ -65,10 +69,13 @@ try {
   uiDb = new Database(UI_DB_PATH);
   console.log(`Connected to UI DB: ${UI_DB_PATH}`);
 } catch (error) {
-  console.error(`Failed to connect to UI DB: ${error}`);
-  try { hermesDbWrite?.close(); } catch (_) { /* ignore */ }
-  try { db?.close(); } catch (_) { /* ignore */ }
-  process.exit(1);
+  if (!isTest) {
+    console.error(`Failed to connect to UI DB: ${error}`);
+    try { hermesDbWrite?.close(); } catch (_) { /* ignore */ }
+    try { db?.close(); } catch (_) { /* ignore */ }
+    process.exit(1);
+  }
+  console.warn(`[db] UI DB not opened in test mode: ${error}`);
 }
 
 // ── Graceful shutdown ──────────────────────────────────────────────────────
