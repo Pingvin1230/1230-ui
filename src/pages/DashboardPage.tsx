@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
@@ -6,11 +6,8 @@ import { MessageSquare, Send, ChevronRight, ChevronDown, Loader2, X, Key, Zap, M
 import type { Assistant, Session } from '../types/api';
 import { formatTimeAgo } from '../lib/time';
 import { AssistantTile } from '../components/AssistantTile';
-
-interface ModelsResponse {
-  default: { id: string; name: string; provider: string } | null;
-  providers: Record<string, { id: string; name: string; models: Array<{ id: string; name: string }> }>;
-}
+import { useAsync } from '../hooks/useAsync';
+import { buildModelMap, type ModelsResponse } from '../hooks/useModels';
 
 /** Returns a time-based greeting key for i18n */
 function getGreetingKey(): string {
@@ -25,8 +22,6 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [model, setModel] = useState('');
   const [modelsData, setModelsData] = useState<ModelsResponse | null>(null);
@@ -39,56 +34,37 @@ export function DashboardPage() {
 
   const greetingKey = useMemo(() => getGreetingKey(), []);
 
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [sessionsData, models, assistantsData] = await Promise.all([
-        api.getSessions(3, 0),
-        api.getModels(),
-        api.getAssistants(false),
-      ]);
-      setSessions(sessionsData.sessions);
-      setModelsData(models);
-      setAssistants(assistantsData.assistants.filter((a) => !a.isArchived));
+  const { loading, error, refetch } = useAsync(async () => {
+    const [sessionsData, models, assistantsData] = await Promise.all([
+      api.getSessions(3, 0),
+      api.getModels(),
+      api.getAssistants(false),
+    ]);
+    setSessions(sessionsData.sessions);
+    setModelsData(models);
+    setAssistants(assistantsData.assistants.filter((a) => !a.isArchived));
 
-      const savedModel = localStorage.getItem('selectedModel');
-      const allModels = Object.values(models.providers).flatMap((p) => p.models);
-      if (savedModel && allModels.some((m) => m.id === savedModel)) {
-        setModel(savedModel);
-      } else if (models.default) {
-        setModel(models.default.id);
-      } else if (allModels.length > 0) {
-        setModel(allModels[0].id);
-      }
-
-      // #29: show onboarding when no models are available AND user hasn't dismissed it
-      // AND there are no sessions yet (first-time user)
-      const dismissed = localStorage.getItem('onboarding_dismissed') === '1';
-      const hasModels = allModels.length > 0;
-      const hasSessions = sessionsData.sessions.length > 0;
-      setShowOnboarding(!dismissed && !hasModels && !hasSessions);
-
-      setError(null);
-    } catch (err) {
-      setError(t('dashboard.failedToLoadDashboard'));
-      console.error(err);
-    } finally {
-      setLoading(false);
+    const savedModel = localStorage.getItem('selectedModel');
+    const allModels = Object.values(models.providers).flatMap((p) => p.models);
+    if (savedModel && allModels.some((m) => m.id === savedModel)) {
+      setModel(savedModel);
+    } else if (models.default) {
+      setModel(models.default.id);
+    } else if (allModels.length > 0) {
+      setModel(allModels[0].id);
     }
+
+    // #29: show onboarding when no models are available AND user hasn't dismissed it
+    // AND there are no sessions yet (first-time user)
+    const dismissed = localStorage.getItem('onboarding_dismissed') === '1';
+    const hasModels = allModels.length > 0;
+    const hasSessions = sessionsData.sessions.length > 0;
+    setShowOnboarding(!dismissed && !hasModels && !hasSessions);
   }, [t]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const loadData = refetch;
 
-  const modelLabelMap = useMemo(() => {
-    const map = new Map<string, string>();
-    if (!modelsData) return map;
-    for (const provider of Object.values(modelsData.providers)) {
-      for (const m of provider.models) map.set(m.id, m.name);
-    }
-    return map;
-  }, [modelsData]);
+  const modelLabelMap = useMemo(() => buildModelMap(modelsData), [modelsData]);
 
   const currentModelLabel = model ? (modelLabelMap.get(model) ?? model) : '';
 
@@ -149,7 +125,7 @@ export function DashboardPage() {
     return (
       <div className="p-3 sm:p-4 md:p-6 max-w-3xl mx-auto">
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-          <p className="text-red-600 dark:text-red-400 font-medium">{error}</p>
+          <p className="text-red-600 dark:text-red-400 font-medium">{t('dashboard.failedToLoadDashboard')}</p>
           <button
             onClick={loadData}
             className="mt-3 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"

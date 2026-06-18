@@ -1,104 +1,15 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import { useRef, useEffect, useState, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, LogOut, Search, Pencil, Check, X, Trash2, Loader2, Paperclip, FileText, Image as ImageIcon, ChevronDown, Sun, Moon, Bell, BellOff, Heart, PanelRight } from 'lucide-react';
+import { Settings, LogOut, Search, Pencil, Check, X, Loader2, Sun, Moon, Bell, BellOff, Heart } from 'lucide-react';
 import { useThemeStore } from '../store/themeStore';
 import { useNotificationsStore } from '../store/notificationsStore';
 import { useSearchStore } from '../store/searchStore';
 import { useChatInputStore } from '../store/chatInputStore';
-import { useAppsPaneStore } from '../store/appsPaneStore';
-import { useFilePreviewStore } from '../store/filePreviewStore';
-import { HermesStatusIndicator } from './HermesStatusIndicator';
-
-import { formatFileSize } from '../lib/fileUtils';
-import { api } from '../lib/api';
-import type { SessionFile } from '../lib/api';
-
-const LIKE_STORAGE_KEY = 'hermes-1230-last-like';
-const LIKE_COOLDOWN_SEC = 3600;
+import { useTimeBracketColor } from '../hooks/useTimeBracketColor';
+import { useLike } from '../hooks/useLike';
 
 
-
-// ── Inline SessionFilesBar for Navbar ─────────────────────────────────────
-function NavSessionFilesBar({ files }: { files: SessionFile[] }) {
-  const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const setSelectedFileId = useFilePreviewStore((s) => s.setSelectedFileId);
-  const appsPaneVisible = useAppsPaneStore((s) => s.visible);
-  const toggleAppsPane = useAppsPaneStore((s) => s.toggleVisible);
-
-  // Close on outside click — use 'click' (not mousedown) to avoid race with toggle
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    // Delay one tick so the opening click doesn't immediately close the panel
-    const id = window.setTimeout(() => document.addEventListener('click', handler), 0);
-    return () => {
-      window.clearTimeout(id);
-      document.removeEventListener('click', handler);
-    };
-  }, [open]);
-
-  const handleFileClick = (fileId: number) => {
-    setSelectedFileId(fileId);
-    if (!appsPaneVisible) toggleAppsPane();
-    setOpen(false);
-  };
-
-  return (
-    <div className="relative" ref={wrapperRef}>
-      {/* Badge — same visual size as model/assistant badges */}
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border transition-colors ${
-          open
-            ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300'
-            : 'border-border-default bg-bg-secondary text-fg-secondary hover:text-fg-primary hover:border-blue-200 dark:hover:border-blue-800'
-        }`}
-        aria-expanded={open}
-        title={t('chat.sessionFilesTitle', { defaultValue: 'Файлы сессии' })}
-      >
-        <Paperclip className="w-3 h-3 flex-shrink-0" />
-        <span>{files.length}</span>
-        <ChevronDown className={`w-3 h-3 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-
-      {open && (
-        <div className="absolute top-full mt-1 right-0 z-[60] w-64 rounded-lg border border-border-default bg-bg-primary shadow-xl overflow-hidden">
-          <div className="px-3 py-2 bg-bg-secondary border-b border-border-default">
-            <span className="text-xs font-medium text-fg-secondary">
-              {t('chat.sessionFilesTitle', { defaultValue: 'Файлы сессии' })} · {files.length}
-            </span>
-          </div>
-          <div className="max-h-52 overflow-y-auto py-1">
-            {files.map(file => (
-              <div
-                key={file.id}
-                onClick={() => handleFileClick(file.id)}
-                className="flex items-center gap-2 px-3 py-1.5 hover:bg-bg-secondary cursor-pointer transition-colors"
-              >
-                {file.mimeType?.startsWith('image/')
-                  ? <ImageIcon className="w-3.5 h-3.5 text-fg-muted flex-shrink-0" />
-                  : <FileText className="w-3.5 h-3.5 text-fg-muted flex-shrink-0" />
-                }
-                <span className="text-xs text-fg-primary truncate flex-1 min-w-0" title={file.filename}>
-                  {file.filename}
-                </span>
-                <span className="text-xs text-fg-muted flex-shrink-0">{formatFileSize(file.size)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── Navbar ─────────────────────────────────────────────────────────────────
 export function Navbar() {
@@ -108,32 +19,12 @@ export function Navbar() {
   const { isDarkMode, toggleDarkMode } = useThemeStore();
   const { enabled: notificationsEnabled, toggle: toggleNotifications } = useNotificationsStore();
 
-  // Like state
-  const [likeState, setLikeState] = useState<'idle' | 'sending' | 'sent' | 'cooldown'>(() => {
-    try {
-      const last = Number(localStorage.getItem(LIKE_STORAGE_KEY) || 0);
-      return last && last + LIKE_COOLDOWN_SEC * 1000 > Date.now() ? 'cooldown' : 'idle';
-    } catch { return 'idle'; }
-  });
+  // Time-of-day bracket color for brand logo brackets
+  const bracket = useTimeBracketColor();
 
-  async function handleLike() {
-    if (likeState !== 'idle') return;
-    setLikeState('sending');
-    try {
-      const result = await api.sendLike();
-      try { localStorage.setItem(LIKE_STORAGE_KEY, String(result.sent_at)); } catch { /* ignore */ }
-      setLikeState('sent');
-    } catch (err) {
-      const e = err as { type?: string; retry_after?: number };
-      if (e.type === 'cooldown') {
-        const sentAt = Date.now() - (LIKE_COOLDOWN_SEC - (e.retry_after ?? 0)) * 1000;
-        try { localStorage.setItem(LIKE_STORAGE_KEY, String(sentAt)); } catch { /* ignore */ }
-        setLikeState('cooldown');
-      } else {
-        setLikeState('idle');
-      }
-    }
-  }
+  // Like state — no live countdown here (Navbar is always mounted; the
+  // per-second timer would cause needless re-renders).
+  const { likeState, handleLike } = useLike(t('settings.failedToSendLike'));
 
   const handleNotificationsToggle = async () => {
     if (typeof Notification === 'undefined') return;
@@ -161,13 +52,17 @@ export function Navbar() {
   // Session metadata from store
   const navSessionMeta = useChatInputStore((s) => s.navSessionMeta);
   const sessionActions = useChatInputStore((s) => s.sessionActions);
-  const sessionFiles = useChatInputStore((s) => s.sessionFiles);
   const activeSessionId = useChatInputStore((s) => s.activeSessionId);
   const navPageContext = useChatInputStore((s) => s.navPageContext);
-
-  // Apps pane
-  const appsPaneVisible = useAppsPaneStore((s) => s.visible);
-  const toggleAppsPane = useAppsPaneStore((s) => s.toggleVisible);
+  // Live stream indicator — only meaningful when there's an active session
+  // and a stream is in flight ('streaming') or recovering after a tab
+  // switch ('recovering'). Both are non-blocking UI hints; the actual
+  // spinner/typing dots live in ChatPage itself. See
+  // docs/analysis/chat-focus-update.md §5.3.
+  const liveStatus = useChatInputStore((s) =>
+    activeSessionId ? (s.liveMessages[activeSessionId]?.status ?? 'idle') : 'idle'
+  );
+  const isLive = liveStatus === 'streaming' || liveStatus === 'recovering';
 
   // Title edit state (lives in Navbar now)
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -175,16 +70,10 @@ export function Navbar() {
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
-  // Delete confirm state
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  // Reset edit/delete state when session changes
+  // Reset edit state when session changes
   useEffect(() => {
     setIsEditingTitle(false);
     setEditingTitle('');
-    setConfirmDelete(false);
-    setIsDeleting(false);
   }, [activeSessionId]);
 
   // Close search when not on a page with search (optional UX)
@@ -253,16 +142,6 @@ export function Navbar() {
     }
   }
 
-  async function handleDeleteConfirmed() {
-    setIsDeleting(true);
-    try {
-      await sessionActions?.onDeleteSession();
-    } finally {
-      setIsDeleting(false);
-      setConfirmDelete(false);
-    }
-  }
-
   const isInChat = Boolean(activeSessionId);
 
   // Render title block (shared between chat and non-chat layouts)
@@ -297,69 +176,19 @@ export function Navbar() {
       <span className="text-sm font-medium text-fg-primary truncate max-w-[140px] sm:max-w-[220px]">
         {navSessionMeta?.title || t('common.session')}
       </span>
+      {isLive && (
+        <span
+          className="inline-flex flex-shrink-0"
+          aria-label={liveStatus === 'recovering' ? t('chat.liveIndicatorRecovering') : t('chat.liveIndicator')}
+        >
+          <Loader2 className="w-3 h-3 text-blue-500 dark:text-blue-400 animate-spin" aria-hidden="true" />
+        </span>
+      )}
       <button type="button" onClick={handleStartEditTitle}
         className="p-1 rounded text-fg-muted hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex-shrink-0"
         aria-label={t('chat.editTitle')} title={t('chat.editTitle')}>
         <Pencil className="w-3 h-3" />
       </button>
-    </div>
-  );
-
-  // Right-side session controls
-  const sessionControls = (
-    <div className="flex items-center gap-1.5 flex-shrink-0">
-      <div className="hidden sm:flex items-center gap-1.5">
-        {navSessionMeta?.assistantName && (
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-bg-secondary text-fg-secondary border border-border-default">
-            {navSessionMeta.assistantIcon && <span aria-hidden="true">{navSessionMeta.assistantIcon}</span>}
-            <span className="truncate max-w-[80px]">{navSessionMeta.assistantName}</span>
-          </span>
-        )}
-        {navSessionMeta?.model && (
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-bg-secondary text-fg-secondary border border-border-default truncate max-w-[100px]">
-            {navSessionMeta.model}
-          </span>
-        )}
-      </div>
-      {sessionFiles.length > 0 && (
-        <div className="hidden sm:block">
-          <NavSessionFilesBar files={sessionFiles} />
-        </div>
-      )}
-      {/* Apps pane toggle — desktop only */}
-      <button
-        type="button"
-        onClick={toggleAppsPane}
-        className={`hidden lg:flex p-1.5 rounded transition-colors ${
-          appsPaneVisible
-            ? 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-            : 'text-fg-muted hover:text-fg-primary hover:bg-bg-secondary'
-        }`}
-        aria-label={appsPaneVisible ? t('applications.hideApplications') : t('applications.showApplications')}
-        title={appsPaneVisible ? t('applications.hideApplications') : t('applications.showApplications')}
-      >
-        <PanelRight className="w-3.5 h-3.5" />
-      </button>
-      {confirmDelete ? (
-        <div className="flex items-center gap-1">
-          <button type="button" onClick={handleDeleteConfirmed} disabled={isDeleting}
-            className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors disabled:opacity-50 flex items-center gap-1">
-            {isDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-            {t('chat.deleteConfirm')}
-          </button>
-          <button type="button" onClick={() => setConfirmDelete(false)} disabled={isDeleting}
-            className="px-2 py-1 bg-bg-secondary hover:bg-bg-muted text-fg-primary text-xs rounded transition-colors disabled:opacity-50">
-            {t('common.cancel')}
-          </button>
-        </div>
-      ) : (
-        <button type="button" onClick={() => setConfirmDelete(true)}
-          className="p-1.5 rounded text-fg-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-          aria-label={t('chat.deleteSession')} title={t('chat.deleteSession')}>
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      )}
-
     </div>
   );
 
@@ -384,7 +213,7 @@ export function Navbar() {
               />
             </div>
             <button type="button" onClick={() => { setIsSearchOpen(false); setLocalInput(''); setQuery(''); }}
-              className="p-1 rounded text-fg-muted hover:text-fg-primary" aria-label="Clear search">
+              className="p-1 rounded text-fg-muted hover:text-fg-primary" aria-label={t('nav.clearSearch')}>
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -396,7 +225,6 @@ export function Navbar() {
           </button>
         )}
       </div>
-      <HermesStatusIndicator />
       <div className="relative" ref={dropdownRef}>
         <button onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="flex items-center" aria-label={t('nav.userMenu')}>
           <div className="h-7 w-7 rounded-full border-2 border-green-500 bg-bg-muted flex items-center justify-center">
@@ -480,9 +308,13 @@ export function Navbar() {
 
         {/* Brand */}
         <div className="flex items-center flex-shrink-0">
-          <Link to="/" className={`flex items-center no-underline ${isInChat ? 'hidden sm:flex' : 'flex'}`}>
-            <span className={`text-base font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-              {t('nav.brand')}
+          <Link
+            to="/"
+            className="flex items-center no-underline"
+            title={`${t(bracket.label)} · ${bracket.color}`}
+          >
+            <span className={`brand-logo text-base ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+              1230<span className="brand-bracket" style={{ color: bracket.color }}>[</span>UI<span className="brand-bracket" style={{ color: bracket.color }}>]</span>
             </span>
           </Link>
         </div>
@@ -494,8 +326,6 @@ export function Navbar() {
               {titleBlock}
             </div>
             <div className="flex-1" />
-            {sessionControls}
-            <div className="w-px h-4 bg-border-default flex-shrink-0" />
           </>
         ) : navPageContext ? (
           <>

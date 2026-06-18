@@ -1,7 +1,7 @@
 {
   "name": "hermes-webui",
   "private": true,
-  "version": "0.9.1",
+  "version": "0.9.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -32,6 +32,7 @@
     "react-virtuoso": "^4.18.7",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
+    "webdav": "^5.10.0",
     "xss": "^1.0.15",
     "zod": "^4.4.3"
   },

@@ -14,6 +14,7 @@ Query parameters:
 - `offset` — pagination offset (default: 0)
 - `includeArchived` — include archived sessions (default: 0)
 - `sort` — sort order: `created` (default) | `lastMessage`; `lastMessage` orders by the time of the most recent message (falls back to `startedAt` for empty sessions)
+- `executor` — filter to one executor: `hermes` | `opencode-1230`. Unknown values are ignored (no filter applied). Derived server-side from the session's assistant; free-chat sessions (no assistant) resolve to `hermes`.
 
 Response:
 ```json
@@ -24,6 +25,7 @@ Response:
       "title": "My session",
       "source": "webui",
       "model": "qwen3.6-plus",
+      "executor": "hermes",
       "startedAt": 1780486478.49,
       "endedAt": null,
       "messageCount": 64,
@@ -53,6 +55,8 @@ Response:
 ```
 GET /api/sessions/:id
 ```
+
+Returns the single session (same shape as the list item), including the `executor` field (`'hermes' | 'opencode-1230'`, derived from the assistant; free-chat = `hermes`) and the linked `assistant` object. The Workspace's `/chat/:id` resolver uses this `executor` to open the correct tab.
 
 ### Get Session Messages
 ```
@@ -221,6 +225,8 @@ Body:
 
 Response: Server-Sent Events (SSE) stream
 
+> **Internal (not part of this API):** `POST /session/:id/permissions/:id` is an adapter→`opencode serve` call the OpenCode executor makes to auto-approve tool permission requests (`{ response: 'once' }`, gated by `OPENCODE_AUTO_APPROVE_TOOLS`). It is not exposed by 1230UI; see [EXECUTOR_ADAPTERS.md](EXECUTOR_ADAPTERS.md) § "Tool permission handling".
+
 ### Save Message
 ```
 POST /api/messages
@@ -353,7 +359,7 @@ wasn't there.
 
 ## Assistants
 
-Named bundles (name, description, color, icon, model) used as session presets.
+Named bundles (name, description, color, icon, model, style, depth, system prompt, executor) used as session presets.
 
 ### List Assistants
 ```
@@ -373,6 +379,10 @@ Response:
     "color": "green",
     "icon": "💻",
     "modelId": "qwen3.6-plus",
+    "style": "concise",
+    "depth": "thorough",
+    "systemPrompt": null,
+    "executor": "hermes",
     "isArchived": false,
     "archivedAt": null,
     "createdAt": "2026-06-08T10:00:00Z",
@@ -398,18 +408,22 @@ Body:
   "description": "Optional description",
   "color": "blue",
   "icon": "🤖",
-  "modelId": "qwen3.6-plus"
+  "modelId": "qwen3.6-plus",
+  "style": "concise",
+  "depth": "standard",
+  "systemPrompt": "Optional system prompt (≤ 4000 chars)",
+  "executor": "hermes"
 }
 ```
 
-Validation: `name` 1–60 chars; `description` ≤ 200 chars; `color` must be in the supported 8-color palette; `icon` ≤ 8 chars; `modelId` must reference an enabled model (or `null` for the global default).
+Validation: `name` 1–60 chars; `description` ≤ 200 chars; `color` must be in the supported 8-color palette; `icon` ≤ 8 chars; `modelId` must reference an enabled model (or `null` for the global default); `style` ∈ {`friendly`, `formal`, `concise`, `creative`}; `depth` ∈ {`quick`, `standard`, `thorough`}; `executor` ∈ {`hermes`, `opencode-1230`} (allowlist enforced server-side, unknown values are rejected with `400`).
 
 ### Update Assistant
 ```
 PATCH /api/assistants/:id
 ```
 
-Same body as Create. If the assistant already has sessions referencing it, the update **forks** it: the existing row is archived (existing sessions retain their reference) and a new row is created with the updated fields. The fork happens atomically in a SQLite transaction.
+Same body as Create. If the assistant already has sessions referencing it, the update **forks** it: the existing row is archived (existing sessions retain their reference) and a new row is created with the updated fields. The fork happens atomically in a SQLite transaction. The per-session executor binding is structural — `session_meta.assistant_id` is set once at session creation and never changes, so the executor is effectively locked for the session's lifetime.
 
 ### Archive Assistant
 ```
@@ -429,6 +443,73 @@ POST /api/assistants/:id/duplicate
 ```
 
 Creates an immediate copy with name `"<name> (copy)"`. The UI uses the editor prefill flow (`?from=<id>`) instead of this endpoint to avoid writing a DB row before the user confirms.
+
+---
+
+## Applications
+
+The Applications pane is a pluggable registry of UI apps that live in the right split-pane. The four shipped apps are File Preview, File Manager, Cloud Connect, and Tududi.
+
+### List Applications
+```
+GET /api/applications
+```
+
+Query parameters:
+- `enabled` — `1` to show only enabled apps, `0` for disabled; omit for all
+
+Response:
+```json
+{
+  "applications": [
+    {
+      "id": 1,
+      "key": "file_preview",
+      "name": "File Preview",
+      "icon": "Eye",
+      "description": "Preview session files inline",
+      "enabled": 1,
+      "sortOrder": 0,
+      "desktopOnly": 1,
+      "config": {},
+      "createdAt": 1781180149780,
+      "updatedAt": 1781180149780
+    },
+    {
+      "id": 4,
+      "key": "tududi",
+      "name": "Tududi",
+      "icon": "ListChecks",
+      "description": "Tasks, notes and inbox from Tududi",
+      "enabled": 1,
+      "sortOrder": 3,
+      "desktopOnly": 1,
+      "config": {},
+      "createdAt": 1781180149780,
+      "updatedAt": 1781180149780
+    }
+  ]
+}
+```
+
+### Update Application
+```
+PATCH /api/applications/:id
+```
+
+Body (all fields optional):
+```json
+{
+  "enabled": 1,
+  "sortOrder": 2,
+  "name": "New Name",
+  "icon": "FileText",
+  "description": "Optional description",
+  "config": { "key": "value" }
+}
+```
+
+`enabled: 0` hides the app from the Applications pane (and from `/applications`). The `desktopOnly` column is read-only from this endpoint; it's set at seed time.
 
 ---
 
@@ -480,6 +561,63 @@ Response (200):
 }
 ```
 
+### Executor Visibility
+
+```
+GET /api/system/executors
+```
+
+Returns the liveness map for the assistant executor picker. The frontend uses this to hide executors whose daemon is unreachable.
+
+Response (200):
+```json
+{
+  "executors": {
+    "hermes": true,
+    "opencode-1230": false
+  }
+}
+```
+
+The OpenCode probe is a 2 s `GET /global/health` against the daemon. Returns `false` on timeout, network error, or non-`{ healthy: true }` body.
+
+### Executor Configuration
+
+```
+GET /api/system/executor-config
+```
+
+Returns the encrypted-at-rest executor config. The password field is masked (`••••last4`).
+
+Response (200):
+```json
+{
+  "opencode": {
+    "url": "http://127.0.0.1:4097",
+    "username": "admin",
+    "hasPassword": true,
+    "passwordPreview": "••••wxyz"
+  }
+}
+```
+
+```
+POST /api/system/executor-config
+```
+
+Body:
+```json
+{
+  "opencode": {
+    "url": "http://127.0.0.1:4097",
+    "username": "admin",
+    "password": "new-password"
+  }
+}
+```
+
+`password` is written AES-256-GCM encrypted, using `CLOUD_CONNECT_KEY` as the key source. An empty `password` clears the stored value. The config is loaded at startup in `server.js` and overrides the corresponding env-var defaults.
+
 ### Execute Command
 ```
 POST /api/system/exec
@@ -491,6 +629,64 @@ Body:
   "command": "update"  // or "doctor"
 }
 ```
+
+---
+
+## Tududi Proxy
+
+A server-side HTTP proxy that forwards the browser's Tududi requests to the upstream Tududi instance, attaching the bearer token on the way out. The browser never holds the token.
+
+### Health Check
+
+```
+GET /api/tududi/health
+```
+
+Probes the upstream with a 5 s timeout on `GET /api/profile`. No token is leaked in the response.
+
+Response (200):
+```json
+{
+  "configured": true,
+  "reachable": true,
+  "status": 200
+}
+```
+
+If `TUDUDI_API_TOKEN` is not set, the response is `{ "configured": false, "reachable": false }`. If the upstream is unreachable, `{ "configured": true, "reachable": false, "error": "<message>" }`.
+
+### Generic Proxy
+
+```
+* /api/tududi/<path>
+```
+
+All methods, all paths under `/api/tududi/*` are forwarded to `${TUDUDI_API_URL}/api/<rest>`. Method, body, and query string are forwarded verbatim; hop-by-hop headers, `set-cookie`, `content-encoding`, and any incoming `authorization` are stripped; `Authorization: Bearer <TUDUDI_API_TOKEN>` is added server-side. 15 s `AbortController` timeout.
+
+| Outcome | HTTP status | Body shape |
+|---|---|---|
+| Success | mirrors upstream | upstream response |
+| Token missing | `503` | `{ "error": { "type": "tududi_not_configured", "message": "..." } }` |
+| Upstream timeout (15 s) | `504` | `{ "error": { "type": "tududi_timeout", "message": "..." } }` |
+| Network error | `502` | `{ "error": { "type": "tududi_unreachable", "message": "..." } }` |
+
+Both the tududi UI base path (`/api/*`) and the `/api/v1/*` paths are forwarded; the router only strips the `/api/tududi` prefix.
+
+### Path → Tududi mapping examples
+
+| Request | Upstream call |
+|---|---|
+| `GET /api/tududi/tasks` | `GET https://todo.thinkout.ru/api/tasks` |
+| `GET /api/tududi/notes` | `GET https://todo.thinkout.ru/api/notes` |
+| `GET /api/tududi/task/abc123` | `GET https://todo.thinkout.ru/api/task/abc123` |
+| `POST /api/tududi/task` (body: `{...}`) | `POST https://todo.thinkout.ru/api/task` (body forwarded) |
+| `PATCH /api/tududi/task/abc123` (body: `{...}`) | `PATCH https://todo.thinkout.ru/api/task/abc123` |
+| `DELETE /api/tududi/note/abc123` | `DELETE https://todo.thinkout.ru/api/note/abc123` |
+| `GET /api/tududi/profile` | `GET https://todo.thinkout.ru/api/profile` |
+
+Note Tududi's inconsistent singular/plural: write paths are singular (`/api/task`, `/api/note`), list endpoints are plural (`/api/tasks`, `/api/notes`, `/api/projects`). `createProject` may return `400` depending on the deployed version. The frontend client (`src/lib/api/tududi.ts`) handles all of these — see [TUDUDI_INTEGRATION.md §3.2](TUDUDI_INTEGRATION.md) for the full observed contract.
+
+---
 
 ## Likes
 

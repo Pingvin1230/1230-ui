@@ -1,17 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
 import { api } from '../lib/api';
 import type { Assistant } from '../types/api';
 import { useToast } from '../hooks/useToast';
+import { useAsync } from '../hooks/useAsync';
+import { buildModelMap, type ModelsResponse } from '../hooks/useModels';
 import { AssistantManageTile } from '../components/AssistantManageTile';
-
-interface ModelOption {
-  id: string;
-  name: string;
-  provider: string;
-}
 
 type Filter = 'active' | 'archived';
 
@@ -21,50 +17,22 @@ export function AssistantsPage() {
   const toast = useToast();
 
   const [assistants, setAssistants] = useState<Assistant[]>([]);
-  const [models, setModels] = useState<ModelOption[]>([]);
+  const [modelsData, setModelsData] = useState<ModelsResponse | null>(null);
   const [filter, setFilter] = useState<Filter>('active');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [reloadTick, setReloadTick] = useState(0);
 
   // Always fetch ALL assistants so counts are accurate for both tabs
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const [a, m] = await Promise.all([
-          api.getAssistants(true),
-          api.getModels(),
-        ]);
-        if (cancelled) return;
-        setAssistants(a.assistants);
-        const flat: ModelOption[] = [];
-        for (const provider of Object.values(m.providers)) {
-          for (const model of provider.models) {
-            flat.push({ id: model.id, name: model.name, provider: provider.name });
-          }
-        }
-        setModels(flat);
-      } catch (err) {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : t('assistants.errorLoadFailed'));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reloadTick]);
+  const { loading, error, refetch } = useAsync(async () => {
+    const [a, m] = await Promise.all([
+      api.getAssistants(true),
+      api.getModels(),
+    ]);
+    setAssistants(a.assistants);
+    setModelsData(m);
+  }, []);
 
-  const reload = () => setReloadTick((n) => n + 1);
+  const reload = refetch;
 
-  const modelLabelMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const m of models) map.set(m.id, m.name);
-    return map;
-  }, [models]);
+  const modelLabelMap = useMemo(() => buildModelMap(modelsData), [modelsData]);
 
   const visible = useMemo(
     () => (filter === 'archived' ? assistants.filter((a) => a.isArchived) : assistants.filter((a) => !a.isArchived)),
@@ -161,7 +129,7 @@ export function AssistantsPage() {
             <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
               <p className="text-sm text-red-500 flex items-center gap-1.5">
                 <AlertCircle className="w-4 h-4" />
-                {error}
+                {error instanceof Error ? error.message : t('assistants.errorLoadFailed')}
               </p>
               <button
                 onClick={reload}

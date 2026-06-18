@@ -30,7 +30,12 @@
     "showingOfTotal": "{{showing}} von {{total}} Sitzungen",
     "selected": "{{count}} ausgewählt",
     "selected_one": "{{count}} ausgewählt",
-    "selected_other": "{{count}} ausgewählt"
+    "selected_other": "{{count}} ausgewählt",
+    "expand": "Erweitern",
+    "collapse": "Einklappen",
+    "loading": "Wird geladen…",
+    "backToSettings": "Zurück zu Einstellungen",
+    "saved": "gespeichert"
   },
   "nav": {
     "home": "Startseite",
@@ -40,6 +45,7 @@
     "brand": "1230.UI",
     "searchPlaceholder": "Sitzungen durchsuchen…",
     "searchLabel": "Sitzungen suchen",
+    "clearSearch": "Suche löschen",
     "notificationsOn": "Benachrichtigungen aktiviert",
     "notificationsOff": "Benachrichtigungen deaktiviert",
     "enableNotifications": "Benachrichtigungen aktivieren",
@@ -52,7 +58,28 @@
     "hermesApiStatus": "Hermes API-Status",
     "hermesApiConnected": "Hermes API: Verbunden",
     "hermesApiDisconnected": "Hermes API: Getrennt",
-    "hermesApiChecking": "Hermes API: Prüfe…"
+    "hermesApiChecking": "Hermes API: Prüfe…",
+    "opencodeStatus": "OpenCode-Status",
+    "opencodeConnected": "OpenCode: Verbunden",
+    "opencodeDisconnected": "OpenCode: Nicht erreichbar",
+    "opencodeChecking": "OpenCode: Prüfe…"
+  },
+  "markdown": {
+    "copied": "Kopiert",
+    "copyCode": "Code kopieren",
+    "copy": "Kopieren",
+    "showMore": "Mehr anzeigen",
+    "showLess": "Weniger anzeigen"
+  },
+  "time": {
+    "midnight": "Mitternacht",
+    "dawn": "Morgendämmerung",
+    "morning": "Morgen",
+    "noon": "Mittag",
+    "afternoon": "Nachmittag",
+    "sunset": "Sonnenuntergang",
+    "evening": "Abend",
+    "night": "Nacht"
   },
   "chat": {
     "sessionNotFound": "Sitzung nicht gefunden",
@@ -120,7 +147,15 @@
     "sessionFilesAgent_other": "{{count}} vom Agenten",
     "sessionFilesInSession": "Dateien in Sitzung",
     "sessionFilesCount_one": "{{count}} Datei",
-    "sessionFilesCount_other": "{{count}} Dateien"
+    "sessionFilesCount_other": "{{count}} Dateien",
+    "viaExecutor": "via {{name}}",
+    "freeChatExecutorHint": "Neue Chats verwenden standardmäßig Hermes. Um OpenCode zu nutzen, wählen Sie einen Assistenten mit der OpenCode-Laufzeitumgebung.",
+    "liveIndicator": "Agent antwortet…",
+    "liveIndicatorRecovering": "Antwort wird nach Tab-Wechsel geladen…",
+    "noActiveSessionTitle": "Keine aktive Sitzung",
+    "noActiveSessionDesc": "Öffne den Reiter Sitzungen und wähle eine Sitzung für diesen Ausführer.",
+    "openSessionsTab": "Sitzungen öffnen",
+    "quickChat": "Schneller Chat"
   },
   "sessions": {
     "title": "Sitzungen",
@@ -138,7 +173,7 @@
     "swipeToDelete": "Zum Löschen nach links wischen",
     "deleteSessionTitle": "Sitzung löschen?",
     "deleteSessionConfirm": "Diese Sitzung löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
-    "noMatchTitle": "Keine Sitzungen entsprechen „{{query}}\"",
+    "noMatchTitle": "Keine Sitzungen entsprechen „{{query}}“",
     "noMatchDesc": "Nur geladene Sitzungen werden durchsucht",
     "searchInfo": "Geladene Sitzungen werden durchsucht — {{filtered}} von {{total}} entsprechen",
     "deleteSessionsTitle": "Sitzungen löschen",
@@ -147,6 +182,13 @@
     "deleteSessionsConfirm_other": "{{count}} Sitzungen löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
     "failedToLoadSessions": "Sitzungen konnten nicht geladen werden",
     "holdToSelect": "Gedrückt halten zum Auswählen"
+  },
+  "workspace": {
+    "tab": {
+      "sessions": "Sitzungen"
+    },
+    "allSessions": "Alle Sitzungen dieses Ausführers",
+    "noRecentSessions": "Keine letzten Sitzungen"
   },
   "dashboard": {
     "welcome": "Willkommen",
@@ -189,6 +231,10 @@
     "title": "Einstellungen",
     "description": "Web-UI-Konfiguration",
     "general": "Allgemein",
+    "language": "Sprache",
+    "interfaceLanguage": "Oberflächensprache",
+    "tududi": "Tududi",
+    "tududiDescription": "Aufgaben- und Notizverwaltung",
     "appearance": "Erscheinungsbild",
     "darkMode": "Dunkelmodus",
     "lightMode": "Hellmodus",
@@ -265,7 +311,26 @@
     "navStyleLabel": "Desktop-Navigation",
     "navStyleDesc": "Wähle die Navigationsart auf dem Desktop",
     "navStyleSidebar": "Seitenleiste",
-    "navStyleBottombar": "Untere Leiste"
+    "navStyleBottombar": "Untere Leiste",
+    "executors": {
+      "title": "Ausführungs-Konfiguration",
+      "subtitle": "Pro-Ausführung-Einstellungen für die in 1230UI verfügbaren KI-Backends.",
+      "opencodeUrl": "URL des OpenCode-Daemon",
+      "username": "Benutzername",
+      "password": "Passwort",
+      "testConnection": "Verbindung testen",
+      "connected": "Verbunden",
+      "unreachable": "Nicht erreichbar",
+      "saved": "Einstellungen gespeichert",
+      "saveError": "Fehler beim Speichern",
+      "hint": "Konfiguriere die Verbindung zum OpenCode-Daemon. Änderungen wirken sich auf die nächste Anfrage aus.",
+      "save": "Speichern",
+      "hermesAgent": "Hermes Agent",
+      "hermesAgentDesc": "Standard-Executor. Modelle, Anbieter und Befehle befinden sich auf dessen Einstellungsseite.",
+      "opencode": "OpenCode",
+      "opencodeDesc": "Optionaler zweiter Executor, läuft als `opencode serve`. Damit lassen sich zusätzliche Modelle und Anbieter bereitstellen, die im OC-Daemon konfiguriert sind.",
+      "manage": "Verwalten"
+    }
   },
   "errors": {
     "content_moderation": "Anfrage blockiert",
@@ -312,6 +377,8 @@
     "likeCooldown": "Sie können nur einmal pro Stunde liken",
     "failedToSendLike": "Like konnte nicht gesendet werden",
     "failedToFetchAvailableProviders": "Anbieter konnten nicht abgerufen werden",
+    "failedToFetchOpenCodeProviders": "OpenCode-Anbieter konnten nicht abgerufen werden",
+    "failedToFetchAvailableExecutors": "Verfügbare Ausführer konnten nicht abgerufen werden",
     "failedToSetProviderKey": "API-Schlüssel konnte nicht gespeichert werden",
     "failedToRemoveProviderKey": "API-Schlüssel konnte nicht entfernt werden",
     "failedToFetchAssistants": "Assistenten konnten nicht geladen werden",
@@ -327,7 +394,18 @@
     "failedToExtendFile": "Dateiverlängerung fehlgeschlagen",
     "failedToCopyFile": "Dateikopie fehlgeschlagen",
     "failedToFetchApplications": "Anwendungen konnten nicht geladen werden",
-    "failedToUpdateApplication": "Anwendung konnte nicht aktualisiert werden"
+    "failedToUpdateApplication": "Anwendung konnte nicht aktualisiert werden",
+    "failedToFetchCloudConnections": "Cloud-Verbindungen konnten nicht abgerufen werden",
+    "failedToTestConnection": "Verbindung konnte nicht getestet werden",
+    "failedToUpdateConnection": "Verbindung konnte nicht aktualisiert werden",
+    "failedToDeleteConnection": "Verbindung konnte nicht gelöscht werden",
+    "failedToListCloudEntries": "Cloud-Dateien konnten nicht aufgelistet werden",
+    "failedToCreateCloudConnection": "Cloud-Verbindung konnte nicht erstellt werden",
+    "failedToIssueLinks": "Links konnten nicht ausgestellt werden",
+    "failedToFetchExecutorConfig": "Ausführer-Konfiguration konnte nicht abgerufen werden",
+    "failedToSaveExecutorConfig": "Ausführer-Konfiguration konnte nicht gespeichert werden",
+    "failedToFetchFilesFromCloud": "Dateien konnten nicht aus der Cloud abgerufen werden",
+    "requestFailed": "Anfrage fehlgeschlagen (HTTP {{status}})"
   },
   "errorBoundary": {
     "title": "Ein Fehler ist aufgetreten",
@@ -439,7 +517,17 @@
     "depthHint": "Steuert, wie gründlich der Assistent die Anfrage analysiert. Erneut klicken zum Abwählen.",
     "depthQuick": "Schnell",
     "depthStandard": "Standard",
-    "depthThorough": "Gründlich"
+    "depthThorough": "Gründlich",
+    "executorLabel": "Laufzeitumgebung",
+    "executorHint": "Backend-Laufzeitumgebung für diesen Assistenten. Hermes ist Standard; OpenCode läuft als separater Dienst. Kann während einer aktiven Sitzung nicht gewechselt werden.",
+    "executor.hermes": "Hermes",
+    "executor.opencode-1230": "OpenCode",
+    "executorBadge": { "hermes": "🤖 Hermes", "opencode-1230": "⚡ OpenCode" },
+    "executorUnavailable": "OpenCode-Dienst nicht erreichbar. Starten Sie opencode-1230ui.service, um diese Option zu aktivieren.",
+    "executorDownOnSave": "OpenCode ist derzeit nicht erreichbar. Starten Sie opencode-1230ui oder wechseln Sie zu Hermes.",
+    "executorChecking": "Laufzeitumgebungen prüfen...",
+    "executorRetry": "Erneut versuchen",
+    "executorDownInline": "⚠ OpenCode ist derzeit nicht erreichbar."
   },
   "applications": {
     "title": "Anwendungen",
@@ -528,6 +616,123 @@
       "hoursLeft_one": "{{count}} Stunde übrig",
       "hoursLeft_other": "{{count}} Stunden übrig",
       "never": "Läuft nie ab"
+    }
+  },
+  "cloudConnect": {
+    "addConnection": "Verbindung hinzufügen",
+    "addConnectionDesc": "Verbinde einen beliebigen WebDAV-Server, um Dateiverknüpfungen im Chat zu durchsuchen und einzufügen",
+    "selectedCount": "{{count}} Dateien ausgewählt",
+    "selectedCount_one": "{{count}} Datei ausgewählt",
+    "selectedCount_other": "{{count}} Dateien ausgewählt",
+    "insertIntoChat": "In Chat einfügen",
+    "inserting": "Wird eingefügt…",
+    "empty": {
+      "noConnections": "Noch keine Cloud-Verbindung",
+      "noConnectionsDesc": "Verbinde einen WebDAV-Server, um Verknüpfungen zu deinen Dateien direkt aus der Cloud einzufügen",
+      "folder": "Dieser Ordner ist leer"
+    },
+    "form": {
+      "label": "Bezeichnung (optional)",
+      "labelPlaceholder": "Meine Cloud",
+      "url": "WebDAV-URL",
+      "username": "Benutzername",
+      "password": "Passwort",
+      "save": "Speichern & verbinden",
+      "testing": "Testen…"
+    }
+  },
+  "executorPage": {
+    "back": "Zurück zu Einstellungen",
+    "hermesTitle": "Hermes Agent Einstellungen",
+    "hermesSubtitle": "Standard-Executor. Startet einen Python-Subprozess pro Chat-Runde.",
+    "opencodeTitle": "OpenCode Einstellungen",
+    "opencodeSubtitle": "Optionaler zweiter Executor, läuft als `opencode serve`."
+  },
+  "blocks": {
+    "models": {
+      "title": "Modelle",
+      "summary": "{{enabled}} Modelle aktiviert / {{total}} gesamt",
+      "unavailable": "Modelle für OpenCode werden innerhalb des `opencode serve`-Daemons konfiguriert und sind noch nicht aus 1230UI editierbar."
+    },
+    "providers": {
+      "title": "Anbieter",
+      "count": "Anbieter konfiguriert",
+      "unavailable": "Anbieter für OpenCode werden innerhalb des `opencode serve`-Daemons konfiguriert und sind noch nicht aus 1230UI editierbar."
+    },
+    "connection": {
+      "title": "Verbindung",
+      "description": "Wie 1230UI mit diesem Executor kommuniziert.",
+      "unavailable": "Hermes Agent läuft als Python-Subprozess, der von 1230UI gestartet wird. Python-Pfad, API-URL und API-Schlüssel werden in der `.env`-Datei von 1230UI gesetzt (`HERMES_PYTHON_PATH`, `HERMES_API_URL`, `HERMES_API_KEY`). Starten Sie 1230UI nach der Bearbeitung neu. Die vollständige Anleitung finden Sie in `docs/INSTALLATION.md`.",
+      "opencodeUrl": "URL des OpenCode-Daemon",
+      "username": "Benutzername",
+      "password": "Passwort",
+      "pythonPath": "Python-Pfad",
+      "apiUrl": "Hermes API-URL",
+      "apiKey": "Hermes API-Schlüssel",
+      "testConnection": "Verbindung testen",
+      "connected": "Verbunden",
+      "unreachable": "Nicht erreichbar",
+      "save": "Speichern",
+      "saved": "Gespeichert",
+      "saveError": "Speichern fehlgeschlagen"
+    }
+  },
+  "opencodeProviders": {
+    "sectionDescription": "API-Anbieter, die der opencode-Daemon kennt. Verbundene Anbieter haben gültige Anmeldedaten und ihre Modelle sind in der Modellauswahl verfügbar.",
+    "summary": "{{connected}} von {{total}} Anbietern verbunden",
+    "errorSummary": "Anbieter konnten nicht geladen werden",
+    "errorHint": "Prüfen Sie, ob der opencode-Daemon läuft und erreichbar ist.",
+    "empty": "Der opencode-Daemon meldet keine Anbieter.",
+    "refresh": "Aktualisieren",
+    "footer": "API-Schlüssel für opencode-Anbieter werden im opencode-Daemon verwaltet (in dessen Konfigurationsdatei oder Umgebung), nicht in 1230UI.",
+    "connected": "verbunden",
+    "notConnected": "nicht verbunden",
+    "connectedHint": "Der Daemon kann diesen Anbieter erreichen — seine Modelle sind nutzbar.",
+    "notConnectedHint": "API-Schlüssel fehlt oder Anmeldedaten ungültig — Modelle sind gelistet, aber nicht nutzbar, bis konfiguriert.",
+    "modelCount": "{{count}} Modelle",
+    "default": "Standard: {{model}}",
+    "envVars": "Umgebungsvariablen",
+    "apiKeyDetected": "API-Schlüssel erkannt",
+    "howToConfigureEnv": "Setzen Sie die Umgebungsvariable {{env}} vor dem Start des opencode-Daemon und starten Sie ihn neu.",
+    "howToConfigureConfig": "Fügen Sie den Anbieter in {{path}} unter dem `provider:`-Schlüssel hinzu.",
+    "howToConfigureCustom": "Dieser Anbieter wird von einem Plugin oder externer Konfiguration hinzugefügt — siehe opencode-Dokumentation.",
+    "source": {
+      "env": "env",
+      "config": "config",
+      "custom": "custom",
+      "api": "eingebaut",
+      "unknown": "unbekannt"
+    }
+  },
+  "tududi": {
+    "config": {
+      "title": "Tududi",
+      "subtitle": "Aufgaben- und Notizverwaltung",
+      "connectionStatus": "Verbindungsstatus",
+      "checkingConnection": "Verbindung wird geprüft…",
+      "connected": "Verbunden",
+      "connectedHelp": "Die Tududi-API ist erreichbar und konfiguriert",
+      "notConfigured": "Nicht konfiguriert",
+      "unreachable": "Nicht erreichbar",
+      "checkBelow": "Überprüfen Sie die folgende Konfiguration",
+      "noData": "Keine Verbindungsdaten",
+      "retestSaved": "Gespeicherte Verbindung erneut testen",
+      "configuration": "Konfiguration",
+      "configurationHelp": "Adresse und API-Token Ihrer Tududi-Instanz. Beide werden verschlüsselt auf dem Server gespeichert und niemals an den Browser gesendet.",
+      "loading": "Konfiguration wird geladen…",
+      "apiUrlLabel": "Tududi-URL",
+      "apiUrlHelp": "Basis-URL der Tududi-Instanz (ohne abschließenden Schrägstrich). Muss vom 1230UI-Server aus erreichbar sein.",
+      "invalidUrl": "Geben Sie eine gültige URL ein (z. B. https://example.com).",
+      "apiTokenLabel": "API-Token",
+      "apiTokenHelp": "Erstellen Sie einen in Tududi: Profile → Settings → API Keys (beginnt mit tt_). Leer lassen, um das gespeicherte Token beizubehalten.",
+      "testConnection": "Verbindung testen",
+      "connectedOk": "Verbunden",
+      "unreachableLabel": "Nicht erreichbar",
+      "saved": "Gespeichert",
+      "saveError": "Speichern fehlgeschlagen — Serverprotokolle prüfen",
+      "openInTududi": "Tududi öffnen",
+      "openInTududiHelp": "Greifen Sie auf die vollständige Tududi-Oberfläche für erweiterte Funktionen wie Posteingangsverarbeitung, Bereiche und Ansichten zu.",
+      "openTududiBtn": "Tududi öffnen"
     }
   }
 }

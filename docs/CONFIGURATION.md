@@ -46,6 +46,41 @@ All variables are validated with a Zod schema at startup — the server will not
 |---|---|---|
 | `DISABLE_GEOIP` | Set to `true` to skip IP→country lookup in the `/api/like` handler. The server starts normally if `geoip-lite` is not installed regardless of this flag. | _(unset / false)_ |
 
+### Cloud Connect (optional)
+
+| Variable | Description | Default |
+|---|---|---|
+| `CLOUD_CONNECT_KEY` | 32-byte base64 key for AES-256-GCM credential encryption and HMAC-signed proxy URLs. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Required for creating cloud connections. | _(unset)_ |
+
+### OpenCode Executor (optional)
+
+The OpenCode executor is a second chat backend (see [EXECUTOR_ADAPTERS.md](EXECUTOR_ADAPTERS.md)). The URL, username and password can be set in `.env` or overridden at runtime from `/settings/executors/opencode` (encrypted at rest with `CLOUD_CONNECT_KEY`).
+
+| Variable | Description | Default |
+|---|---|---|
+| `OPENCODE_URL` | Base URL of the `opencode serve` daemon. | `http://127.0.0.1:4097` |
+| `OPENCODE_SERVER_USERNAME` | Optional Basic Auth username. | _(unset)_ |
+| `OPENCODE_SERVER_PASSWORD` | Optional Basic Auth password. | _(unset)_ |
+| `OPENCODE_AUTO_APPROVE_TOOLS` | Whether the OpenCode adapter auto-approves tool permission requests (`bash`, `edit`, …). Truthy values: `1`, `true`, `yes`, `on` (case-insensitive). | `1` |
+
+**Security note on `OPENCODE_AUTO_APPROVE_TOOLS`.** When enabled (the default), the model can run `bash` / `edit` / other tools as the daemon user inside the worktree without per-turn confirmation. This is convenient for an agent loop but means a prompt-injection or a confused model can write files or run commands unattended. Set `OPENCODE_AUTO_APPROVE_TOOLS=0` to require manual approval of each tool permission request instead. See [EXECUTOR_ADAPTERS.md](EXECUTOR_ADAPTERS.md) § "Tool permission handling".
+
+If `OPENCODE_URL` is not reachable, the OpenCode option is hidden in the assistant executor picker (`GET /api/system/executors` returns the visibility map).
+
+> **Session filtering is a query param, not an env var.** The sessions list can be narrowed to one executor with `GET /api/sessions?executor=hermes|opencode-1230`. There is no env var for this — it is a per-request query parameter (used by the Workspace's `ExecutorToolbar` `…` link).
+
+### Tududi Application (optional)
+
+Tududi is a self-hosted task / notes manager proxied through 1230-UI at `/api/tududi/*`. The bearer token is read from `.env` and never leaves the server.
+
+| Variable | Description | Default |
+|---|---|---|
+| `TUDUDI_API_URL` | Base URL of the Tududi instance (no trailing slash). | `https://todo.thinkout.ru` |
+| `TUDUDI_API_TOKEN` | Bearer token (`tt_<hex>`) for the Tududi proxy. Required for the app to work. When unset, the app shows a red status dot and the proxy returns `503 tududi_not_configured`. | _(unset)_ |
+| `TUDUDI_TIMEOUT_MS` | Request timeout in ms (applies to every proxied call). | `15000` |
+
+The token is created in the Tududi UI under **Profile → Settings → API Keys**. Each Tududi user has one token. The proxy does not currently support an override file — set the URL and token in `.env` and restart the service.
+
 ## Example `.env` File
 
 ```bash
@@ -71,6 +106,20 @@ LIKES_COOLDOWN_SEC=3600
 
 # GeoIP (optional — set to true to skip country lookup)
 # DISABLE_GEOIP=true
+
+# Cloud Connect (optional)
+# CLOUD_CONNECT_KEY=
+
+# OpenCode executor (optional)
+# OPENCODE_URL=http://127.0.0.1:4097
+# OPENCODE_SERVER_USERNAME=
+# OPENCODE_SERVER_PASSWORD=
+# OPENCODE_AUTO_APPROVE_TOOLS=1   # set to 0 to require manual tool approval
+
+# Tududi application (optional)
+# TUDUDI_API_URL=https://todo.thinkout.ru
+# TUDUDI_API_TOKEN=tt_your_token_here
+# TUDUDI_TIMEOUT_MS=15000
 ```
 
 ## Configuration Validation
@@ -98,6 +147,8 @@ Five independent rate-limit profiles protect against abuse:
 | `execLimiter` | `POST /api/system/exec` | 5 req / 5 min |
 | `providerLimiter` | `POST/DELETE /api/providers/:name/key` | 10 req / min |
 | `likeLimiter` | `POST /api/like` | 5 req / hr (per IP) |
+
+The Tududi proxy (`/api/tududi/*` and `GET /api/tududi/health`) is also gated by `apiLimiter`.
 
 ### Input Sanitization
 

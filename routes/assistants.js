@@ -28,6 +28,7 @@ const router = Router();
 const ASSISTANT_PALETTE    = new Set(['blue', 'green', 'purple', 'red', 'orange', 'yellow', 'pink', 'gray']);
 const ASSISTANT_STYLES     = new Set(['friendly', 'formal', 'concise', 'creative']);
 const ASSISTANT_DEPTHS     = new Set(['quick', 'standard', 'thorough']);
+const ASSISTANT_EXECUTORS  = new Set(['hermes', 'opencode-1230']);
 const MAX_ASSISTANT_NAME   = 60;
 const MAX_ASSISTANT_DESC   = 200;
 const MAX_ASSISTANT_ICON_LEN = 8;
@@ -35,7 +36,7 @@ const MAX_ASSISTANT_ICON_LEN = 8;
 // ── Input validation ───────────────────────────────────────────────────────
 const MAX_SYSTEM_PROMPT = 4000;
 
-function sanitizeAssistantInput({ name, color, icon, model_id, style, depth, system_prompt }) {
+function sanitizeAssistantInput({ name, color, icon, model_id, style, depth, system_prompt, executor }) {
   if (typeof name !== 'string') throw new Error('name must be a string');
   const trimmed = name.trim();
   if (trimmed.length < 1 || trimmed.length > MAX_ASSISTANT_NAME) {
@@ -66,9 +67,13 @@ function sanitizeAssistantInput({ name, color, icon, model_id, style, depth, sys
   if (sp != null && sp.length > MAX_SYSTEM_PROMPT) {
     throw new Error(`system_prompt must be <= ${MAX_SYSTEM_PROMPT} characters`);
   }
+  const exec = executor == null || executor === '' ? 'hermes' : String(executor);
+  if (!ASSISTANT_EXECUTORS.has(exec)) {
+    throw new Error('executor must be one of: hermes, opencode-1230');
+  }
   // description is derived automatically: first 100 chars of system_prompt
   const desc = sp ? sp.slice(0, 100) : null;
-  return { name: trimmed, description: desc, color: col, icon: ic, model_id: mid, style: sty, depth: dep, system_prompt: sp };
+  return { name: trimmed, description: desc, color: col, icon: ic, model_id: mid, style: sty, depth: dep, system_prompt: sp, executor: exec };
 }
 
 // ── GET /api/assistants ────────────────────────────────────────────────────
@@ -115,9 +120,9 @@ router.post('/', apiLimiter, (req, res) => {
   try {
     const input = sanitizeAssistantInput(req.body || {});
     const result = uiDb.prepare(`
-      INSERT INTO assistants (name, description, color, icon, model_id, style, depth, system_prompt, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `).run(input.name, input.description, input.color, input.icon, input.model_id, input.style, input.depth, input.system_prompt);
+      INSERT INTO assistants (name, description, color, icon, model_id, style, depth, system_prompt, executor, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `).run(input.name, input.description, input.color, input.icon, input.model_id, input.style, input.depth, input.system_prompt, input.executor);
     const row = uiDb.prepare('SELECT * FROM assistants WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json({ assistant: rowToAssistant(row), forked: false });
   } catch (error) {
@@ -144,6 +149,7 @@ router.patch('/:id', apiLimiter, (req, res) => {
       style:         req.body.style         !== undefined ? req.body.style         : existing.style,
       depth:         req.body.depth         !== undefined ? req.body.depth         : existing.depth,
       system_prompt: req.body.system_prompt !== undefined ? req.body.system_prompt : existing.system_prompt,
+      executor:      req.body.executor      !== undefined ? req.body.executor      : (existing.executor ?? 'hermes'),
     });
 
     const linkedSessions = uiDb.prepare(
@@ -159,17 +165,17 @@ router.patch('/:id', apiLimiter, (req, res) => {
           WHERE id = ?
         `).run(existing.id);
         const ins = uiDb.prepare(`
-          INSERT INTO assistants (name, description, color, icon, model_id, style, depth, system_prompt, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `).run(input.name, input.description, input.color, input.icon, input.model_id, input.style, input.depth, input.system_prompt);
+          INSERT INTO assistants (name, description, color, icon, model_id, style, depth, system_prompt, executor, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `).run(input.name, input.description, input.color, input.icon, input.model_id, input.style, input.depth, input.system_prompt, input.executor);
         const created = uiDb.prepare('SELECT * FROM assistants WHERE id = ?').get(ins.lastInsertRowid);
         return { assistant: rowToAssistant(created), forked: true, previousId: existing.id };
       }
       uiDb.prepare(`
         UPDATE assistants
-        SET name = ?, description = ?, color = ?, icon = ?, model_id = ?, style = ?, depth = ?, system_prompt = ?, updated_at = CURRENT_TIMESTAMP
+        SET name = ?, description = ?, color = ?, icon = ?, model_id = ?, style = ?, depth = ?, system_prompt = ?, executor = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(input.name, input.description, input.color, input.icon, input.model_id, input.style, input.depth, input.system_prompt, existing.id);
+      `).run(input.name, input.description, input.color, input.icon, input.model_id, input.style, input.depth, input.system_prompt, input.executor, existing.id);
       const updated = uiDb.prepare('SELECT * FROM assistants WHERE id = ?').get(existing.id);
       return { assistant: rowToAssistant(updated), forked: false };
     });
@@ -237,9 +243,9 @@ router.post('/:id/duplicate', apiLimiter, (req, res) => {
     }
 
     const result = uiDb.prepare(`
-      INSERT INTO assistants (name, description, color, icon, model_id, style, depth, system_prompt, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `).run(candidate, existing.description, existing.color, existing.icon, existing.model_id, existing.style, existing.depth, existing.system_prompt);
+      INSERT INTO assistants (name, description, color, icon, model_id, style, depth, system_prompt, executor, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `).run(candidate, existing.description, existing.color, existing.icon, existing.model_id, existing.style, existing.depth, existing.system_prompt, existing.executor ?? 'hermes');
     const row = uiDb.prepare('SELECT * FROM assistants WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json({ assistant: rowToAssistant(row) });
   } catch (error) {

@@ -15,33 +15,13 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { uiDb, db } from '../db/connections.js';
 import config from '../config.js';
+import { fixFilenameEncoding } from '../lib/fileUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadsDir = path.join(__dirname, '..', 'data', 'uploads');
 
 const router = Router();
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-/**
- * Fixes double-encoded UTF-8 filenames (mojibake).
- * Some browsers/upload paths send UTF-8 bytes that get re-encoded as UTF-8.
- * E.g. "Снимок" → "Ð¡Ð½Ð¸Ð¼Ð¾Ðº" in the DB.
- */
-function fixFilenameEncoding(name) {
-  if (!name) return name;
-  try {
-    // If the string contains characters in the Ð/Ñ range (U+00C0–U+00FF),
-    // it's likely double-encoded UTF-8.
-    if (/[\u00C0-\u00FF]/.test(name)) {
-      return Buffer.from(name, 'latin1').toString('utf8');
-    }
-  } catch {
-    // ignore — return original
-  }
-  return name;
-}
 
 // ── GET /api/files ──────────────────────────────────────────────────────────
 router.get('/', (req, res) => {
@@ -271,6 +251,7 @@ router.post('/:fileId/copy', (req, res) => {
       id: newFile.id,
       sessionId: newFile.session_id,
       filename: newFile.filename,
+      storedName: newFile.stored_name,
       mimeType: newFile.mime_type,
       size: newFile.size,
       uploadedAt: newFile.uploaded_at,

@@ -8,6 +8,24 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     <title>hermes-webui</title>
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem('hermes-theme');
+          var isDark = true;
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object' && parsed.state && typeof parsed.state.isDarkMode === 'boolean') {
+              isDark = parsed.state.isDarkMode;
+            }
+          }
+          var cls = document.documentElement.classList;
+          if (isDark) cls.add('dark'); else cls.remove('dark');
+        } catch (e) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

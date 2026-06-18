@@ -72,3 +72,6 @@ temp/
 .pm2/
 ecosystem.config.js
 data/
+
+# Vendored nanobot-slim — not pushed to public 1230UI repo
+vendor/nanobot-slim/

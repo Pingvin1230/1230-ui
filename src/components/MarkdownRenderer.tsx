@@ -1,22 +1,52 @@
 import { useRef, useState, useEffect, type HTMLAttributes, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useTranslation } from 'react-i18next';
 import { Check, Copy, ChevronDown, ExternalLink } from 'lucide-react';
+import { useThemeStore } from '../store/themeStore';
+import darkThemeUrl from 'highlight.js/styles/github-dark.css?url';
+import lightThemeUrl from 'highlight.js/styles/github.css?url';
 
 let _rehypeHighlight: typeof import('rehype-highlight')['default'] | null = null;
 let _highlightLoading = false;
 const _highlightCallbacks: Array<() => void> = [];
+
+let _darkLink: HTMLLinkElement | null = null;
+let _lightLink: HTMLLinkElement | null = null;
+let _currentIsDark = true;
+
+function ensureLink(id: string, href: string): HTMLLinkElement {
+  let link = document.getElementById(id) as HTMLLinkElement | null;
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.id = id;
+    link.href = href;
+    document.head.appendChild(link);
+  }
+  return link;
+}
+
+function applyTheme() {
+  if (_darkLink) _darkLink.disabled = !_currentIsDark;
+  if (_lightLink) _lightLink.disabled = _currentIsDark;
+}
+
+function setHighlightTheme(isDark: boolean) {
+  _currentIsDark = isDark;
+  applyTheme();
+}
 
 function loadHighlight(onReady: () => void) {
   if (_rehypeHighlight) { onReady(); return; }
   _highlightCallbacks.push(onReady);
   if (_highlightLoading) return;
   _highlightLoading = true;
-  Promise.all([
-    import('rehype-highlight'),
-    import('highlight.js/styles/github-dark.css'),
-  ]).then(([mod]) => {
+  import('rehype-highlight').then((mod) => {
+    _darkLink = ensureLink('hljs-theme-dark', darkThemeUrl);
+    _lightLink = ensureLink('hljs-theme-light', lightThemeUrl);
     _rehypeHighlight = mod.default;
+    applyTheme();
     _highlightCallbacks.forEach((cb) => cb());
     _highlightCallbacks.length = 0;
   });
@@ -59,6 +89,8 @@ interface CodeBlockProps extends HTMLAttributes<HTMLPreElement> {
 }
 
 function CodeBlock({ children, 'data-language': dataLang, ...rest }: CodeBlockProps) {
+  const { t } = useTranslation();
+  const isDarkMode = useThemeStore((s) => s.isDarkMode);
   const [copied, setCopied] = useState(false);
   const [collapsed, setCollapsed] = useState(true);
   const [isLong, setIsLong] = useState(false);
@@ -85,24 +117,40 @@ function CodeBlock({ children, 'data-language': dataLang, ...rest }: CodeBlockPr
 
   const langLabel = dataLang ? getLangLabel(`language-${dataLang}`) : null;
 
+  const headerBg = isDarkMode ? 'bg-[#1e2736] border-white/10' : 'bg-[#eaeef2] border-black/10';
+  const preBg = isDarkMode ? 'bg-[#0d1117]' : 'bg-[#f6f8fa]';
+  const fadeFrom = isDarkMode ? 'from-[#0d1117]' : 'from-[#f6f8fa]';
+  const toggleBg = isDarkMode
+    ? 'text-gray-400 hover:text-white bg-[#0d1117] hover:bg-[#161b22] border-white/10'
+    : 'text-gray-500 hover:text-gray-900 bg-[#f6f8fa] hover:bg-[#e1e4e8] border-black/10';
+  const copyBtn = isDarkMode
+    ? 'text-gray-400 hover:text-white hover:bg-white/10'
+    : 'text-gray-500 hover:text-gray-900 hover:bg-black/10';
+  const labelColor = isDarkMode ? 'text-gray-400' : 'text-gray-500';
+  const copiedColor = isDarkMode ? 'text-green-400' : 'text-green-600';
+  const copiedIcon = isDarkMode ? 'text-green-400' : 'text-green-600';
+
+  const copiedLabel = t('markdown.copied');
+  const copyCodeLabel = t('markdown.copyCode');
+
   return (
     <div className="group relative mb-4 rounded-lg overflow-hidden border border-border-default">
       {/* Header bar: language label + copy button */}
-      <div className="flex items-center justify-between px-4 py-2 bg-[#1e2736] border-b border-white/10">
-        <span className="text-xs font-mono text-gray-400 select-none">
+      <div className={`flex items-center justify-between px-4 py-2 border-b ${headerBg}`}>
+        <span className={`text-xs font-mono select-none ${labelColor}`}>
           {langLabel ?? 'code'}
         </span>
         {/* Copy button — always visible on touch, hover-only on desktop */}
         <button
           type="button"
           onClick={handleCopy}
-          aria-label={copied ? 'Скопировано' : 'Копировать код'}
-          title={copied ? 'Скопировано' : 'Копировать код'}
-          className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-gray-400 hover:text-white hover:bg-white/10 transition-colors md:opacity-0 md:group-hover:opacity-100 opacity-100"
+          aria-label={copied ? copiedLabel : copyCodeLabel}
+          title={copied ? copiedLabel : copyCodeLabel}
+          className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors md:opacity-0 md:group-hover:opacity-100 opacity-100 ${copyBtn}`}
         >
           {copied
-            ? <><Check className="w-3.5 h-3.5 text-green-400" /><span className="text-green-400">Скопировано</span></>
-            : <><Copy className="w-3.5 h-3.5" /><span>Копировать</span></>
+            ? <><Check className={`w-3.5 h-3.5 ${copiedIcon}`} /><span className={copiedColor}>{copiedLabel}</span></>
+            : <><Copy className="w-3.5 h-3.5" /><span>{t('markdown.copy')}</span></>
           }
         </button>
       </div>
@@ -114,7 +162,7 @@ function CodeBlock({ children, 'data-language': dataLang, ...rest }: CodeBlockPr
       >
         <pre
           ref={preRef}
-          className="overflow-x-auto bg-[#0d1117] p-4 text-sm leading-relaxed"
+          className={`overflow-x-auto p-4 text-sm leading-relaxed ${preBg}`}
           {...rest}
         >
           {children}
@@ -122,7 +170,7 @@ function CodeBlock({ children, 'data-language': dataLang, ...rest }: CodeBlockPr
 
         {/* Fade gradient at bottom when collapsed */}
         {isLong && collapsed && (
-          <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-[#0d1117] to-transparent pointer-events-none" />
+          <div className={`absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t to-transparent pointer-events-none ${fadeFrom}`} />
         )}
       </div>
 
@@ -131,10 +179,10 @@ function CodeBlock({ children, 'data-language': dataLang, ...rest }: CodeBlockPr
         <button
           type="button"
           onClick={() => setCollapsed(v => !v)}
-          className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-gray-400 hover:text-white bg-[#0d1117] hover:bg-[#161b22] border-t border-white/10 transition-colors"
+          className={`w-full flex items-center justify-center gap-1.5 py-2 text-xs border-t transition-colors ${toggleBg}`}
         >
           <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsed ? '' : 'rotate-180'}`} />
-          {collapsed ? 'Показать полностью' : 'Свернуть'}
+          {collapsed ? t('markdown.showMore') : t('markdown.showLess')}
         </button>
       )}
     </div>
@@ -183,6 +231,11 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   className = '',
 }) => {
   const [highlightReady, setHighlightReady] = useState(!!_rehypeHighlight);
+  const isDarkMode = useThemeStore((s) => s.isDarkMode);
+
+  useEffect(() => {
+    setHighlightTheme(isDarkMode);
+  }, [isDarkMode]);
 
   useEffect(() => {
     if (_rehypeHighlight) return;

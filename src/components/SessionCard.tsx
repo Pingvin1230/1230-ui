@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Star, Archive, Trash2, CheckSquare, Square } from 'lucide-react';
@@ -16,6 +15,7 @@ interface SessionCardProps {
   onToggleArchive: (session: Session) => void;
   onSwipeDelete: (session: Session) => void;
   onLongPress?: (session: Session) => void;
+  onOpen: (session: Session) => void;
 }
 
 export function SessionCard({
@@ -27,6 +27,7 @@ export function SessionCard({
   onToggleArchive,
   onSwipeDelete,
   onLongPress,
+  onOpen,
 }: SessionCardProps) {
   const { t } = useTranslation();
   const isMobile = useMobile();
@@ -42,13 +43,6 @@ export function SessionCard({
   });
 
   const { ref: swipeRef, translateX: swipeTranslateX, swiping: swipeSwiping } = swipe;
-
-  const handleClick = (e: React.MouseEvent) => {
-    if (longPressHandledRef.current) {
-      e.preventDefault();
-      longPressHandledRef.current = false;
-    }
-  };
 
   const title =
     session.title ||
@@ -103,16 +97,29 @@ export function SessionCard({
           )}
 
           {/* Content */}
-          <Link
-            to={`/chat/${session.id}`}
-            onClick={handleClick}
-            className="flex-1 min-w-0 py-3.5 px-3 sm:px-4"
+          <button
+            type="button"
+            onClick={(e) => {
+              if (longPressHandledRef.current) {
+                e.preventDefault();
+                longPressHandledRef.current = false;
+                return;
+              }
+              if (bulkMode) {
+                onToggleSelect(session.id);
+                return;
+              }
+              onOpen(session);
+            }}
+            aria-label={bulkMode ? undefined : title}
+            className="flex-1 min-w-0 py-3.5 px-3 sm:px-4 text-left"
           >
             {/* Row 1: title + meta */}
             <div className="flex items-baseline gap-2 min-w-0">
               <span className="font-medium text-fg-primary truncate text-sm flex-1 min-w-0">
                 {title}
               </span>
+              <ExecutorBadge executor={session.executor} />
               <span className="text-xs text-fg-muted whitespace-nowrap flex-shrink-0 hidden sm:block">
                 {metaParts.join(' · ')}
               </span>
@@ -128,7 +135,7 @@ export function SessionCard({
                 {session.preview}
               </p>
             )}
-          </Link>
+          </button>
 
           {/* Actions — always visible */}
           {!bulkMode && (
@@ -162,5 +169,21 @@ export function SessionCard({
         </div>
       </div>
     </div>
+  );
+}
+
+function ExecutorBadge({ executor }: { executor: 'hermes' | 'opencode-1230' }) {
+  const isOc = executor === 'opencode-1230';
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide flex-shrink-0 ${
+        isOc
+          ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
+          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+      }`}
+      title={isOc ? 'OpenCode' : 'Hermes'}
+    >
+      {isOc ? '⚡ OC' : '🤖 H'}
+    </span>
   );
 }

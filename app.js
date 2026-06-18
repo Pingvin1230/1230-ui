@@ -14,6 +14,8 @@ import cors from 'cors';
 
 import config from './config.js';
 import { sanitizeMiddleware, apiLimiter } from './middleware/security.js';
+import { requestLogger } from './middleware/logger.js';
+import { errorHandler } from './middleware/errorHandler.js';
 
 import systemRouter, { getHealthHandler }       from './routes/system.js';
 import sessionsRouter, { postMessageHandler }   from './routes/sessions.js';
@@ -25,11 +27,19 @@ import providersRouter  from './routes/providers.js';
 import likesRouter      from './routes/likes.js';
 import applicationsRouter from './routes/applications.js';
 import globalFilesRouter  from './routes/globalFiles.js';
+import cloudConnectionsRouter from './routes/cloudConnections.js';
+import cloudFilesRouter       from './routes/cloudFiles.js';
+import opencodeRouter  from './routes/opencode.js';
+import tududiRouter    from './routes/tududi.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
 const app = express();
+
+// One nginx HTTP hop terminates TLS and proxies to this app, so trust the
+// first proxy hop for correct req.ip / rate-limit key generation.
+app.set('trust proxy', 1);
 
 // ── Security / parsing middleware ──────────────────────────────────────────
 app.use(helmet({
@@ -58,28 +68,9 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // ── Request logging middleware ─────────────────────────────────────────────
-app.use((req, res, next) => {
-  const start = Date.now();
-  const originalJson = res.json.bind(res);
-  res.json = (body) => {
-    const duration = Date.now() - start;
-    const logEntry = {
-      level: res.statusCode >= 400 ? 'warn' : 'info',
-      timestamp: new Date().toISOString(),
-      method: req.method,
-      path: req.path,
-      status: res.statusCode,
-      duration: `${duration}ms`,
-    };
-    if (res.statusCode >= 400) {
-      console.warn(JSON.stringify(logEntry));
-    } else {
-      console.log(JSON.stringify(logEntry));
-    }
-    return originalJson(body);
-  };
-  next();
-});
+// Hooks res 'finish'/'close' so SSE streams and file downloads are logged
+// too (the old res.json monkey-patch missed them). See middleware/logger.js.
+app.use(requestLogger);
 
 // ── API routes ─────────────────────────────────────────────────────────────
 // Stand-alone endpoints first (exact paths, no prefix stripping)
@@ -97,10 +88,20 @@ app.use('/api/providers',   providersRouter);
 app.use('/api/like',        likesRouter);
 app.use('/api/applications', applicationsRouter);
 app.use('/api/files',        globalFilesRouter);
+app.use('/api',              cloudConnectionsRouter);
+app.use('/api',              cloudFilesRouter);
+app.use('/api/opencode',     opencodeRouter);
+app.use('/api/tududi',       tududiRouter);
 
 // ── SPA fallback ───────────────────────────────────────────────────────────
 app.get('/{*path}', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
+
+// ── Central error handler (must be mounted last) ───────────────────────────
+// Catches any unhandled error thrown/rejected from a route handler (or the
+// SPA fallback's sendFile) and any error forwarded via next(err). Responds
+// with { "error": <string> } for full backward compatibility with api.ts.
+app.use(errorHandler);
 
 export default app;

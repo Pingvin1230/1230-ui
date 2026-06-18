@@ -40,6 +40,14 @@ export const DEPTH_OPTIONS = [
 
 export type AssistantDepthId = (typeof DEPTH_OPTIONS)[number]['id'];
 
+// ── Executor backend (Variant B) ──────────────────────────────────────────
+export const EXECUTOR_OPTIONS = [
+  { id: 'hermes',        emoji: '🤖', label: 'assistants.executor.hermes' },
+  { id: 'opencode-1230', emoji: '⚡', label: 'assistants.executor.opencode-1230' },
+] as const;
+
+export type AssistantExecutorId = (typeof EXECUTOR_OPTIONS)[number]['id'];
+
 export interface AssistantFormValues {
   name: string;
   description: string;

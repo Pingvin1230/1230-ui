@@ -264,6 +264,53 @@ EOF
     log_info "View logs with: sudo journalctl -u 1230-ui -f"
 }
 
+# Setup OpenCode executor service (optional)
+setup_opencode() {
+    if command -v opencode &>/dev/null; then
+        echo ""
+        log_info "OpenCode binary detected: $(command -v opencode)"
+        read -p "Do you want to install the OpenCode systemd service (opencode-1230ui)? (y/N): " -n 1 -r
+        echo
+
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            if ! command_exists systemctl; then
+                log_warning "systemd not available — skipping service installation"
+                log_info "To run OpenCode manually: opencode web --hostname 127.0.0.1 --port 4097"
+                return
+            fi
+
+            log_info "Installing opencode-1230ui.service..."
+
+            sudo tee /etc/systemd/system/opencode-1230ui.service > /dev/null <<'EOF'
+[Unit]
+Description=OpenCode AI Coding Assistant (1230-UI)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/opencode web --hostname 127.0.0.1 --port 4097
+Restart=always
+RestartSec=5
+Environment=HOME=/root
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+            sudo systemctl daemon-reload
+            log_success "opencode-1230ui.service installed"
+            log_info "Enable and start with: sudo systemctl enable --now opencode-1230ui.service"
+            log_info "Make sure OPENCODE_URL=http://127.0.0.1:4097 is set in .env"
+        else
+            log_info "Skipping OpenCode service installation"
+        fi
+    else
+        log_warning "OpenCode not found — to enable OpenCode executor, install opencode binary and set OPENCODE_URL in .env. See docs/INSTALLATION.md for details."
+    fi
+}
+
 # Main installation
 main() {
     echo ""
@@ -287,7 +334,10 @@ main() {
     
     echo ""
     setup_systemd
-    
+
+    echo ""
+    setup_opencode
+
     echo ""
     echo "=================================="
     log_success "Installation complete!"

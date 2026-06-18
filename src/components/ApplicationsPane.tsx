@@ -1,8 +1,15 @@
 import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import * as LucideIcons from 'lucide-react';
+import { Eye, FolderOpen, Cloud, ListChecks, type LucideIcon } from 'lucide-react';
 import { useApplicationsStore } from '../store/applicationsStore';
 import { applicationRegistry } from '../applications/registry';
+
+const APPLICATION_ICONS: Record<string, LucideIcon> = {
+  Eye,
+  FolderOpen,
+  Cloud,
+  ListChecks,
+};
 
 interface ApplicationsPaneProps {
   sessionId: string | null;
@@ -55,9 +62,7 @@ export function ApplicationsPane({ sessionId }: ApplicationsPaneProps) {
         <div className="flex gap-1.5 overflow-x-auto">
           {enabledApps.map((app) => {
             const isActive = app.key === selectedApp?.key;
-            const IconComponent = app.icon
-              ? (LucideIcons as unknown as Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>>)[app.icon]
-              : null;
+            const IconComponent = app.icon ? APPLICATION_ICONS[app.icon] ?? null : null;
 
             return (
               <button

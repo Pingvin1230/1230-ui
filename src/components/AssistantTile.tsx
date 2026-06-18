@@ -73,6 +73,16 @@ export function AssistantTile({ assistant, modelLabel, onClick, loading, disable
             {modelLabel}
           </span>
         )}
+        {assistant.executor && assistant.executor !== 'hermes' && (
+          <span
+            className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 truncate max-w-[120px]"
+            title={t('assistants.executorHint')}
+          >
+            {assistant.executor === 'opencode-1230'
+              ? t('assistants.executorBadge.opencode-1230')
+              : t('assistants.executorBadge.hermes')}
+          </span>
+        )}
         {styleOption && (
           <span
             className="flex items-center gap-1 text-xs text-fg-secondary"

@@ -1,7 +1,7 @@
 # 1230-UI — Tasks and Progress
 
-**Last updated:** 2026-06-10 (Tasks #36, #37, #38 shipped — applications architecture, file preview, file manager; all v1.0.0 requirements met)
-**Current version:** 0.9.1
+**Last updated:** 2026-06-18 (v0.9.3 released — Workspace + OpenCode connector overhaul + a full code-audit hardening pass: security fixes, `ChatPage` refactor with message virtualization, global event bus removed, central error handling, completed i18n, soft response validation. Test suite 176 → 305. See [CHANGELOG.md](CHANGELOG.md) §0.9.3 and [docs/AUDIT.md](docs/AUDIT.md).)
+**Current version:** 0.9.3
 **Release target:** v1.0.0 — friendly web interface for non-technical Hermes Agent users
 
 ---
@@ -22,9 +22,52 @@ Everything in **🚨 Required for v1.0.0 release** must be done before tagging v
 
 ## 🚨 Required for v1.0.0 release
 
-All required tasks for v1.0.0 have been completed. Ready to tag v1.0.0.
+**Status: v1.0.0 not yet tagged.** v0.9.3 is the current beta. The 2026-06-18 code audit (`docs/AUDIT.md`) recommends resolving the remaining P0/P1 items before tagging v1.0.0:
+
+- **A1 — sandbox for agent-generated file paths** (deferred; the highest-priority open item — an LLM-referenced absolute path is currently downloadable).
+- **A5 — Content-Security-Policy** (deferred; needs nonce-based CSP + runtime testing).
+- **D7 — versioned DB migrations** (deferred; risk-on-live-DB > value).
+- **SaaS / broad-readiness:** Docker-first install, clean non-personal defaults, export/backup, FTS5 search, smart titles. See the audit's blocks E/F.
+
+Most of the audit's blocks A/B/C/D were closed in the v0.9.3 hardening pass; the checkboxes in `docs/AUDIT.md` reflect the current state.
 
 ---
+
+## 🆕 OpenCode Executor Integration — Post-Spike Backlog
+
+The spike shipped v0.9.2 (multi-executor support) but several hardening and completeness items remain. This section tracks them. See also [docs/executor-selection.md §0.1a](docs/executor-selection.md) for the full list with effort/risk estimates and [CHANGELOG.md](CHANGELOG.md) v0.9.2 for the spike summary.
+
+> **v0.9.3 note:** Most OpenCode connector bugs found in the v0.9.3 audit are fixed in v0.9.3 (history glue, binding upsert, pin/archive column preservation, createSession race, rehydration, orphan user row, merge dedup, delta streaming). See CHANGELOG v0.9.3.
+
+### Quality & testing
+
+
+#### ✅ B2. Tool-call continuation loop in OC adapter
+**Role:** Backend
+- [x] Handle OpenCode's `permission.asked` events — forward to 1230UI for in-app approval (or proxy to daemon UI)
+- [x] Implement tool-call → response → next-prompt loop
+- [x] Update `OpenCodeClient.promptAsync` to wait for tool response before next step
+- [x] Currently `--no-tools` only; tool calls happen in OC daemon's own UI on port 4096
+
+**Done in v0.9.3** — `lib/opencode.js` handles `permission.updated` and auto-approves via `POST /session/:id/permissions/:id` (`"once"` mode), gated by `OPENCODE_AUTO_APPROVE_TOOLS`; tools now run inline in 1230UI.
+
+**Priority:** LOW (most users don't need tools in chat UI; file/bash is via daemon UI)
+**Complexity:** L (1-2 days)
+
+
+
+#### 📋 B5. Adapter registry pattern
+**Role:** Backend (Architecture, future)
+- [ ] Replace inline `ADAPTERS` map with plugin system
+- [ ] Each adapter in `lib/adapters/<name>.js` self-registers on import
+- [ ] Allows third-party adapters (e.g. user writes their own)
+- [ ] `ASSISTANT_EXECUTORS` becomes a derived list from the registry
+
+**Priority:** LOW (current map is fine for 2-3 adapters)
+**Complexity:** M (1 day)
+
+
+
 
 ## 🔮 Deferred (post-1.0)
 
@@ -45,12 +88,14 @@ Tasks explicitly deferred past v1.0.0. Re-prioritized per release after v1.0.0 s
 
 #### 📋 11. Backend Unit Tests
 **Role:** Backend
-- [ ] Set up Vitest or Jest
-- [ ] Tests for `/api/sessions`, `/api/chat`, `/api/models`
+- [x] Set up Vitest or Jest (Vitest already in use via `security.test.js`)
+- [x] Tests for executor-логика: `lib/opencode.js` (parseSseChunk + OpenCodeClient), `lib/adapters/{hermes,opencode}.js`, `lib/adapters/index.js` registry
+- [x] **110/110 tests pass** (22 prior + 88 new across 5 test files: `opencode-parseSseChunk`, `opencode-client`, `adapters-opencode`, `adapters-hermes`, `adapters-registry`)
+- [ ] Tests for the rest of the routes: `/api/sessions` (list, get, create, pin, archive, delete, messages merge), `/api/chat` (dispatcher end-to-end with both adapters), `/api/models`, `/api/assistants`, `/api/system/*`
 - [ ] Coverage > 70%
 
 **Priority:** MEDIUM
-**Complexity:** Medium
+**Complexity:** Medium — **executor layer DONE in v0.9.2 post-spike; route coverage remains**
 
 ---
 
@@ -209,9 +254,125 @@ Tasks that were considered and explicitly rejected. Kept for reference so we don
 
 ---
 
+## 🧹 v0.9.2 Release-Prep — Code Issues & Dead Code
+
+Findings from the v0.9.2 doc-vs-code audit (2026-06-16). None are blockers for the v0.9.2 release; all should be cleaned up either before tagging v0.9.2 or as the first task in the v0.9.3 cycle.
+
+### Dead code (remove)
+
+#### ✅ D1. `routes/tududiSettings.js` — never mounted (RESOLVED 2026-06-17)
+**File:** `routes/tududiSettings.js` (54 lines) — **DELETED**.
+- The runtime config feature was implemented properly in `routes/tududi.js` (`POST /api/tududi/config` + `lib/systemSettings.js`), so this dead stub is no longer needed.
+
+#### ✅ D2. `src/applications/tududi/SettingsModal.tsx` — never imported (RESOLVED 2026-06-17)
+**File:** `src/applications/tududi/SettingsModal.tsx` — **DELETED**.
+- The dedicated `/settings/tududi` page (`TududiSettingsPage.tsx`) is the canonical surface; the modal was orphaned.
+
+### Documentation drift (fix in this audit)
+
+#### 📋 D3. `docs/INSTALLATION.md` — phantom `docs/deploy/opencode-1230ui.service` link
+- The doc references a file at `docs/deploy/opencode-1230ui.service` that **does not exist** in the repo (`docs/deploy/` directory is absent).
+- The heredoc unit block in §OpenCode is the actual content; the link is a leftover from when the file was meant to ship separately.
+- **Action:** fix the cross-reference to the in-doc heredoc, or drop the link. Updated in the v0.9.2 docs pass.
+
+#### 📋 D4. `docs/executor-selection.md` — superseded
+- 1756-line spike document for the OpenCode executor work. Most of the design content is now stable and lives in `docs/EXECUTOR_ADAPTERS.md` and the v0.9.2 `CHANGELOG.md` entry.
+- Still contains a few facts that are **out of date** (e.g. Variant B spike-time API contract that has since moved; post-spike hardening items that have closed).
+- **Action:** keep for now as a historical spike record, but mark it as historical in the title and add a one-line header pointing readers to `EXECUTOR_ADAPTERS.md` and `CHANGELOG.md#multi-executor-hardening-2026-06-12`. The 30-item hardening backlog from `docs/brief-multi-executor-audit.md` is the single source of truth for "what's still open" — this file should stop carrying that list.
+
+#### 📋 D5. `docs/brief-multi-executor-audit.md` and `docs/brief-settings-reorganisation.md` — one-shot briefs
+- `brief-multi-executor-audit.md` (156 lines) — 30-item hardening backlog. Most items closed in the v0.9.2 spike post-pass; the document is now stale.
+- `brief-settings-reorganisation.md` (373 lines) — proposal for splitting `/settings` into per-executor sub-pages. The proposal has been **implemented** (`/settings/executors/hermes-agent`, `/settings/executors/opencode` exist, the parent Settings page already shows a compact "Executor Configuration" list linking to them). The doc still says "Status: Proposal (not yet implemented)".
+- **Action:** the settings reorganisation brief can be deleted (its content is realised in the shipped code); the multi-executor audit brief should be moved into `TODO.md` as the new "Post-Spike Backlog" section (the existing `🆕 OpenCode Executor Integration — Post-Spike Backlog` section already absorbs it — verify line items match, then delete the brief).
+
+#### 📋 D6. `docs/audit-opencode-runtime.md` — host-specific audit
+- 273-line audit of the OpenCode CLI / web / serve modes on the BIG server, written for a specific user question in 2026-06-11.
+- Not user-facing, not part of the architecture. Has no future maintenance value.
+- **Action:** delete, or move to a `docs/internal/` subfolder if internal audits are kept.
+
+#### 📋 D7. `docs/logo.html` — design artifact
+- Stand-alone HTML/CSS file (757 lines) for a logo design exploration. Not documentation, not part of the app.
+- **Action:** delete from `docs/`. If the logo work is still active, move it to `design/` or `assets/`.
+
+### Code smells (not strictly dead, but worth fixing)
+
+#### 📋 C1. `routes/opencode.js` and `lib/opencode.js` — overlapping modules
+- `lib/opencode.js` (448 lines) — `OpenCodeClient` class + `streamOpenCodeSession()` async generator, used by `lib/adapters/opencode.js`.
+- `routes/opencode.js` (84 lines) — small router that exposes a few OpenCode endpoints. Most of its content is internal to the adapter.
+- The split is historical (the router was added before the adapter was extracted). With the dispatcher in `routes/chat.js` and the adapter in `lib/adapters/`, the router has very little surface left and `lib/opencode.js` is the only one the adapter actually needs.
+- **Action:** audit the router to confirm what is still called from the frontend, then either (a) move the surviving endpoints into the OpenCode adapter's HTTP routes, or (b) document why both exist. Currently it is non-obvious which file to edit for "OpenCode stuff".
+
+#### ✅ C2. `TududiApp.tsx` hard-codes the upstream URL twice (RESOLVED 2026-06-17)
+- Both call sites now read the URL live:
+  - `TududiSettingsPage.tsx` "Open Tududi" button → `t()`-wrapped, uses the form's URL when valid.
+  - `TududiApp.tsx` header "Open in Tududi" icon → fetched from `GET /api/tududi/config` on mount, falls back to `https://todo.thinkout.ru` if the call fails.
+
+#### ✅ C3. No `tududi.*` keys in i18n catalogues (RESOLVED 2026-06-17)
+- `tududi.config.*` keys (24 strings) now exist in all four locales (`en/ru/es/de/translation.json`). `common.backToSettings` and `common.saved` also added. Other `tududi.*` keys used inline by `TududiApp` and `TasksView` (`tududi.tab.*`, `tududi.tasks.filter.*`, `tududi.settings`, `tududi.openExternal`) remain in the inline-fallback form — they're rare enough that promoting them is future work.
+
+#### ✅ C4. No Vitest coverage for the Tududi proxy or client (RESOLVED 2026-06-17)
+- `tests/tududi.test.js` — 9 tests for `lib/tududi.js` (`probeTududi` happy path / 401 / 500 / timeout / network error / no-token / no-url / trailing-slash / custom timeout).
+- `tests/tududi-routes.test.js` — 24 tests covering `GET /health`, `GET /config`, `POST /config` (validation, save, hot-reload, encrypt, clear), `POST /test` (saved + ad-hoc), and proxy pass-through (hop-by-hop stripping, 502/503/504 mapping, body forwarding).
+- `tests/systemSettings.test.js` — 7 tests for `lib/systemSettings.js` (`getSetting`, `upsertSetting`, `getSettings`, `transaction`).
+- Total suite: 150 tests across 10 files (was 119 across 8).
+
+#### ✅ C5. `docs/TUDUDI_INTEGRATION.md` `inbox` references (RESOLVED 2026-06-17)
+- §1.2 header and client-methods list no longer mention Inbox; §2.4 "Removed" remains the single source of truth.
+
+---
+
 ## ✅ Completed (history)
 
 Done features, kept for reference. Organized by release / category. Last release at the top.
+
+### v0.9.2 — Cloud Connect (2026-06-10)
+
+#### Task #39 — Cloud Connect: WebDAV file picker + cloud-link interceptor
+**Role:** Fullstack
+**Status:** ✅ Shipped
+
+Minimal WebDAV client for browsing cloud files and inserting file links into chat. Cloud links are expanded inline before sending to Hermes — the agent receives file content directly, no tool calls needed.
+
+**Backend:**
+- ✅ `cloud_connections` table in `db/migrate.js` (idempotent)
+- ✅ `lib/cloud/crypto.js` — AES-256-GCM encrypt/decrypt + HMAC-SHA256 signed URLs
+- ✅ `routes/cloudConnections.js` — CRUD + test connection
+- ✅ `routes/cloudFiles.js` — list directory, issue signed links, proxy stream
+- ✅ `routes/chat.js` — cloud-link interceptor: expands `/api/cloud/...` URLs to inline content before sending to Hermes
+  - Text files (md/txt/json/csv/py/js/ts/...) → `{ type: "text" }` with filename header
+  - Images (png/jpg/webp/gif/svg) → `{ type: "image_url", image_url: { url: "data:..." } }`
+  - Binary files → text description (data URL if ≤ 1MB)
+  - Max inline size: 5MB
+- ✅ `CLOUD_CONNECT_KEY` env variable (config.js, .env.example)
+- ✅ Seed `cloud_connect` application in `db/seed.js`
+
+**Frontend:**
+- ✅ `CloudConnectApp` — entry component in Applications pane
+- ✅ `ConnectionChips` — switch between saved connections
+- ✅ `EntryList` — breadcrumb + lazy directory listing + checkbox select
+- ✅ `InsertBar` — "N files selected" + "Insert into chat" button
+- ✅ `AddConnectionForm` — inline form (url, username, password) with test-on-save
+- ✅ `cloudConnectStore` — Zustand store for state management
+- ✅ `chat:insertText` event — appended to ChatInput textarea
+- ✅ Registry update: `cloud_connect: CloudConnectApp`
+- ✅ i18n: `cloudConnect.*` keys × 2 languages (en, ru)
+
+**Nginx:**
+- ✅ `/api/cloud/` bypass from Authelia in `kesha.thinkout.ru.conf` (HMAC + TTL protected)
+- ✅ `trust proxy` enabled for correct `req.protocol`
+
+**New files:** `routes/cloudConnections.js`, `routes/cloudFiles.js`, `lib/cloud/crypto.js`, `src/store/cloudConnectStore.ts`, `src/applications/cloud-connect/` (CloudConnectApp, components/ConnectionChips, EntryList, InsertBar, AddConnectionForm, index.ts).
+**Changed files:** `db/migrate.js`, `db/seed.js`, `config.js`, `.env.example`, `app.js`, `routes/chat.js`, `src/types/api.ts`, `src/lib/api.ts`, `src/components/ChatInput.tsx`, `src/applications/registry.ts`, i18n locales (en, ru), nginx config.
+
+**New dependency:** `webdav ^5.7.0`
+
+**Deferred (future):**
+- Yandex Disk OAuth integration
+- Provider presets (Mail.ru, Nextcloud, etc.)
+- Settings page `/settings/cloud-connect`
+- Multi-account per provider
+- File preview / thumbnails
+- Mobile support
 
 ### v0.9.1 — Applications Architecture + File Preview (2026-06-10)
 

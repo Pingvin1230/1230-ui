@@ -22,6 +22,14 @@ const envSchema = z.object({
   LIKES_WEBHOOK_URL: z.string().url().optional(),
   LIKES_COOLDOWN_SEC: z.coerce.number().int().positive().default(3600),
   FILE_RETENTION_DAYS: z.coerce.number().int().min(0).default(30),
+  CLOUD_CONNECT_KEY: z.string().min(1).optional(),
+  OPENCODE_URL: z.string().url().default('http://127.0.0.1:4097'),
+  OPENCODE_SERVER_USERNAME: z.string().optional(),
+  OPENCODE_SERVER_PASSWORD: z.string().optional(),
+  OPENCODE_AUTO_APPROVE_TOOLS: z.string().optional().default('1'),
+  TUDUDI_API_URL: z.string().url().default('https://todo.thinkout.ru'),
+  TUDUDI_API_TOKEN: z.string().optional(),
+  TUDUDI_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
 });
 
 function validateConfig() {
@@ -37,6 +45,14 @@ function validateConfig() {
     LIKES_WEBHOOK_URL: process.env.LIKES_WEBHOOK_URL,
     LIKES_COOLDOWN_SEC: process.env.LIKES_COOLDOWN_SEC,
     FILE_RETENTION_DAYS: process.env.FILE_RETENTION_DAYS,
+    CLOUD_CONNECT_KEY: process.env.CLOUD_CONNECT_KEY,
+    OPENCODE_URL: process.env.OPENCODE_URL,
+    OPENCODE_SERVER_USERNAME: process.env.OPENCODE_SERVER_USERNAME,
+    OPENCODE_SERVER_PASSWORD: process.env.OPENCODE_SERVER_PASSWORD,
+    OPENCODE_AUTO_APPROVE_TOOLS: process.env.OPENCODE_AUTO_APPROVE_TOOLS,
+    TUDUDI_API_URL: process.env.TUDUDI_API_URL,
+    TUDUDI_API_TOKEN: process.env.TUDUDI_API_TOKEN,
+    TUDUDI_TIMEOUT_MS: process.env.TUDUDI_TIMEOUT_MS,
   };
 
   const parsed = envSchema.safeParse(raw);
@@ -122,6 +138,14 @@ function validateConfig() {
     likesWebhookUrl: cfg.LIKES_WEBHOOK_URL || null,
     likesCooldownSec: cfg.LIKES_COOLDOWN_SEC,
     fileRetentionDays: cfg.FILE_RETENTION_DAYS,
+    cloudConnectKey: cfg.CLOUD_CONNECT_KEY || null,
+    opencodeUrl: cfg.OPENCODE_URL,
+    opencodeUsername: cfg.OPENCODE_SERVER_USERNAME || null,
+    opencodePassword: cfg.OPENCODE_SERVER_PASSWORD || null,
+    opencodeAutoApproveTools: ['1', 'true', 'yes', 'on'].includes((cfg.OPENCODE_AUTO_APPROVE_TOOLS || '').toLowerCase()),
+    tududiApiUrl: cfg.TUDUDI_API_URL,
+    tududiApiToken: cfg.TUDUDI_API_TOKEN || null,
+    tududiTimeoutMs: cfg.TUDUDI_TIMEOUT_MS,
     scripts,
   };
 }

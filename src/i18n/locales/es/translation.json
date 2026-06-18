@@ -30,7 +30,12 @@
     "showingOfTotal": "{{showing}} de {{total}} sesiones",
     "selected": "{{count}} seleccionados",
     "selected_one": "{{count}} seleccionado",
-    "selected_other": "{{count}} seleccionados"
+    "selected_other": "{{count}} seleccionados",
+    "expand": "Expandir",
+    "collapse": "Contraer",
+    "loading": "Cargando…",
+    "backToSettings": "Volver a Configuración",
+    "saved": "guardado"
   },
   "nav": {
     "home": "Inicio",
@@ -40,6 +45,7 @@
     "brand": "1230.UI",
     "searchPlaceholder": "Buscar sesiones...",
     "searchLabel": "Buscar sesiones",
+    "clearSearch": "Limpiar búsqueda",
     "notificationsOn": "Notificaciones activadas",
     "notificationsOff": "Notificaciones desactivadas",
     "enableNotifications": "Activar notificaciones",
@@ -52,7 +58,28 @@
     "hermesApiStatus": "Estado de Hermes API",
     "hermesApiConnected": "Hermes API: Conectado",
     "hermesApiDisconnected": "Hermes API: Desconectado",
-    "hermesApiChecking": "Hermes API: Comprobando…"
+    "hermesApiChecking": "Hermes API: Comprobando…",
+    "opencodeStatus": "Estado de OpenCode",
+    "opencodeConnected": "OpenCode: Conectado",
+    "opencodeDisconnected": "OpenCode: No disponible",
+    "opencodeChecking": "OpenCode: Comprobando…"
+  },
+  "markdown": {
+    "copied": "Copiado",
+    "copyCode": "Copiar código",
+    "copy": "Copiar",
+    "showMore": "Mostrar más",
+    "showLess": "Mostrar menos"
+  },
+  "time": {
+    "midnight": "Medianoche",
+    "dawn": "Amanecer",
+    "morning": "Mañana",
+    "noon": "Mediodía",
+    "afternoon": "Tarde",
+    "sunset": "Atardecer",
+    "evening": "Anochecer",
+    "night": "Noche"
   },
   "chat": {
     "sessionNotFound": "Sesión no encontrada",
@@ -120,7 +147,15 @@
     "sessionFilesAgent_other": "{{count}} del agente",
     "sessionFilesInSession": "archivos en sesión",
     "sessionFilesCount_one": "{{count}} archivo",
-    "sessionFilesCount_other": "{{count}} archivos"
+    "sessionFilesCount_other": "{{count}} archivos",
+    "viaExecutor": "vía {{name}}",
+    "freeChatExecutorHint": "Los nuevos chats usan Hermes por defecto. Para usar OpenCode, selecciona un asistente con el motor OpenCode.",
+    "liveIndicator": "El agente está respondiendo…",
+    "liveIndicatorRecovering": "Recuperando tras cambiar de pestaña…",
+    "noActiveSessionTitle": "Sin sesión activa",
+    "noActiveSessionDesc": "Abre la pestaña Sesiones y elige una sesión para este ejecutor.",
+    "openSessionsTab": "Abrir Sesiones",
+    "quickChat": "Chat rápido"
   },
   "sessions": {
     "title": "Sesiones",
@@ -147,6 +182,13 @@
     "deleteSessionsConfirm_other": "¿Eliminar {{count}} sesiones? Esta acción no se puede deshacer.",
     "failedToLoadSessions": "Error al cargar las sesiones",
     "holdToSelect": "Mantén presionado para seleccionar"
+  },
+  "workspace": {
+    "tab": {
+      "sessions": "Sesiones"
+    },
+    "allSessions": "Todas las sesiones de este ejecutor",
+    "noRecentSessions": "No hay sesiones recientes"
   },
   "dashboard": {
     "welcome": "Bienvenido",
@@ -189,6 +231,10 @@
     "title": "Configuración",
     "description": "Configuración de la interfaz web",
     "general": "General",
+    "language": "Idioma",
+    "interfaceLanguage": "Idioma de la interfaz",
+    "tududi": "Tududi",
+    "tududiDescription": "Integración de gestión de tareas y notas",
     "appearance": "Apariencia",
     "darkMode": "Modo oscuro",
     "lightMode": "Modo claro",
@@ -265,7 +311,26 @@
     "navStyleLabel": "Navegación en escritorio",
     "navStyleDesc": "Elige cómo navegar en escritorio",
     "navStyleSidebar": "Barra lateral",
-    "navStyleBottombar": "Barra inferior"
+    "navStyleBottombar": "Barra inferior",
+    "executors": {
+      "title": "Configuración del ejecutor",
+      "subtitle": "Ajustes por ejecutor para los backends de IA disponibles en 1230UI.",
+      "opencodeUrl": "URL del demonio OpenCode",
+      "username": "Usuario",
+      "password": "Contraseña",
+      "testConnection": "Probar conexión",
+      "connected": "Conectado",
+      "unreachable": "No disponible",
+      "saved": "Configuración guardada",
+      "saveError": "Error al guardar configuración",
+      "hint": "Configura la conexión al demonio OpenCode. Los cambios surten efecto en la siguiente solicitud.",
+      "save": "Guardar",
+      "hermesAgent": "Hermes Agent",
+      "hermesAgentDesc": "Ejecutor por defecto. Los modelos, proveedores y comandos están en su página de ajustes.",
+      "opencode": "OpenCode",
+      "opencodeDesc": "Segundo ejecutor opcional, se ejecuta como `opencode serve`. Úsalo para exponer modelos y proveedores adicionales configurados en el demonio OC.",
+      "manage": "Gestionar"
+    }
   },
   "errors": {
     "content_moderation": "Solicitud bloqueada",
@@ -312,6 +377,8 @@
     "likeCooldown": "Solo puedes dar un like una vez por hora",
     "failedToSendLike": "Error al enviar el like",
     "failedToFetchAvailableProviders": "Error al obtener los proveedores",
+    "failedToFetchOpenCodeProviders": "Error al obtener los proveedores de OpenCode",
+    "failedToFetchAvailableExecutors": "Error al obtener los ejecutores disponibles",
     "failedToSetProviderKey": "Error al guardar la clave de API",
     "failedToRemoveProviderKey": "Error al eliminar la clave de API",
     "failedToFetchAssistants": "Error al cargar asistentes",
@@ -327,7 +394,18 @@
     "failedToExtendFile": "Error al extender el archivo",
     "failedToCopyFile": "Error al copiar el archivo",
     "failedToFetchApplications": "Error al obtener las aplicaciones",
-    "failedToUpdateApplication": "Error al actualizar la aplicación"
+    "failedToUpdateApplication": "Error al actualizar la aplicación",
+    "failedToFetchCloudConnections": "Error al obtener las conexiones en la nube",
+    "failedToTestConnection": "Error al probar la conexión",
+    "failedToUpdateConnection": "Error al actualizar la conexión",
+    "failedToDeleteConnection": "Error al eliminar la conexión",
+    "failedToListCloudEntries": "Error al listar los archivos en la nube",
+    "failedToCreateCloudConnection": "Error al crear la conexión en la nube",
+    "failedToIssueLinks": "Error al generar los enlaces",
+    "failedToFetchExecutorConfig": "Error al obtener la configuración del ejecutor",
+    "failedToSaveExecutorConfig": "Error al guardar la configuración del ejecutor",
+    "failedToFetchFilesFromCloud": "Error al obtener archivos de la nube",
+    "requestFailed": "Error en la solicitud (HTTP {{status}})"
   },
   "errorBoundary": {
     "title": "Ocurrió un error",
@@ -439,7 +517,17 @@
     "depthHint": "Controla cuán detalladamente el asistente analiza la solicitud. Haz clic de nuevo para deseleccionar.",
     "depthQuick": "Rápido",
     "depthStandard": "Estándar",
-    "depthThorough": "Detallado"
+    "depthThorough": "Detallado",
+    "executorLabel": "Motor",
+    "executorHint": "Motor de backend para este asistente. Hermes es el predeterminado; OpenCode se ejecuta como un servicio separado. No se puede cambiar durante una sesión activa.",
+    "executor.hermes": "Hermes",
+    "executor.opencode-1230": "OpenCode",
+    "executorBadge": { "hermes": "🤖 Hermes", "opencode-1230": "⚡ OpenCode" },
+    "executorUnavailable": "El servicio OpenCode no está disponible. Inicie opencode-1230ui.service para habilitar esta opción.",
+    "executorDownOnSave": "OpenCode no está disponible actualmente. Inicie opencode-1230ui o cambie a Hermes.",
+    "executorChecking": "Verificando motores...",
+    "executorRetry": "Reintentar",
+    "executorDownInline": "⚠ OpenCode no está disponible actualmente."
   },
   "applications": {
     "title": "Aplicaciones",
@@ -528,6 +616,123 @@
       "hoursLeft_one": "{{count}} hora restante",
       "hoursLeft_other": "{{count}} horas restantes",
       "never": "Sin expiración"
+    }
+  },
+  "cloudConnect": {
+    "addConnection": "Añadir conexión",
+    "addConnectionDesc": "Conecta a cualquier servidor WebDAV para explorar e insertar enlaces de archivos en el chat",
+    "selectedCount": "{{count}} archivos seleccionados",
+    "selectedCount_one": "{{count}} archivo seleccionado",
+    "selectedCount_other": "{{count}} archivos seleccionados",
+    "insertIntoChat": "Insertar en el chat",
+    "inserting": "Insertando…",
+    "empty": {
+      "noConnections": "Aún no hay conexión en la nube",
+      "noConnectionsDesc": "Conecta un servidor WebDAV para insertar enlaces a tus archivos directamente desde la nube",
+      "folder": "Esta carpeta está vacía"
+    },
+    "form": {
+      "label": "Etiqueta (opcional)",
+      "labelPlaceholder": "Mi nube",
+      "url": "URL de WebDAV",
+      "username": "Usuario",
+      "password": "Contraseña",
+      "save": "Guardar y conectar",
+      "testing": "Probando…"
+    }
+  },
+  "executorPage": {
+    "back": "Volver a Ajustes",
+    "hermesTitle": "Ajustes de Hermes Agent",
+    "hermesSubtitle": "Ejecutor por defecto. Lanza un subproceso de Python por cada turno de chat.",
+    "opencodeTitle": "Ajustes de OpenCode",
+    "opencodeSubtitle": "Segundo ejecutor opcional, se ejecuta como `opencode serve`."
+  },
+  "blocks": {
+    "models": {
+      "title": "Modelos",
+      "summary": "{{enabled}} modelos habilitados / {{total}} en total",
+      "unavailable": "Los modelos de OpenCode se configuran dentro del demonio `opencode serve` y aún no se pueden editar desde 1230UI."
+    },
+    "providers": {
+      "title": "Proveedores",
+      "count": "proveedores configurados",
+      "unavailable": "Los proveedores de OpenCode se configuran dentro del demonio `opencode serve` y aún no se pueden editar desde 1230UI."
+    },
+    "connection": {
+      "title": "Conexión",
+      "description": "Cómo se comunica 1230UI con este ejecutor.",
+      "unavailable": "Hermes Agent se ejecuta como un subproceso de Python lanzado por 1230UI. La ruta de Python, la URL de la API y la clave de la API se configuran en el archivo `.env` de 1230UI (`HERMES_PYTHON_PATH`, `HERMES_API_URL`, `HERMES_API_KEY`). Reinicie 1230UI tras editarlas. Consulte `docs/INSTALLATION.md` para ver la configuración completa.",
+      "opencodeUrl": "URL del demonio OpenCode",
+      "username": "Usuario",
+      "password": "Contraseña",
+      "pythonPath": "Ruta de Python",
+      "apiUrl": "URL de la API de Hermes",
+      "apiKey": "Clave de la API de Hermes",
+      "testConnection": "Probar conexión",
+      "connected": "Conectado",
+      "unreachable": "No disponible",
+      "save": "Guardar",
+      "saved": "Guardado",
+      "saveError": "Error al guardar"
+    }
+  },
+  "opencodeProviders": {
+    "sectionDescription": "Proveedores de API que conoce el demonio opencode. Los proveedores conectados tienen credenciales válidas y sus modelos están disponibles en el selector de modelos.",
+    "summary": "{{connected}} de {{total}} proveedores conectados",
+    "errorSummary": "No se pudieron cargar los proveedores",
+    "errorHint": "Verifique que el demonio opencode esté en ejecución y sea accesible.",
+    "empty": "El demonio opencode no informa de ningún proveedor.",
+    "refresh": "Actualizar",
+    "footer": "Las claves API de los proveedores de opencode se gestionan dentro del demonio opencode (en su archivo de configuración o variables de entorno), no en 1230UI.",
+    "connected": "conectado",
+    "notConnected": "no conectado",
+    "connectedHint": "El demonio puede contactar con este proveedor — sus modelos están disponibles.",
+    "notConnectedHint": "Falta la clave API o las credenciales no son válidas — los modelos aparecen en la lista pero no se pueden usar hasta configurarlos.",
+    "modelCount": "{{count}} modelos",
+    "default": "por defecto: {{model}}",
+    "envVars": "Variables de entorno",
+    "apiKeyDetected": "Clave API detectada",
+    "howToConfigureEnv": "Establezca la variable de entorno {{env}} antes de iniciar el demonio opencode y reinícielo.",
+    "howToConfigureConfig": "Añada el proveedor en {{path}} bajo la clave `provider:`.",
+    "howToConfigureCustom": "Este proveedor se añade mediante un plugin o configuración externa — consulte la documentación de opencode.",
+    "source": {
+      "env": "env",
+      "config": "config",
+      "custom": "custom",
+      "api": "integrado",
+      "unknown": "desconocido"
+    }
+  },
+  "tududi": {
+    "config": {
+      "title": "Tududi",
+      "subtitle": "Integración de gestión de tareas y notas",
+      "connectionStatus": "Estado de conexión",
+      "checkingConnection": "Comprobando conexión…",
+      "connected": "Conectado",
+      "connectedHelp": "La API de Tududi es accesible y está configurada",
+      "notConfigured": "No configurado",
+      "unreachable": "Inalcanzable",
+      "checkBelow": "Compruebe la configuración a continuación",
+      "noData": "Sin datos de conexión",
+      "retestSaved": "Reprobar conexión guardada",
+      "configuration": "Configuración",
+      "configurationHelp": "La dirección y el token de API de su instancia de Tududi. Ambos se almacenan cifrados en el servidor y nunca se envían al navegador.",
+      "loading": "Cargando configuración…",
+      "apiUrlLabel": "URL de Tududi",
+      "apiUrlHelp": "URL base de la instancia de Tududi (sin barra final). Debe ser accesible desde el servidor 1230UI.",
+      "invalidUrl": "Introduzca una URL válida (p. ej. https://example.com).",
+      "apiTokenLabel": "Token de API",
+      "apiTokenHelp": "Cree uno en Tududi: Profile → Settings → API Keys (empieza por tt_). Déjelo vacío para mantener el token guardado.",
+      "testConnection": "Probar conexión",
+      "connectedOk": "Conectado",
+      "unreachableLabel": "Inalcanzable",
+      "saved": "Guardado",
+      "saveError": "Error al guardar — revise los registros del servidor",
+      "openInTududi": "Abrir Tududi",
+      "openInTududiHelp": "Acceda a la interfaz completa de Tududi para funciones avanzadas como procesamiento de entrada, áreas y vistas.",
+      "openTududiBtn": "Abrir Tududi"
     }
   }
 }

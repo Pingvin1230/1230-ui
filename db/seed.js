@@ -81,7 +81,17 @@ export function seedStarterApplications(uiDb) {
       insert.run('file_manager', 'File Manager', 'FolderOpen', 'Manage all session files', 1, 1, 1);
     }
 
-    if (!filePreviewExists || !fileManagerExists) {
+    const cloudConnectExists = uiDb.prepare("SELECT id FROM applications WHERE key = 'cloud_connect'").get();
+    if (!cloudConnectExists) {
+      insert.run('cloud_connect', 'Cloud Connect', 'Cloud', 'Insert cloud file links into chat', 1, 2, 1);
+    }
+
+    const tududiExists = uiDb.prepare("SELECT id FROM applications WHERE key = 'tududi'").get();
+    if (!tududiExists) {
+      insert.run('tududi', 'Tududi', 'ListChecks', 'Tasks, notes and projects from Tududi', 1, 3, 1);
+    }
+
+    if (!filePreviewExists || !fileManagerExists || !cloudConnectExists || !tududiExists) {
       console.log('Seeded starter application(s).');
     }
   } catch (err) {

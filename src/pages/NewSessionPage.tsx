@@ -1,17 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, Settings2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useToast } from '../hooks/useToast';
+import { useAsync } from '../hooks/useAsync';
+import { buildModelMap, type ModelsResponse } from '../hooks/useModels';
 import type { Assistant } from '../types/api';
+import type { AssistantExecutorId } from '../types/assistant';
 import { NoModelsIllustration } from '../assets/illustrations';
 import { AssistantTile } from '../components/AssistantTile';
-
-interface ModelsResponse {
-  default: { id: string; name: string; provider: string } | null;
-  providers: Record<string, { id: string; name: string; models: Array<{ id: string; name: string }> }>;
-}
 
 export function NewSessionPage() {
   const { t } = useTranslation();
@@ -20,49 +18,35 @@ export function NewSessionPage() {
   const [model, setModel] = useState('');
   const [models, setModels] = useState<ModelsResponse | null>(null);
   const [assistants, setAssistants] = useState<Assistant[]>([]);
-  const [loading, setLoading] = useState(true);
   const [creatingFrom, setCreatingFrom] = useState<string | null>(null);
+  const [availableExecutors, setAvailableExecutors] = useState<AssistantExecutorId[]>(['hermes']);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [modelsData, assistantsData] = await Promise.all([
-          api.getModels(),
-          api.getAssistants(false),
-        ]);
+  const { loading } = useAsync(async () => {
+    const [modelsData, assistantsData, executorsData] = await Promise.all([
+      api.getModels(),
+      api.getAssistants(false),
+      api.getAvailableExecutors().catch(() => ({ executors: ['hermes' as AssistantExecutorId] })),
+    ]);
 
-        if (cancelled) return;
-        setModels(modelsData);
-        setAssistants(assistantsData.assistants.filter((a) => !a.isArchived));
+    setModels(modelsData);
+    setAssistants(assistantsData.assistants.filter((a) => !a.isArchived));
+    const execList = (executorsData.executors || ['hermes']).filter(
+      (e): e is AssistantExecutorId => e === 'hermes' || e === 'opencode-1230'
+    );
+    setAvailableExecutors(execList.length ? execList : ['hermes']);
 
-        const savedModel = localStorage.getItem('selectedModel');
-        if (savedModel && Object.values(modelsData.providers).some((p) => p.models.some((m) => m.id === savedModel))) {
-          setModel(savedModel);
-        } else if (modelsData.default) {
-          setModel(modelsData.default.id);
-        } else {
-          const firstProvider = Object.values(modelsData.providers)[0];
-          if (firstProvider && firstProvider.models.length > 0) setModel(firstProvider.models[0].id);
-        }
-      } catch (error) {
-        if (cancelled) return;
-        console.error('Failed to load data:', error);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+    const savedModel = localStorage.getItem('selectedModel');
+    if (savedModel && Object.values(modelsData.providers).some((p) => p.models.some((m) => m.id === savedModel))) {
+      setModel(savedModel);
+    } else if (modelsData.default) {
+      setModel(modelsData.default.id);
+    } else {
+      const firstProvider = Object.values(modelsData.providers)[0];
+      if (firstProvider && firstProvider.models.length > 0) setModel(firstProvider.models[0].id);
+    }
   }, []);
 
-  const modelLabelMap = useMemo(() => {
-    const map = new Map<string, string>();
-    if (!models) return map;
-    for (const provider of Object.values(models.providers)) {
-      for (const m of provider.models) map.set(m.id, m.name);
-    }
-    return map;
-  }, [models]);
+  const modelLabelMap = useMemo(() => buildModelMap(models), [models]);
 
   const handleStartStandard = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -196,6 +180,12 @@ export function NewSessionPage() {
             </button>
           </form>
         </div>
+        {/* C4: hint when OpenCode is available but free chats default to Hermes */}
+        {availableExecutors.includes('opencode-1230') && (
+          <p className="mt-2 text-xs text-fg-muted">
+            {t('chat.freeChatExecutorHint')}
+          </p>
+        )}
       </div>
 
       {!loading && !models && (

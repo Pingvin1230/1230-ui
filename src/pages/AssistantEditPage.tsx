@@ -1,26 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Save, Loader2, AlertCircle, Archive } from 'lucide-react';
 import { api } from '../lib/api';
 import { useToast } from '../hooks/useToast';
+import { flattenModels, type FlatModel, type ModelsResponse } from '../hooks/useModels';
 import type { Assistant } from '../types/api';
 import {
   ASSISTANT_NAME_MAX,
   STYLE_OPTIONS,
   DEPTH_OPTIONS,
+  EXECUTOR_OPTIONS,
   type AssistantColorId,
   type AssistantStyleId,
   type AssistantDepthId,
+  type AssistantExecutorId,
 } from '../types/assistant';
 import { ColorPicker } from '../components/ColorPicker';
 import { IconPicker } from '../components/IconPicker';
-
-interface ModelOption {
-  id: string;
-  name: string;
-  provider: string;
-}
+import { Modal } from '../components/Modal';
 
 export function AssistantEditPage() {
   const { t } = useTranslation();
@@ -39,16 +37,66 @@ export function AssistantEditPage() {
   const [color, setColor] = useState<AssistantColorId | null>(null);
   const [icon, setIcon] = useState<string | null>(null);
   const [modelId, setModelId] = useState<string>('');
-  const [models, setModels] = useState<ModelOption[]>([]);
+  const [models, setModels] = useState<FlatModel[]>([]);
   const [defaultModelId, setDefaultModelId] = useState<string | null>(null);
   const [style, setStyle] = useState<AssistantStyleId | null>(null);
   const [depth, setDepth] = useState<AssistantDepthId | null>(null);
   const [systemPrompt, setSystemPrompt] = useState<string>('');
+  const [executor, setExecutor] = useState<AssistantExecutorId>('hermes');
+  const [availableExecutors, setAvailableExecutors] = useState<AssistantExecutorId[]>(['hermes']);
+  const [isLoadingExecutors, setIsLoadingExecutors] = useState(true);
+  const [executorLoadError, setExecutorLoadError] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+
+  // Probe which executors the backend currently considers usable so we
+  // can grey out the OpenCode option when its daemon is down.
+  const fetchExecutors = useCallback(() => {
+    setIsLoadingExecutors(true);
+    setExecutorLoadError(false);
+    return api.getAvailableExecutors()
+      .then((r) => {
+        const list = (r.executors || ['hermes']).filter(
+          (e): e is AssistantExecutorId => e === 'hermes' || e === 'opencode-1230'
+        );
+        setAvailableExecutors(list.length ? list : ['hermes']);
+        setExecutorLoadError(false);
+      })
+      .catch(() => {
+        setExecutorLoadError(true);
+        /* keep default [hermes] */
+      })
+      .finally(() => {
+        setIsLoadingExecutors(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getAvailableExecutors()
+      .then((r) => {
+        if (cancelled) return;
+        const list = (r.executors || ['hermes']).filter(
+          (e): e is AssistantExecutorId => e === 'hermes' || e === 'opencode-1230'
+        );
+        setAvailableExecutors(list.length ? list : ['hermes']);
+        setExecutorLoadError(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setExecutorLoadError(true);
+        /* keep default [hermes] */
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingExecutors(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,14 +109,8 @@ export function AssistantEditPage() {
         const results = await Promise.all(tasks);
         if (cancelled) return;
 
-        const modelsData = results[0] as Awaited<ReturnType<typeof api.getModels>>;
-        const flat: ModelOption[] = [];
-        for (const provider of Object.values(modelsData.providers)) {
-          for (const model of provider.models) {
-            flat.push({ id: model.id, name: model.name, provider: provider.name });
-          }
-        }
-        setModels(flat);
+        const modelsData = results[0] as ModelsResponse;
+        setModels(flattenModels(modelsData));
         setDefaultModelId(modelsData.default?.id ?? null);
 
         if (!isNew) {
@@ -81,6 +123,7 @@ export function AssistantEditPage() {
           setStyle((a.style as AssistantStyleId | null) ?? null);
           setDepth((a.depth as AssistantDepthId | null) ?? null);
           setSystemPrompt(a.systemPrompt ?? '');
+          setExecutor((a.executor as AssistantExecutorId) ?? 'hermes');
         } else if (isCloning) {
           const source = results[1] as Assistant;
           setSourceName(source.name);
@@ -91,6 +134,7 @@ export function AssistantEditPage() {
           setStyle((source.style as AssistantStyleId | null) ?? null);
           setDepth((source.depth as AssistantDepthId | null) ?? null);
           setSystemPrompt(source.systemPrompt ?? '');
+          setExecutor((source.executor as AssistantExecutorId) ?? 'hermes');
         }
       } catch (err) {
         if (cancelled) return;
@@ -120,6 +164,24 @@ export function AssistantEditPage() {
     setSaving(true);
     setError(null);
     try {
+      // C1: Re-check executor availability immediately before saving
+      if (executor === 'opencode-1230') {
+        let liveExecutors: AssistantExecutorId[] = ['hermes'];
+        try {
+          const r = await api.getAvailableExecutors();
+          liveExecutors = (r.executors || ['hermes']).filter(
+            (e): e is AssistantExecutorId => e === 'hermes' || e === 'opencode-1230'
+          );
+        } catch {
+          // treat fetch failure as unavailable
+        }
+        if (!liveExecutors.includes('opencode-1230')) {
+          setError(t('assistants.executorDownOnSave'));
+          setSaving(false);
+          return;
+        }
+      }
+
       const payload = {
         name: name.trim(),
         color,
@@ -128,6 +190,7 @@ export function AssistantEditPage() {
         style,
         depth,
         systemPrompt: systemPrompt.trim() || null,
+        executor,
       };
       if (isNew) {
         await api.createAssistant(payload);
@@ -151,13 +214,21 @@ export function AssistantEditPage() {
 
   const handleArchive = async () => {
     if (!assistant) return;
-    if (!window.confirm(t('assistants.confirmArchive'))) return;
+    setShowArchiveConfirm(true);
+  };
+
+  const confirmArchive = async () => {
+    if (!assistant || archiving) return;
+    setArchiving(true);
     try {
       await api.archiveAssistant(assistant.id);
       toast.success(t('assistants.archivedToast'));
       navigate('/assistants');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('assistants.errorArchive'));
+      setShowArchiveConfirm(false);
+    } finally {
+      setArchiving(false);
     }
   };
 
@@ -317,7 +388,7 @@ export function AssistantEditPage() {
                     : t('assistants.modelDefaultUnknown')}
                 </option>
                 {Object.entries(
-                  models.reduce<Record<string, ModelOption[]>>((acc, m) => {
+                  models.reduce<Record<string, FlatModel[]>>((acc, m) => {
                     (acc[m.provider] = acc[m.provider] || []).push(m);
                     return acc;
                   }, {})
@@ -332,6 +403,52 @@ export function AssistantEditPage() {
                 ))}
               </select>
               <p className="text-xs text-fg-muted mt-1">{t('assistants.modelHint')}</p>
+            </div>
+
+            {/* Executor picker (Variant B) */}
+            <div>
+              <label className="block text-sm font-medium text-fg-primary mb-2 flex items-center gap-1.5">
+                {t('assistants.executorLabel')}
+                {isLoadingExecutors && (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-fg-muted" aria-label={t('assistants.executorChecking')} />
+                )}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {EXECUTOR_OPTIONS.map((opt) => {
+                  const disabled = !availableExecutors.includes(opt.id);
+                  const isActive = executor === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => setExecutor(opt.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm transition-all min-h-[36px] ${
+                        isActive
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 font-medium'
+                          : 'border-border-default text-fg-secondary hover:border-blue-300 hover:text-fg-primary'
+                      } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    >
+                      <span aria-hidden="true">{opt.emoji}</span>
+                      <span>{t(opt.label)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {/* C3: Inline warning when OC is selected/was set but is now unreachable */}
+              {!isLoadingExecutors && (executorLoadError || !availableExecutors.includes('opencode-1230')) && executor === 'opencode-1230' && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5 flex items-center gap-1">
+                  <span>{t('assistants.executorDownInline')}</span>
+                  <button
+                    type="button"
+                    onClick={fetchExecutors}
+                    className="underline hover:no-underline text-amber-600 dark:text-amber-400 font-medium"
+                  >
+                    {t('assistants.executorRetry')}
+                  </button>
+                </p>
+              )}
+              <p className="text-xs text-fg-muted mt-1">{t('assistants.executorHint')}</p>
             </div>
 
             <ColorPicker
@@ -381,6 +498,38 @@ export function AssistantEditPage() {
           </Link>
         </div>
       </div>
+
+      <Modal
+        isOpen={showArchiveConfirm}
+        onClose={() => setShowArchiveConfirm(false)}
+        title={t('assistants.confirmArchive')}
+        size="sm"
+      >
+        <div className="p-4 space-y-4">
+          <p className="text-sm text-fg-secondary">
+            {t('assistants.confirmArchive')}
+          </p>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowArchiveConfirm(false)}
+              disabled={archiving}
+              className="px-4 py-2 rounded-lg border border-border-default text-sm text-fg-secondary hover:bg-bg-secondary min-h-[44px]"
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={confirmArchive}
+              disabled={archiving}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-50 min-h-[44px]"
+            >
+              {archiving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+              {t('assistants.archive')}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

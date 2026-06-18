@@ -90,6 +90,7 @@ export function initSchema(uiDb) {
     { name: 'style',         sql: "ALTER TABLE assistants ADD COLUMN style TEXT DEFAULT NULL" },
     { name: 'depth',         sql: "ALTER TABLE assistants ADD COLUMN depth TEXT DEFAULT NULL" },
     { name: 'system_prompt', sql: "ALTER TABLE assistants ADD COLUMN system_prompt TEXT DEFAULT NULL" },
+    { name: 'executor',      sql: "ALTER TABLE assistants ADD COLUMN executor TEXT NOT NULL DEFAULT 'hermes'" },
   ];
   for (const col of assistantColumnAdds) {
     if (!assistantColumns.has(col.name)) {
@@ -100,6 +101,22 @@ export function initSchema(uiDb) {
         console.warn(`Failed to add column assistants.${col.name}: ${err.message}`);
       }
     }
+  }
+
+  // Backfill: enforce 'hermes' for any row that could have been touched
+  // during the migration window before the DEFAULT was applied (the column
+  // was added with raw ALTER TABLE; theoretically some rows may have NULL
+  // or empty values). Defensive: this is a no-op if every row is already
+  // populated.
+  try {
+    const info = uiDb
+      .prepare("UPDATE assistants SET executor = 'hermes' WHERE executor IS NULL OR executor = ''")
+      .run();
+    if (info.changes > 0) {
+      console.log(`Backfilled assistants.executor = 'hermes' for ${info.changes} row(s)`);
+    }
+  } catch (err) {
+    console.warn(`Failed to backfill assistants.executor: ${err.message}`);
   }
 
   // session_meta.assistant_id
@@ -113,6 +130,16 @@ export function initSchema(uiDb) {
       console.log('Added column session_meta.assistant_id');
     } catch (err) {
       console.warn(`Failed to add column session_meta.assistant_id: ${err.message}`);
+    }
+  }
+
+  // session_meta.opencode_session_id (Variant B: persist OC session id across restarts)
+  if (!sessionMetaColumns.has('opencode_session_id')) {
+    try {
+      uiDb.exec('ALTER TABLE session_meta ADD COLUMN opencode_session_id TEXT DEFAULT NULL');
+      console.log('Added column session_meta.opencode_session_id');
+    } catch (err) {
+      console.warn(`Failed to add column session_meta.opencode_session_id: ${err.message}`);
     }
   }
 
@@ -181,6 +208,35 @@ export function initSchema(uiDb) {
     );
     CREATE INDEX IF NOT EXISTS idx_applications_enabled_order
       ON applications(enabled DESC, sort_order ASC);
+  `);
+
+  // ── cloud_connections table (Task #39) ────────────────────────────────
+  uiDb.exec(`
+    CREATE TABLE IF NOT EXISTS cloud_connections (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      label           TEXT    NOT NULL,
+      url             TEXT    NOT NULL,
+      username        TEXT    NOT NULL,
+      credentials_ct  TEXT    NOT NULL,
+      credentials_iv  TEXT    NOT NULL,
+      credentials_tag TEXT    NOT NULL,
+      status          TEXT    NOT NULL DEFAULT 'unknown',
+      last_tested_at  INTEGER,
+      last_error      TEXT,
+      created_at      INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000),
+      updated_at      INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000)
+    );
+    CREATE INDEX IF NOT EXISTS idx_cloud_connections_status
+      ON cloud_connections(status);
+  `);
+
+  // ── system_settings table (executor config) ───────────────────────────
+  uiDb.exec(`
+    CREATE TABLE IF NOT EXISTS system_settings (
+      key        TEXT PRIMARY KEY,
+      value      TEXT NOT NULL,
+      updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000)
+    );
   `);
 
   console.log('UI DB tables initialized');

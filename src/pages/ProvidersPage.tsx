@@ -1,43 +1,21 @@
-import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Loader2, AlertCircle, ArrowLeft, KeyRound } from 'lucide-react';
 import { api } from '../lib/api';
+import { useAsync } from '../hooks/useAsync';
 import { ProviderCard, type ProviderCardData } from '../components/ProviderCard';
 
 export function ProvidersPage() {
   const { t } = useTranslation();
-  const [providers, setProviders] = useState<ProviderCardData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [reloadTick, setReloadTick] = useState(0);
+  const { data, loading, error, refetch } = useAsync(async () => {
+    const resp = await api.getAvailableProviders();
+    return [...resp.providers].sort((a, b) =>
+      a.display_name.localeCompare(b.display_name)
+    ) as ProviderCardData[];
+  }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await api.getAvailableProviders();
-        if (cancelled) return;
-        const sorted = [...data.providers].sort((a, b) =>
-          a.display_name.localeCompare(b.display_name)
-        );
-        setProviders(sorted);
-      } catch (err) {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : t('providers.errorLoadFailed'));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reloadTick]);
-
-  const reload = () => setReloadTick((n) => n + 1);
+  const providers = data ?? [];
+  const reload = refetch;
 
   return (
     <div className="h-full flex flex-col px-4 md:px-6 py-4">
@@ -66,7 +44,7 @@ export function ProvidersPage() {
             <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
               <p className="text-sm text-red-500 flex items-center gap-1.5">
                 <AlertCircle className="w-4 h-4" />
-                {error}
+                {error instanceof Error ? error.message : t('providers.errorLoadFailed')}
               </p>
               <button
                 onClick={reload}

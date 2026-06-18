@@ -21,6 +21,64 @@ import { seedStarterAssistants, seedStarterApplications } from './db/seed.js';
 seedStarterAssistants(uiDb);
 seedStarterApplications(uiDb);
 
+// 3a. Load saved executor config from DB (overrides env defaults)
+import { decrypt as cryptoDecrypt } from './lib/cloud/crypto.js';
+{
+  const getSetting = (key) => {
+    const row = uiDb.prepare('SELECT value FROM system_settings WHERE key = ?').get(key);
+    return row ? row.value : null;
+  };
+  const savedUrl = getSetting('executor_opencode_url');
+  if (savedUrl) config.opencodeUrl = savedUrl;
+  const savedUsername = getSetting('executor_opencode_username');
+  if (savedUsername !== null) config.opencodeUsername = savedUsername || null;
+  const ct = getSetting('executor_opencode_password_ct');
+  const iv = getSetting('executor_opencode_password_iv');
+  const tag = getSetting('executor_opencode_password_tag');
+  if (ct && iv && tag) {
+    try {
+      config.opencodePassword = cryptoDecrypt({ ct, iv, tag });
+    } catch {
+      // Key not available or data corrupted — skip
+    }
+  } else if (ct === '') {
+    config.opencodePassword = null;
+  }
+
+  const savedHermesPythonPath = getSetting('executor_hermes_python_path');
+  if (savedHermesPythonPath) config.hermesPythonPath = savedHermesPythonPath;
+  const savedHermesApiUrl = getSetting('executor_hermes_api_url');
+  if (savedHermesApiUrl) config.hermesApiUrl = savedHermesApiUrl;
+  const hermesApiKeyCt = getSetting('executor_hermes_api_key_ct');
+  const hermesApiKeyIv = getSetting('executor_hermes_api_key_iv');
+  const hermesApiKeyTag = getSetting('executor_hermes_api_key_tag');
+  if (hermesApiKeyCt && hermesApiKeyIv && hermesApiKeyTag) {
+    try {
+      config.hermesApiKey = cryptoDecrypt({ ct: hermesApiKeyCt, iv: hermesApiKeyIv, tag: hermesApiKeyTag });
+    } catch {
+      // Key not available or data corrupted — skip
+    }
+  } else if (hermesApiKeyCt === '') {
+    config.hermesApiKey = null;
+  }
+
+  // Tududi — overrides .env defaults with saved runtime config (if any).
+  const savedTududiUrl = getSetting('tududi_api_url');
+  if (savedTududiUrl) config.tududiApiUrl = savedTududiUrl;
+  const tududiTokenCt = getSetting('tududi_api_token_ct');
+  const tududiTokenIv = getSetting('tududi_api_token_iv');
+  const tududiTokenTag = getSetting('tududi_api_token_tag');
+  if (tududiTokenCt && tududiTokenIv && tududiTokenTag) {
+    try {
+      config.tududiApiToken = cryptoDecrypt({ ct: tududiTokenCt, iv: tududiTokenIv, tag: tududiTokenTag });
+    } catch {
+      // Key not available or data corrupted — fall back to .env value
+    }
+  } else if (tududiTokenCt === '') {
+    config.tududiApiToken = null;
+  }
+}
+
 // 4. Cleanup expired files (Task #38)
 import fs from 'fs';
 import path from 'path';

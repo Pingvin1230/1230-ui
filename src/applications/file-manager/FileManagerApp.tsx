@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { FolderOpen, Loader2, AlertCircle } from 'lucide-react';
 import { api } from '../../lib/api';
 import type { GlobalFile } from '../../lib/api';
+import { useChatInputStore } from '../../store/chatInputStore';
 import { FileStatsBar } from './FileStatsBar';
 import { FileList } from './FileList';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
@@ -88,7 +89,7 @@ export function FileManagerApp({ sessionId }: ApplicationComponentProps) {
     try {
       const copiedFile = await api.copyFile(file.id, sessionId);
       // Dispatch event to add file to ChatInput
-      window.dispatchEvent(new CustomEvent('chat:addFile', { detail: copiedFile }));
+      useChatInputStore.getState().addFileToInput(copiedFile);
       // Refresh files list to show the new copy
       fetchFiles();
     } catch {

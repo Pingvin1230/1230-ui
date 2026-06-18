@@ -1,5 +1,5 @@
 import { Outlet, useNavigate } from 'react-router-dom';
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { Navbar } from './Navbar';
 import { MobileNav } from './MobileNav';
 import { ChatInput } from './ChatInput';
@@ -9,17 +9,36 @@ import { useChatInputStore } from '../store/chatInputStore';
 import { useAppsPaneStore } from '../store/appsPaneStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useHermesStatusPoll } from '../hooks/useHermesStatusPoll';
+import { useOpenCodeStatusPoll } from '../hooks/useOpenCodeStatusPoll';
 
 export function Layout() {
   const { isDarkMode } = useThemeStore();
   const navigate = useNavigate();
   const activeSessionId = useChatInputStore((s) => s.activeSessionId);
-  const sending = useChatInputStore((s) => s.sending);
-  const isBlocked = useChatInputStore((s) => s.isSessionBlocked);
+  // Derive send/blocked state from the ACTIVE session's live slice. A global
+  // flag would let a stream running in one session disable the input in every
+  // other session of the same executor.
+  const liveStatus = useChatInputStore(
+    (s) => (activeSessionId ? s.liveMessages[activeSessionId]?.status : undefined),
+  );
+  const liveErrorType = useChatInputStore(
+    (s) => (activeSessionId ? s.liveMessages[activeSessionId]?.error?.type : undefined),
+  );
+  const sending = liveStatus === 'streaming' || liveStatus === 'recovering';
+  const [persistedBlocked, setPersistedBlocked] = useState(false);
+  useEffect(() => {
+    setPersistedBlocked(
+      activeSessionId ? sessionStorage.getItem(`blocked:${activeSessionId}`) === 'true' : false,
+    );
+  }, [activeSessionId]);
+  const isBlocked = persistedBlocked || liveErrorType === 'content_moderation';
   const setSessionFiles = useChatInputStore((s) => s.setSessionFiles);
   const setHasAttached = useChatInputStore((s) => s.setHasAttachedFiles);
   const appsPaneVisible = useAppsPaneStore((s) => s.visible);
+  const requestSend = useChatInputStore((s) => s.requestSend);
+  const requestStop = useChatInputStore((s) => s.requestStop);
   useHermesStatusPoll();
+  useOpenCodeStatusPoll();
 
   useEffect(() => {
     if (isDarkMode) {
@@ -46,12 +65,12 @@ export function Layout() {
   ]);
 
   const handleSend = useCallback((content: string) => {
-    window.dispatchEvent(new CustomEvent('chat:send', { detail: { content } }));
-  }, []);
+    requestSend(content);
+  }, [requestSend]);
 
   const handleStop = useCallback(() => {
-    window.dispatchEvent(new CustomEvent('chat:stop'));
-  }, []);
+    requestStop();
+  }, [requestStop]);
 
   const handleSessionFilesChange = useCallback((files: Parameters<typeof setSessionFiles>[0]) => {
     setSessionFiles(files);

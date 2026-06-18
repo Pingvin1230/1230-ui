@@ -29,6 +29,7 @@ import { apiLimiter } from '../middleware/security.js';
 import { db, uiDb, hermesDbWrite } from '../db/connections.js';
 import { rowToAssistant, getDefaultModelId } from '../db/helpers.js';
 import config from '../config.js';
+import { opencodeClient as OPENCODE_CLIENT } from '../lib/opencode.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -65,6 +66,7 @@ router.get('/', (req, res) => {
     const offset = parseInt(req.query.offset) || 0;
     const includeArchived = req.query.includeArchived === '1';
     const sort = req.query.sort === 'lastMessage' ? 'lastMessage' : 'created';
+    const executorFilter = typeof req.query.executor === 'string' ? req.query.executor : null;
 
     const orderBy = sort === 'lastMessage'
       ? 'COALESCE(lastMessageAt, s.started_at) DESC, s.started_at DESC'
@@ -118,11 +120,16 @@ router.get('/', (req, res) => {
         pinned: meta?.pinned ?? 0,
         archived: meta?.archived ?? 0,
         assistant: assistant ? rowToAssistant(assistant) : null,
+        executor: assistant?.executor ?? 'hermes',
         fileCount: fileCountMap[s.id] ?? 0,
       };
     });
 
     if (!includeArchived) filtered = filtered.filter((s) => s.archived !== 1);
+
+    if (executorFilter === 'hermes' || executorFilter === 'opencode-1230') {
+      filtered = filtered.filter((s) => s.executor === executorFilter);
+    }
 
     const total = filtered.length;
 
@@ -161,7 +168,7 @@ router.get('/:id', async (req, res) => {
         const a = uiDb.prepare('SELECT * FROM assistants WHERE id = ?').get(meta.assistant_id);
         if (a) assistant = rowToAssistant(a);
       }
-      return res.json({ ...session, assistant });
+      return res.json({ ...session, assistant, executor: assistant?.executor ?? 'hermes' });
     }
 
     // Fallback: fetch from Hermes API (newly created sessions not yet in state.db)
@@ -190,6 +197,7 @@ router.get('/:id', async (req, res) => {
           inputTokens: 0,
           outputTokens: 0,
           assistant,
+          executor: assistant?.executor ?? 'hermes',
         });
       }
     } catch (apiErr) {
@@ -282,7 +290,13 @@ router.post('/', apiLimiter, async (req, res) => {
 });
 
 // ── PATCH /api/sessions/:id/title ──────────────────────────────────────────
-router.patch('/:id/title', (req, res) => {
+//
+// Updates the session title in Hermes state.db AND, if the session is bound
+// to an OpenCode session, propagates the new title to the OC daemon so the
+// `opencode web:4096` UI shows the same name. The OC update is non-fatal:
+// if the daemon is down or the OC session was wiped, we still return
+// success (the local rename already succeeded).
+router.patch('/:id/title', async (req, res) => {
   try {
     if (!hermesDbWrite) {
       return res.status(503).json({ error: 'Session rename unavailable — writable DB connection failed' });
@@ -308,7 +322,31 @@ router.patch('/:id/title', (req, res) => {
       throw e;
     }
 
-    res.json({ success: true, title: trimmedTitle });
+    // Propagate to the OC daemon if this session is OC-bound.
+    // We deliberately do not await on the response — the OC daemon is
+    // optional infrastructure; a failure here must not break the rename
+    // (which already succeeded in Hermes state.db). Failures are logged
+    // and surfaced via a `ocSync` field in the response so the frontend
+    // can decide whether to notify the user.
+    const ocBinding = uiDb.prepare(
+      'SELECT opencode_session_id FROM session_meta WHERE session_id = ?'
+    ).get(sessionId);
+    let ocSync = null;
+    if (ocBinding?.opencode_session_id) {
+      try {
+        const result = await OPENCODE_CLIENT.updateSession(ocBinding.opencode_session_id, {
+          title: trimmedTitle,
+        });
+        ocSync = result === null
+          ? { ok: false, reason: 'OC session not found on daemon (likely restarted)' }
+          : { ok: true };
+      } catch (e) {
+        console.warn(`[sessions] failed to sync title to OC daemon: ${e.message}`);
+        ocSync = { ok: false, reason: e.message };
+      }
+    }
+
+    res.json({ success: true, title: trimmedTitle, ocSync });
   } catch (error) {
     console.error('Error updating session title:', error);
     res.status(500).json({ error: 'Failed to update session title' });
@@ -388,7 +426,7 @@ router.patch('/:id/pin', (req, res) => {
     const meta = uiDb.prepare('SELECT pinned FROM session_meta WHERE session_id = ?').get(sessionId);
     const newValue = meta?.pinned ? 0 : 1;
 
-    uiDb.prepare('INSERT OR REPLACE INTO session_meta (session_id, pinned) VALUES (?, ?)').run(sessionId, newValue);
+    uiDb.prepare('INSERT INTO session_meta (session_id, pinned) VALUES (?, ?) ON CONFLICT(session_id) DO UPDATE SET pinned = excluded.pinned').run(sessionId, newValue);
     res.json({ success: true, pinned: newValue });
   } catch (error) {
     console.error('Error toggling pin:', error);
@@ -406,7 +444,7 @@ router.patch('/:id/archive', (req, res) => {
     const meta = uiDb.prepare('SELECT archived FROM session_meta WHERE session_id = ?').get(sessionId);
     const newValue = meta?.archived ? 0 : 1;
 
-    uiDb.prepare('INSERT OR REPLACE INTO session_meta (session_id, archived) VALUES (?, ?)').run(sessionId, newValue);
+    uiDb.prepare('INSERT INTO session_meta (session_id, archived) VALUES (?, ?) ON CONFLICT(session_id) DO UPDATE SET archived = excluded.archived').run(sessionId, newValue);
     res.json({ success: true, archived: newValue });
   } catch (error) {
     console.error('Error toggling archive:', error);
@@ -415,11 +453,11 @@ router.patch('/:id/archive', (req, res) => {
 });
 
 // ── GET /api/sessions/:id/messages ─────────────────────────────────────────
-router.get('/:id/messages', (req, res) => {
+router.get('/:id/messages', async (req, res) => {
   try {
     const sessionId = req.params.id;
 
-    const messages = db.prepare(`
+    let messages = db.prepare(`
       SELECT
         id,
         session_id    AS sessionId,
@@ -434,6 +472,39 @@ router.get('/:id/messages', (req, res) => {
       WHERE session_id = ?
       ORDER BY timestamp ASC
     `).all(sessionId);
+
+    // Recovery path: for sessions with an opencode_session_id, also
+    // fetch the OpenCode conversation. We MERGE with the Hermes rows
+    // (de-duped on a sliding 60s window for the same role+content) so
+    // that a session that started under the v0.9.x "messages wiped" bug
+    // still shows its full history even after the user sends a new
+    // turn (which writes to Hermes). New sessions use the merge with
+    // zero OpenCode messages, so the cost is just a small HTTP GET.
+    const meta = uiDb
+      .prepare('SELECT opencode_session_id FROM session_meta WHERE session_id = ?')
+      .get(sessionId);
+    const opencodeSessionId = meta?.opencode_session_id ?? null;
+    if (opencodeSessionId) {
+      try {
+        const ocMessages = await OPENCODE_CLIENT._fetch(
+          'GET',
+          `/session/${encodeURIComponent(opencodeSessionId)}/message`,
+          { timeoutMs: 5000 }
+        );
+        if (Array.isArray(ocMessages) && ocMessages.length > 0) {
+          const ocRows = ocMessages
+            .map((m) => normalizeOpenCodeMessage(sessionId, m))
+            .filter(Boolean);
+          // Dedup: drop any OpenCode row whose (role, content, ±60s) is
+          // already present in Hermes. This handles the case where the
+          // session has both recovered OpenCode history AND new
+          // Hermes-persisted turns from the same message.
+          messages = mergeAndDedupMessages(messages, ocRows);
+        }
+      } catch (ocErr) {
+        console.warn(`[sessions] opencode recovery fetch failed for ${sessionId}: ${ocErr.message}`);
+      }
+    }
 
     // Load agent-generated files for this session and attach each file to
     // every assistant message whose content mentions the file's path.
@@ -450,7 +521,9 @@ router.get('/:id/messages', (req, res) => {
     if (agentFiles.length > 0) {
       const assistantMessages = messages.filter(m => m.role === 'assistant' && m.content);
       for (const msg of assistantMessages) {
-        const matched = agentFiles.filter(f => msg.content.includes(f.storedName));
+        const content = typeof msg.content === 'string' ? msg.content : '';
+        if (!content) continue;
+        const matched = agentFiles.filter(f => content.includes(f.storedName));
         if (matched.length > 0) {
           filesByMessageId.set(msg.id, matched.map(f => ({
             id: f.id,
@@ -464,7 +537,7 @@ router.get('/:id/messages', (req, res) => {
 
     const parsed = messages.map((msg) => ({
       ...msg,
-      toolCalls: msg.toolCalls ? JSON.parse(msg.toolCalls) : null,
+      toolCalls: msg.toolCalls ? (typeof msg.toolCalls === 'string' ? JSON.parse(msg.toolCalls) : msg.toolCalls) : null,
       agentFiles: filesByMessageId.get(msg.id) ?? null,
     }));
 
@@ -474,6 +547,69 @@ router.get('/:id/messages', (req, res) => {
     res.status(500).json({ error: 'Failed to fetch messages' });
   }
 });
+
+/**
+ * Merge two message arrays (Hermes rows + OpenCode rows) and remove
+ * near-duplicates. Two messages are considered duplicates if they
+ * share the same role and content AND their timestamps are within
+ * DEDUP_WINDOW_SEC of each other. The Hermes row wins ties (it has
+ * the real id and token_count from the source-of-truth database).
+ */
+function mergeAndDedupMessages(hermesRows, ocRows, dedupWindowSec = 60) {
+  const merged = [...hermesRows];
+  for (const oc of ocRows) {
+    const isDup = hermesRows.some((h) => {
+      if (h.role !== oc.role) return false;
+      const norm = (s) => (s ?? '').replace(/\s+/g, ' ').trim();
+      const hContent = norm(h.content);
+      const ocContent = norm(oc.content);
+      if (!hContent || hContent !== ocContent) return false;
+      return Math.abs((h.timestamp ?? 0) - (oc.timestamp ?? 0)) < dedupWindowSec;
+    });
+    if (!isDup) merged.push(oc);
+  }
+  merged.sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
+  return merged;
+}
+
+/**
+ * Flatten an OpenCode message (with its `parts` array) into the
+ * Hermes-row shape used by the chat UI. OpenCode stores text and tool
+ * calls as separate `parts` on a message; we collapse the text parts
+ * into a single `content` string and store tool calls as a JSON array
+ * in `toolCalls` (matching the Hermes schema).
+ */
+function normalizeOpenCodeMessage(sessionId, ocMessage) {
+  const info = ocMessage?.info ?? ocMessage ?? {};
+  const parts = Array.isArray(ocMessage?.parts) ? ocMessage.parts : [];
+  const textParts = parts.filter((p) => p?.type === 'text' && typeof p.text === 'string');
+  const toolParts = parts.filter((p) => p?.type === 'tool');
+
+  const content = textParts.map((p) => p.text).join('\n').trim();
+  const toolCalls = toolParts.length > 0
+    ? toolParts.map((p) => ({
+        id: p.callID ?? p.id,
+        name: p.tool ?? p.name,
+        args: p.state?.input ?? p.input ?? {},
+        result: p.state?.output ?? null,
+      }))
+    : null;
+
+  const time = info.time?.created ?? info.time ?? Date.now() / 1000;
+  const timestamp = typeof time === 'number' && time > 1e12 ? time / 1000 : time;
+
+  return {
+    id: info.id ? Number(String(info.id).replace(/\D/g, '').slice(-12)) || Math.floor(Math.random() * 1e9) : Math.floor(Math.random() * 1e9),
+    sessionId,
+    role: info.role ?? 'assistant',
+    content: content || null,
+    toolCallId: null,
+    toolCalls,
+    toolName: toolParts[0]?.tool ?? toolParts[0]?.name ?? null,
+    timestamp,
+    tokenCount: info.tokens?.total ?? null,
+  };
+}
 
 // ── POST /api/messages ─────────────────────────────────────────────────────
 // Exported separately so app.js can mount it at /api/messages directly.

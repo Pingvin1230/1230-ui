@@ -4,6 +4,7 @@ import { CheckCircle2, AlertCircle, Info, AlertTriangle, X } from 'lucide-react'
 import { ToastContext, type Toast, type ToastApi, type ToastType } from '../hooks/useToast';
 
 const DEFAULT_DURATION = 4000;
+const MAX_TOASTS = 4;
 
 const ICONS: Record<ToastType, ReactNode> = {
   success: <CheckCircle2 className="w-5 h-5" />,
@@ -45,7 +46,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const push = useCallback(
     (type: ToastType, message: string, duration = DEFAULT_DURATION): string => {
       const id = nextId();
-      setToasts((prev) => [...prev, { id, type, message, duration }]);
+      setToasts((prev) => {
+        const next = [...prev, { id, type, message, duration }];
+        return next.length > MAX_TOASTS ? next.slice(next.length - MAX_TOASTS) : next;
+      });
       if (duration > 0) {
         const timer = window.setTimeout(() => dismiss(id), duration);
         timersRef.current.set(id, timer);

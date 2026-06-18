@@ -1,52 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import i18n from '../i18n';
 import { api } from '../lib/api';
-import { formatRelativeTimestamp } from '../lib/time';
-import { Download, Wrench, Loader2, CheckCircle, XCircle, AlertTriangle, Sun, Moon, Bell, BellOff, Calendar, MessageCircle, Heart, ArrowRight, Grid3X3 } from 'lucide-react';
+import { Download, Wrench, Loader2, CheckCircle, XCircle, AlertTriangle, Sun, Moon, Bell, BellOff, Calendar, MessageCircle, Heart, ArrowRight, Grid3X3, Bot, Zap } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { useThemeStore } from '../store/themeStore';
 import { useNotificationsStore } from '../store/notificationsStore';
 import { useSessionsSortStore } from '../store/sessionsSortStore';
 import { useHermesStatusStore } from '../store/hermesStatusStore';
+import { useOpenCodeStatusStore } from '../store/openCodeStatusStore';
+import { useApplicationsStore } from '../store/applicationsStore';
+import { useModels } from '../hooks/useModels';
+import { useLike, formatCooldown } from '../hooks/useLike';
 
-
-const LIKE_STORAGE_KEY = 'hermes-1230-last-like';
-const LIKE_DEFAULT_COOLDOWN_SEC = 3600;
-
-type LikeState = 'idle' | 'sending' | 'sent' | 'cooldown';
-
-function formatCooldown(sec: number): string {
-  if (sec <= 0) return '';
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  if (m >= 60) {
-    const h = Math.floor(m / 60);
-    return `${h}h ${m % 60}m`;
-  }
-  return m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`;
-}
-
-interface Model {
-  id: number;
-  model_id: string;
-  display_name: string;
-  enabled: number;
-}
-
-interface Provider {
-  id: number;
-  name: string;
-  display_name: string;
-  env_var: string;
-  base_url: string;
-  sync_status: string;
-  last_synced_at: string | null;
-  models: Model[];
-  enabledCount: number;
-  totalCount: number;
-}
 
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -56,14 +23,16 @@ export function SettingsPage() {
   const setSortMode = useSessionsSortStore((s) => s.setSortMode);
   const hermesStatus = useHermesStatusStore((s) => s.status);
   const hermesVersion = useHermesStatusStore((s) => s.version);
-  const hermesLatestVersion = useHermesStatusStore((s) => s.latestVersion);
-  const hermesUpdateAvailable = useHermesStatusStore((s) => s.updateAvailable);
+  const isCloudConnectEnabled = useApplicationsStore((s) =>
+    s.applications.some((a) => a.key === 'cloud_connect' && a.enabled)
+  );
+  const fetchApplications = useApplicationsStore((s) => s.fetchApplications);
+  const opencodeStatus = useOpenCodeStatusStore((s) => s.status);
 
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [expandedProvider, setExpandedProvider] = useState<number | null>(null);
+  useEffect(() => {
+    fetchApplications();
+  }, [fetchApplications]);
+
   const [executing, setExecuting] = useState<string | null>(null);
   const [pendingCommand, setPendingCommand] = useState<'update' | 'doctor' | null>(null);
   const [execResult, setExecResult] = useState<{
@@ -71,84 +40,28 @@ export function SettingsPage() {
     success: boolean;
     output: string;
   } | null>(null);
-  const [modelsData, setModelsData] = useState<Awaited<ReturnType<typeof api.getModels>> | null>(null);
+  const { models: modelsData } = useModels();
   const [selectedModel, setSelectedModel] = useState<string>(
     () => localStorage.getItem('selectedModel') ?? ''
   );
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
     typeof Notification !== 'undefined' ? Notification.permission : 'denied'
   );
-  // Computed once at mount via useState lazy-initialiser to avoid calling Date.now()
-  // directly in the render body (which would be flagged as impure by react-hooks/purity).
-  const [likeState, setLikeState] = useState<LikeState>(() => {
-    try {
-      const raw = localStorage.getItem(LIKE_STORAGE_KEY);
-      const last = raw ? Number(raw) : 0;
-      if (!last) return 'idle';
-      const remainingMs = last + LIKE_DEFAULT_COOLDOWN_SEC * 1000 - Date.now();
-      return remainingMs > 0 ? 'cooldown' : 'idle';
-    } catch {
-      return 'idle';
-    }
-  });
-  const [likeError, setLikeError] = useState<string | null>(null);
-  const [cooldownRemaining, setCooldownRemaining] = useState<number>(() => {
-    try {
-      const raw = localStorage.getItem(LIKE_STORAGE_KEY);
-      const last = raw ? Number(raw) : 0;
-      if (!last) return 0;
-      const remainingMs = last + LIKE_DEFAULT_COOLDOWN_SEC * 1000 - Date.now();
-      return remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0;
-    } catch {
-      return 0;
-    }
-  });
+  const { likeState, cooldownRemaining, likeError, handleLike } = useLike(
+    t('settings.failedToSendLike'),
+    { countdown: true },
+  );
 
+  // Pick the default / saved model once the models catalogue arrives.
   useEffect(() => {
-    if (likeState !== 'cooldown') return;
-    const timer = window.setInterval(() => {
-      setCooldownRemaining((prev) => {
-        if (prev <= 1) {
-          window.clearInterval(timer);
-          setLikeState('idle');
-          setLikeError(null);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [likeState]);
-
-  async function handleLike() {
-    if (likeState === 'sending' || likeState === 'cooldown') return;
-    setLikeState('sending');
-    setLikeError(null);
-    try {
-      const result = await api.sendLike();
-      try {
-        localStorage.setItem(LIKE_STORAGE_KEY, String(result.sent_at));
-      } catch {
-        // ignore
-      }
-      setLikeState('sent');
-    } catch (err) {
-      const e = err as { type?: string; retry_after?: number; message?: string };
-      if (e.type === 'cooldown' && typeof e.retry_after === 'number') {
-        const sentAt = Date.now() - (LIKE_DEFAULT_COOLDOWN_SEC - e.retry_after) * 1000;
-        try {
-          localStorage.setItem(LIKE_STORAGE_KEY, String(sentAt));
-        } catch {
-          // ignore
-        }
-        setCooldownRemaining(e.retry_after);
-        setLikeState('cooldown');
-        return;
-      }
-      setLikeState('idle');
-      setLikeError(e.message || t('settings.failedToSendLike'));
+    if (!modelsData) return;
+    const saved = localStorage.getItem('selectedModel');
+    if (saved && Object.values(modelsData.providers).some((p) => p.models.some((m) => m.id === saved))) {
+      setSelectedModel(saved);
+    } else if (modelsData.default) {
+      setSelectedModel(modelsData.default.id);
     }
-  }
+  }, [modelsData]);
 
   const handleNotificationsToggle = async () => {
     if (typeof Notification === 'undefined') return;
@@ -162,70 +75,6 @@ export function SettingsPage() {
       setNotificationsEnabled(false);
     }
   };
-
-  const loadModels = useCallback(async () => {
-    try {
-      const data = await api.getModels();
-      setModelsData(data);
-      const saved = localStorage.getItem('selectedModel');
-      if (saved && Object.values(data.providers).some((p) => p.models.some((m) => m.id === saved))) {
-        setSelectedModel(saved);
-      } else if (data.default) {
-        setSelectedModel(data.default.id);
-      }
-    } catch (err) {
-      console.error('Failed to load models:', err);
-    }
-  }, []);
-
-  const loadProviders = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await api.getModelProviders();
-      setProviders(data);
-      setError(null);
-    } catch (err) {
-      setError(t('settings.failedToLoadProviders'));
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => {
-    loadProviders();
-    loadModels();
-  }, [loadProviders, loadModels]);
-
-  async function handleSync() {
-    try {
-      setSyncing(true);
-      setError(null);
-      const result = await api.syncModelProviders();
-      
-      if (result.success) {
-        await loadProviders();
-      } else {
-        setError(result.error || t('settings.syncFailed'));
-      }
-    } catch (err) {
-      setError(t('settings.failedToSyncProviders'));
-      console.error(err);
-    } finally {
-      setSyncing(false);
-    }
-  }
-
-  async function handleToggleModel(modelId: number) {
-    try {
-      const result = await api.toggleModel(modelId);
-      if (result.success) {
-        await loadProviders();
-      }
-    } catch (err) {
-      console.error('Failed to toggle model:', err);
-    }
-  }
 
   async function handleExecCommand(command: 'update' | 'doctor') {
     try {
@@ -358,9 +207,9 @@ export function SettingsPage() {
             {/* Language Selector */}
             <div className="flex items-center justify-between mb-4 pb-4 border-b border-border-default">
               <div>
-                <p className="text-sm text-fg-primary">Language</p>
+                <p className="text-sm text-fg-primary">{t('settings.language')}</p>
                 <p className="text-xs text-fg-muted mt-0.5">
-                  Interface language
+                  {t('settings.interfaceLanguage')}
                 </p>
               </div>
               <select
@@ -406,14 +255,14 @@ export function SettingsPage() {
             )}
           </div>
 
-          {/* Assistants Section */}
-          <div className="bg-bg-primary border border-border-default rounded-lg">
-            <div className="px-4 py-3 border-b border-border-default flex items-center justify-between">
+          {/* Assistants + Applications + Cloud Connect — grouped */}
+          <div className="bg-bg-primary border border-border-default rounded-lg divide-y divide-border-default">
+
+            {/* Assistants */}
+            <div className="px-4 py-3 flex items-center justify-between">
               <div>
                 <h3 className="font-medium text-fg-primary">{t('assistants.title')}</h3>
-                <p className="text-xs text-fg-muted mt-0.5">
-                  {t('assistants.subtitle')}
-                </p>
+                <p className="text-xs text-fg-muted mt-0.5">{t('assistants.subtitle')}</p>
               </div>
               <Link
                 to="/assistants"
@@ -423,11 +272,9 @@ export function SettingsPage() {
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>
-          </div>
 
-          {/* Applications Section */}
-          <div className="bg-bg-primary border border-border-default rounded-lg">
-            <div className="px-4 py-3 border-b border-border-default flex items-center justify-between">
+            {/* Applications */}
+            <div className="px-4 py-3 flex items-center justify-between">
               <div>
                 <h3 className="font-medium text-fg-primary">{t('applications.title')}</h3>
                 <p className="text-xs text-fg-muted mt-0.5">
@@ -443,127 +290,136 @@ export function SettingsPage() {
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>
-          </div>
 
-          {/* Model Providers Section */}
-          <div className="bg-bg-primary border border-border-default rounded-lg">
-            <div className="px-4 py-3 border-b border-border-default flex items-center justify-between">
-              <div>
-                <h3 className="font-medium text-fg-primary">{t('settings.modelProviders')}</h3>
-                <p className="text-xs text-fg-muted mt-0.5">
-                  {t('settings.modelProvidersDesc')}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Cloud Connect — only if enabled */}
+            {isCloudConnectEnabled && (
+              <div className="px-4 py-3 flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium text-fg-primary">{t('cloudConnect.settings.title', 'Cloud Connect')}</h3>
+                  <p className="text-xs text-fg-muted mt-0.5">
+                    {t('cloudConnect.settings.settingsDesc', 'Manage WebDAV connections')}
+                  </p>
+                </div>
                 <Link
-                  to="/settings/providers"
-                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-border-default bg-bg-primary hover:bg-bg-secondary text-fg-secondary rounded-lg transition-colors"
+                  to="/settings/cloud"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-border-default bg-bg-primary hover:bg-bg-secondary text-fg-secondary rounded-lg transition-colors min-h-[44px]"
                 >
-                  {t('providers.manageKeys')}
+                  {t('common.manage', 'Manage')}
                   <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
-                <button
-                  onClick={handleSync}
-                  disabled={syncing || loading}
-                  className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded transition-colors disabled:cursor-not-allowed"
-                >
-                  {syncing ? t('settings.syncing') : t('settings.syncAll')}
-                </button>
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="px-4 py-8 flex items-center justify-center">
-                <div className="spinner"></div>
-              </div>
-            ) : error ? (
-              <div className="px-4 py-4">
-                <div className="bg-red-500/10 border border-red-500/20 rounded p-3">
-                  <p className="text-sm text-red-500">{error}</p>
-                  <button
-                    onClick={loadProviders}
-                    className="mt-2 px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600"
-                  >
-                    {t('common.retry')}
-                  </button>
-                </div>
-              </div>
-            ) : providers.length === 0 ? (
-              <div className="px-4 py-8 text-center text-fg-muted">
-                <p className="text-sm">{t('common.noProvidersConfigured')}</p>
-                <p className="text-xs mt-1">{t('settings.noProvidersHint')}</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-border-default">
-                {providers.map((provider) => (
-                  <div key={provider.id}>
-                    <button
-                      onClick={() => setExpandedProvider(expandedProvider === provider.id ? null : provider.id)}
-                      className="w-full px-4 py-3 flex items-center justify-between hover:bg-bg-secondary transition-colors"
-                    >
-                      <div className="flex-1 text-left">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-fg-primary">
-                            {provider.display_name || provider.name}
-                          </span>
-                          {provider.sync_status === 'ok' ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                              {t('settings.synced')}
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-                              {provider.sync_status}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3 mt-1 text-xs text-fg-muted">
-                          <span>{t('settings.modelsEnabled', { enabled: provider.enabledCount, total: provider.totalCount })}</span>
-                          <span>•</span>
-                          <span>{t('settings.syncedAt', { timestamp: formatRelativeTimestamp(provider.last_synced_at, t) })}</span>
-                        </div>
-                      </div>
-                        <svg
-                          className={`w-5 h-5 text-fg-muted transition-transform ${
-                            expandedProvider === provider.id ? 'rotate-180' : ''
-                          }`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-
-                    {expandedProvider === provider.id && (
-                      <div className="px-4 pb-3 space-y-1">
-                        {provider.models.length === 0 ? (
-                          <p className="text-sm text-fg-muted py-2">
-                            {t('settings.noModelsInProvider')}
-                          </p>
-                        ) : (
-                          provider.models.map((model) => (
-                            <label
-                              key={model.id}
-                              className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-bg-secondary cursor-pointer"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={model.enabled === 1}
-                                onChange={() => handleToggleModel(model.id)}
-                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600"
-                              />
-                              <span className={`text-sm ${model.enabled ? 'text-fg-primary' : 'text-fg-muted'}`}>
-                                {model.display_name || model.model_id}
-                              </span>
-                            </label>
-                          ))
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
               </div>
             )}
+
+            {/* Tududi */}
+            <div className="px-4 py-3 flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-fg-primary">{t('settings.tududi')}</h3>
+                <p className="text-xs text-fg-muted mt-0.5">
+                  {t('settings.tududiDescription')}
+                </p>
+              </div>
+              <Link
+                to="/settings/tududi"
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-border-default bg-bg-primary hover:bg-bg-secondary text-fg-secondary rounded-lg transition-colors min-h-[44px]"
+              >
+                {t('common.manage', 'Manage')}
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
+          </div>
+
+          {/* Executor Configuration Section */}
+          <div className="bg-bg-primary border border-border-default rounded-lg p-4">
+            <h3 className="font-medium text-sm text-fg-primary mb-1">
+              {t('settings.executors.title', 'Executor Configuration')}
+            </h3>
+            <p className="text-xs text-fg-muted mb-3">
+              {t('settings.executors.subtitle', 'Per-executor settings for the AI backends available to 1230UI.')}
+            </p>
+            <div className="divide-y divide-border-default -mx-4">
+              <div className="px-4 py-3 flex items-center justify-between">
+                <div className="flex items-start gap-3 min-w-0">
+                  <Bot className="w-5 h-5 text-fg-muted flex-shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <h4 className="font-medium text-sm text-fg-primary">
+                      {t('settings.executors.hermesAgent', 'Hermes Agent')}
+                    </h4>
+                    <p className="text-xs text-fg-muted mt-0.5">
+                      {t('settings.executors.hermesAgentDesc', 'Default executor. Models, providers, and commands live on its settings page.')}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-fg-muted">
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          hermesStatus === 'connected'
+                            ? 'bg-green-500'
+                            : hermesStatus === 'disconnected'
+                              ? 'bg-red-500'
+                              : 'bg-fg-muted'
+                        }`}
+                      />
+                      <span>
+                        {hermesStatus === 'connected'
+                          ? t('dashboard.connected')
+                          : hermesStatus === 'disconnected'
+                            ? t('dashboard.disconnected')
+                            : t('common.unknown', 'Unknown')}
+                      </span>
+                      {hermesVersion && <span>· v{hermesVersion}</span>}
+                    </div>
+                  </div>
+                </div>
+                <Link
+                  to="/settings/executors/hermes-agent"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-border-default bg-bg-primary hover:bg-bg-secondary text-fg-secondary rounded-lg transition-colors min-h-[44px] flex-shrink-0"
+                >
+                  {t('settings.executors.manage', 'Manage')}
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+
+              <div className="px-4 py-3 flex items-center justify-between">
+                <div className="flex items-start gap-3 min-w-0">
+                  <Zap className="w-5 h-5 text-fg-muted flex-shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <h4 className="font-medium text-sm text-fg-primary">
+                      {t('settings.executors.opencode', 'OpenCode')}
+                    </h4>
+                    <p className="text-xs text-fg-muted mt-0.5">
+                      {t(
+                        'settings.executors.opencodeDesc',
+                        'Optional second executor running as `opencode serve`. Use it to expose additional models and providers configured on the OC daemon.'
+                      )}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-fg-muted">
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          opencodeStatus === 'connected'
+                            ? 'bg-green-500'
+                            : opencodeStatus === 'disconnected'
+                              ? 'bg-red-500'
+                              : 'bg-fg-muted'
+                        }`}
+                      />
+                      <span>
+                        {opencodeStatus === 'connected'
+                          ? t('dashboard.connected')
+                          : opencodeStatus === 'disconnected'
+                            ? t('dashboard.disconnected')
+                            : t('common.unknown', 'Unknown')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <Link
+                  to="/settings/executors/opencode"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-border-default bg-bg-primary hover:bg-bg-secondary text-fg-secondary rounded-lg transition-colors min-h-[44px] flex-shrink-0"
+                >
+                  {t('settings.executors.manage', 'Manage')}
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </div>
           </div>
 
           {/* Hermes Commands Section */}
@@ -598,40 +454,6 @@ export function SettingsPage() {
                 <span>{executing === 'doctor' ? t('settings.running') : t('settings.hermesDoctorFix')}</span>
               </button>
             </div>
-          </div>
-
-          {/* Hermes Agent Status Section */}
-          <div className="bg-bg-primary border border-border-default rounded-lg p-4">
-            <h3 className="font-medium text-sm text-fg-primary mb-3">{t('settings.connectionStatus')}</h3>
-            {hermesStatus === 'unknown' ? (
-              <p className="text-sm text-fg-muted">{t('settings.loadingStatus')}</p>
-            ) : (
-              <div className="space-y-2 text-sm">
-                <p className="text-fg-muted">
-                  {t('settings.hermesAgent')}{' '}
-                  {hermesStatus === 'connected' ? (
-                    <span className="text-green-500">{t('dashboard.connected')}</span>
-                  ) : (
-                    <span className="text-red-500">{t('dashboard.disconnected')}</span>
-                  )}
-                </p>
-                {hermesVersion && (
-                  <p className="text-fg-muted">
-                    {t('settings.hermesAgentVersion', { version: hermesVersion })}
-                  </p>
-                )}
-                {hermesLatestVersion && (
-                  <p className="text-fg-muted">
-                    {t('settings.latestVersion', { version: hermesLatestVersion })}
-                  </p>
-                )}
-                {typeof hermesUpdateAvailable === 'number' && hermesUpdateAvailable > 0 && (
-                  <p className="text-xs text-yellow-600 dark:text-yellow-400">
-                    {t('settings.updateAvailable', { count: hermesUpdateAvailable })}
-                  </p>
-                )}
-              </div>
-            )}
           </div>
 
           {/* About Section */}

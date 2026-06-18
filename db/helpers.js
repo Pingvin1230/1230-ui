@@ -23,6 +23,7 @@ export function rowToAssistant(row) {
     style: row.style ?? null,
     depth: row.depth ?? null,
     systemPrompt: row.system_prompt ?? null,
+    executor: row.executor ?? 'hermes',
     isArchived: !!row.is_archived,
     archivedAt: row.archived_at,
     createdAt: row.created_at,
@@ -47,11 +48,39 @@ export function getDefaultModelId() {
 }
 
 /**
- * Heuristic: derive the Hermes provider name from a model ID string.
+ * Look up the Hermes provider name for a model_id by querying the providers
+ * + models tables. Returns null if the model is not registered in the UI DB
+ * (the caller is expected to fall back to a heuristic).
+ * @param {string} modelId
+ * @returns {string|null}
+ */
+export function getProviderForModelId(modelId) {
+  if (!modelId) return null;
+  try {
+    const row = uiDb.prepare(`
+      SELECT p.name AS provider_name
+      FROM models m
+      JOIN providers p ON p.id = m.provider_id
+      WHERE m.model_id = ?
+      LIMIT 1
+    `).get(modelId);
+    return row ? row.provider_name : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve a Hermes provider name for a model. Tries the DB first, then falls
+ * back to a string heuristic. Always returns a non-empty string so callers
+ * can pass it to the Python wrapper without further checks.
  * @param {string} model
  * @returns {string}
  */
 export function getProviderFromModel(model) {
+  if (!model) return 'unknown';
+  const fromDb = getProviderForModelId(model);
+  if (fromDb) return fromDb;
   const m = model.toLowerCase();
   if (m.includes('minimax'))  return 'minimax';
   if (m.includes('qwen'))     return 'opencode-go';

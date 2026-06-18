@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
+import { useAsync } from '../hooks/useAsync';
 import { Sparkles, Loader2, SearchX, Archive, Trash2, Eye, CheckSquare } from 'lucide-react';
 import type { Session } from '../types/api';
 import { useSearchStore } from '../store/searchStore';
 import { useSessionsSortStore } from '../store/sessionsSortStore';
 import { useChatInputStore } from '../store/chatInputStore';
+import { useWorkspaceStore } from '../store/workspaceStore';
 import { NoSessionsIllustration } from '../assets/illustrations';
 import { Modal } from '../components/Modal';
 import { SessionCard } from '../components/SessionCard';
@@ -83,9 +85,7 @@ export function SessionsPage() {
   const { t } = useTranslation();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -97,26 +97,40 @@ export function SessionsPage() {
   const query = useSearchStore((s) => s.query);
   const setQuery = useSearchStore((s) => s.setQuery);
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const executorFilter = searchParams.get('executor') === 'opencode-1230'
+    ? 'opencode-1230'
+    : searchParams.get('executor') === 'hermes'
+      ? 'hermes'
+      : null;
   const setNavPageContext = useChatInputStore((s) => s.setNavPageContext);
+  const setActiveSession = useWorkspaceStore((s) => s.setActiveSession);
+  const setActiveTab = useWorkspaceStore((s) => s.setActiveTab);
+
+  const setExecutorFilter = useCallback((next: 'hermes' | 'opencode-1230' | null) => {
+    setSearchParams((prev) => {
+      const p = new URLSearchParams(prev);
+      if (next) p.set('executor', next); else p.delete('executor');
+      return p;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const openSession = useCallback((session: Session) => {
+    setActiveSession(session.executor, session.id);
+    setActiveTab(session.executor);
+  }, [setActiveSession, setActiveTab]);
 
   // Infinite scroll sentinel — must be declared before any early returns
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const loadSessions = useCallback(async (includeArchived = false) => {
-    try {
-      setLoading(true);
-      const data = await api.getSessions(PAGE_SIZE, 0, includeArchived, sortMode);
-      setSessions(data.sessions);
-      setTotal(data.total);
-      setHasMore(data.sessions.length < data.total);
-      setError(null);
-    } catch (err) {
-        setError(t('sessions.failedToLoadSessions'));
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [sortMode, t]);
+  // Fetch sessions on mount and whenever the filters/sort change.
+  // Replaces the previously duplicated `loadSessions` callback + fetch effect.
+  const { loading, error, refetch } = useAsync(async () => {
+    const data = await api.getSessions(PAGE_SIZE, 0, showArchived, sortMode, executorFilter ?? undefined);
+    setSessions(data.sessions);
+    setTotal(data.total);
+    setHasMore(data.sessions.length < data.total);
+  }, [location.key, showArchived, sortMode, executorFilter, t]);
 
   // Register page context in Navbar
   useEffect(() => {
@@ -128,9 +142,7 @@ export function SessionsPage() {
           icon: <Eye className="w-3.5 h-3.5" />,
           active: showArchived,
           onClick: () => {
-            const next = !showArchived;
-            setShowArchived(next);
-            loadSessions(next);
+            setShowArchived(!showArchived);
           },
         },
         {
@@ -142,37 +154,13 @@ export function SessionsPage() {
       ],
     });
     return () => setNavPageContext(null);
-  }, [t, showArchived, bulkMode, setNavPageContext, loadSessions]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setLoading(true);
-        const data = await api.getSessions(PAGE_SIZE, 0, showArchived, sortMode);
-        if (cancelled) return;
-        setSessions(data.sessions);
-        setTotal(data.total);
-        setHasMore(data.sessions.length < data.total);
-        setError(null);
-      } catch (err) {
-        if (cancelled) return;
-        setError(t('sessions.failedToLoadSessions'));
-        console.error(err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [location.key, showArchived, sortMode, t]);
+  }, [t, showArchived, bulkMode, setNavPageContext]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     try {
       setLoadingMore(true);
-      const data = await api.getSessions(PAGE_SIZE, sessions.length, showArchived, sortMode);
+      const data = await api.getSessions(PAGE_SIZE, sessions.length, showArchived, sortMode, executorFilter ?? undefined);
       setSessions((prev) => [...prev, ...data.sessions]);
       setHasMore(sessions.length + data.sessions.length < data.total);
     } catch (err) {
@@ -180,7 +168,7 @@ export function SessionsPage() {
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMore, sessions.length, showArchived, sortMode]);
+  }, [loadingMore, hasMore, sessions.length, showArchived, sortMode, executorFilter]);
 
   // Trigger loadMore when sentinel enters viewport
   useEffect(() => {
@@ -212,7 +200,7 @@ export function SessionsPage() {
         setSessions(prev => prev.filter(s => s.id !== session.id));
         setTotal(t => t - 1);
       } else {
-        await loadSessions(showArchived);
+        refetch();
       }
     } catch (err) {
       console.error('Failed to toggle archive:', err);
@@ -287,9 +275,9 @@ export function SessionsPage() {
     return (
       <div className="p-3 sm:p-4 md:p-6 max-w-4xl mx-auto">
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-          <p className="text-red-600 dark:text-red-400 font-medium">{error}</p>
+          <p className="text-red-600 dark:text-red-400 font-medium">{t('sessions.failedToLoadSessions')}</p>
           <button
-            onClick={() => loadSessions(showArchived)}
+            onClick={refetch}
             className="mt-3 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
           >
             {t('common.retry')}
@@ -318,6 +306,30 @@ export function SessionsPage() {
   return (
     <div className="flex-1 min-h-0 overflow-y-auto">
     <div className="p-3 sm:p-4 md:p-6 max-w-4xl mx-auto">
+
+      <div className="flex items-center gap-1.5 mb-3 overflow-x-auto">
+        {([
+          { key: null as 'hermes' | 'opencode-1230' | null, label: t('sessions.filterAll', { defaultValue: 'All' }) },
+          { key: 'hermes' as const, label: t('sessions.filterHermes', { defaultValue: 'Hermes' }) },
+          { key: 'opencode-1230' as const, label: t('sessions.filterOpenCode', { defaultValue: 'OpenCode' }) },
+        ]).map((chip) => {
+          const active = executorFilter === chip.key;
+          return (
+            <button
+              key={chip.key ?? 'all'}
+              type="button"
+              onClick={() => setExecutorFilter(chip.key)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
+                active
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-bg-secondary text-fg-muted hover:text-fg-secondary hover:bg-bg-tertiary'
+              }`}
+            >
+              {chip.label}
+            </button>
+          );
+        })}
+      </div>
 
       {bulkMode && selectedIds.size > 0 && (
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
@@ -433,6 +445,7 @@ export function SessionsPage() {
                   onToggleArchive={handleToggleArchive}
                   onSwipeDelete={handleSwipeDelete}
                   onLongPress={handleLongPress}
+                  onOpen={openSession}
                 />
               );
             })}

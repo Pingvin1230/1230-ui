@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo, forwardRef, useImperativeHandle, useEffect } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Paperclip, X, FileText, Image as ImageIcon, AlertCircle, Loader2, Plus, ShieldAlert, Send, Square } from 'lucide-react';
@@ -57,10 +57,15 @@ interface ChatInputProps {
   onAttachedFilesChange?: (hasAttached: boolean) => void;
 }
 
-export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
-  { sessionId, isSessionBlocked, sending, onSend, onStop, onSessionFilesChange, onAttachedFilesChange },
-  ref
-) {
+export function ChatInput({
+  sessionId,
+  isSessionBlocked,
+  sending,
+  onSend,
+  onStop,
+  onSessionFilesChange,
+  onAttachedFilesChange,
+}: ChatInputProps) {
   const { t } = useTranslation();
   const [input, setInput] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
@@ -85,62 +90,78 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       .map(f => ({ id: f.id, path: f.path, filename: f.filename }))
   }), [attachedFiles]);
 
-  useImperativeHandle(ref, () => handle, [handle]);
-
-  // Also publish the handle to the store so ChatPage can reach ChatInput
-  // (which lives in a different React subtree — Layout — and so cannot share
-  // refs with ChatPage directly).
+  // Publish the handle to the store so ChatPage (in a different React
+  // subtree) can reach ChatInput's attached-files state. Layout never
+  // passes a ref, so the imperative-ref escape hatch is not needed.
   useEffect(() => {
     setStoreHandle(handle);
     return () => setStoreHandle(null);
   }, [handle, setStoreHandle]);
 
-  // Listen for prefill events from prompt suggestions
+  // D3: drain the pending input-action queue (replaces the chat:prefill /
+  // chat:addFile / chat:insertText window listeners). The nonce guard makes
+  // each request fire exactly once even under React StrictMode and lets a
+  // same-tick batch (e.g. Cloud Connect's forEach file insert) accumulate
+  // in order. The handler bodies mirror the old event handlers byte-for-byte.
+  const pendingInputActions = useChatInputStore((s) => s.pendingInputActions);
+  const lastInputNonce = useRef(0);
   useEffect(() => {
-    const handler = (e: Event) => {
-      const text = (e as CustomEvent<{ text: string }>).detail.text;
-      setInput(text);
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
-        textareaRef.current.focus();
-      }
-    };
-    window.addEventListener('chat:prefill', handler);
-    return () => window.removeEventListener('chat:prefill', handler);
-  }, []);
-
-  // Listen for add-file events from File Manager (copy file to current session)
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const file = (e as CustomEvent<SessionFile>).detail;
-      // Add to attached files as already uploaded (ready status)
-      const localId = crypto.randomUUID();
-      setAttachedFiles((prev) => {
-        const remainingSlots = MAX_FILES_PER_MESSAGE - prev.length;
-        if (remainingSlots <= 0) {
-          setFileWarning(t('chat.tooManyFiles'));
-          return prev;
+    const fresh = pendingInputActions.filter((a) => a.nonce > lastInputNonce.current);
+    if (fresh.length === 0) return;
+    for (const action of fresh) {
+      if (action.type === 'prefill') {
+        setInput(action.text);
+        if (textareaRef.current) {
+          textareaRef.current.style.height = 'auto';
+          textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+          textareaRef.current.focus();
         }
-        return [...prev, {
-          localId,
-          id: file.id,
-          filename: file.filename,
-          size: file.size,
-          path: file.path,
-          status: 'ready',
-        }];
-      });
-      // Also add to session files list
-      setSessionFiles((prev) => {
-        const next = [...prev, file];
-        onSessionFilesChange?.(next);
-        return next;
-      });
-    };
-    window.addEventListener('chat:addFile', handler);
-    return () => window.removeEventListener('chat:addFile', handler);
-  }, [t, onSessionFilesChange]);
+      } else if (action.type === 'addFile') {
+        const file = action.file;
+        const localId = crypto.randomUUID();
+        setAttachedFiles((prev) => {
+          const remainingSlots = MAX_FILES_PER_MESSAGE - prev.length;
+          if (remainingSlots <= 0) {
+            setFileWarning(t('chat.tooManyFiles'));
+            return prev;
+          }
+          return [...prev, {
+            localId,
+            id: file.id,
+            filename: file.filename,
+            size: file.size,
+            path: file.path,
+            status: 'ready',
+          }];
+        });
+        setSessionFiles((prev) => {
+          const next = [...prev, file];
+          onSessionFilesChange?.(next);
+          return next;
+        });
+      } else {
+        // insertText — append with a separating blank line (was the
+        // chat:insertText handler; no current dispatcher, kept for the
+        // type-safe surface).
+        const text = action.text;
+        setInput((prev) => {
+          const separator = prev && !prev.endsWith('\n') && !prev.endsWith(' ') ? '\n\n' : '';
+          const next = prev + separator + text;
+          if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+            textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+          }
+          return next;
+        });
+      }
+    }
+    lastInputNonce.current = fresh[fresh.length - 1].nonce;
+    // Trim processed entries from the live store, keeping anything pushed
+    // concurrently (read fresh inside the updater to avoid losing a race).
+    useChatInputStore.setState((s) => ({
+      pendingInputActions: s.pendingInputActions.filter((a) => a.nonce > lastInputNonce.current),
+    }));
+  }, [pendingInputActions, t, onSessionFilesChange]);
 
   // Notify parent about attached files presence (for navigation guard)
   useEffect(() => {
@@ -440,4 +461,4 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       </div>
     </div>
   );
-});
+}

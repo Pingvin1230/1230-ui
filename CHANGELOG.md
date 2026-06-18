@@ -2,6 +2,429 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.3] - 2026-06-18 — Workspace (multi-session / multi-executor) + OpenCode connector overhaul + code-audit hardening
+
+The primary area is now a **Workspace**: a tabbed surface (Sessions / Hermes / OpenCode) where each executor runs its own concurrently-active session, and switching sessions/tabs/pages never interrupts an in-flight turn. Bundled with a comprehensive overhaul of the OpenCode connector (several data-loss/crash bugs fixed) and inline tool-call support.
+
+This release also ships a full **code-audit & hardening pass** (2026-06-18): backend security fixes, a `ChatPage` refactor with message-list virtualization, removal of the global `window` event bus, central error handling + SSE-aware logging, completed i18n, and soft runtime response validation. See [Code audit & hardening (2026-06-18)](#code-audit--hardening-2026-06-18) below. Test suite grew from 176 → 305.
+
+### Workspace & multi-session UX
+
+- **`/sessions` route → Workspace shell** (`src/components/Workspace.tsx`): a header with Sessions / Hermes / OpenCode tabs and a content area. The Sessions tab shows the sessions list; each executor tab shows that executor's chat. Both executor chats are mounted simultaneously, so a running stream in one survives switching to the other.
+- **`/chat/:id`** now resolves the session's executor and opens the Workspace on the matching tab (`src/components/ChatRouteResolver.tsx`); deep links and the mobile nav keep working.
+- **`workspaceStore`** (`src/store/workspaceStore.ts`): `activeTab` + `activeSessionByExecutor` (one active session per executor), persisted to localStorage.
+- **Per-executor toolbar** (`src/components/ExecutorToolbar.tsx`): the last 3 sessions of that executor as quick-switch pills + a "…" that opens the Sessions tab filtered by that executor.
+- **Executor status dots** (`src/components/ExecutorStatusDot.tsx`) live in the Workspace tab header, to the left of each executor tab.
+- **Session controls moved** from the global Navbar into the Workspace header (right side): assistant/model badges, session files, applications-pane toggle, delete-session — shown only when an executor tab has an active session (`src/components/WorkspaceSessionControls.tsx`).
+- **Global Navbar**: removed the Hermes/OpenCode status indicators (now in the Workspace); the 1230UI logo is now always visible, including on mobile inside a chat.
+- Consistent assistant badge (free-chat sessions show "Quick chat" instead of no badge).
+
+### Sessions list & backend executor support
+
+- `GET /api/sessions` and `GET /api/sessions/:id` now return an `executor` field (`'hermes' | 'opencode-1230'`, derived from the assistant; free-chat = hermes).
+- `?executor=hermes|opencode-1230` filter on `GET /api/sessions` (`routes/sessions.js`).
+- Bright executor badge on every session card + All/Hermes/OpenCode filter chips; clicking a session opens it in its executor's tab (`src/components/SessionCard.tsx`, `src/pages/SessionsPage.tsx`).
+
+### Per-session streaming (streams survive navigation)
+
+- Stream ownership moved out of `ChatPage` into `chatInputStore`: new `startStream`/`stopStream` actions, a module-level `streamControllers` map of `AbortController`s, and an extended `liveMessages` slice (`pendingUserContent`, `agentFiles`). `ChatPage` is now a subscriber/renderer.
+- Navigating to another session, executor tab, or another page (e.g. /settings) no longer aborts an in-flight turn — only the Stop button, turn completion, or a real browser disconnect ends a stream. Two concurrent streams (one per executor) coexist.
+- Fixed scroll-to-bottom after send (the effect now keys on the pending user bubble + tool calls, not only on committed messages).
+
+### OpenCode connector — bug fixes (several caused data loss / crashes)
+
+- **History glue / "answers fed back as user questions"**: the adapter now sends ONLY the new user turn to the stateful OpenCode session (`lib/adapters/opencode.js`). Previously the whole history was re-flattened into one user prompt and stored back by the daemon.
+- **Lost `opencode_session_id` binding → "sessions splitting"**: the binding INSERT is now `ON CONFLICT DO UPDATE` (was `DO NOTHING`, which silently no-op'd when `session_meta` already existed — e.g. a row pre-created with `assistant_id`).
+- **pin/archive wiped the binding + executor**: `PATCH /:id/pin` and `/archive` now use a column-preserving upsert (`ON CONFLICT DO UPDATE SET …`) instead of `INSERT OR REPLACE`, which had been deleting the whole `session_meta` row and nulling `opencode_session_id` + `assistant_id` (silent switch back to Hermes).
+- **`ReferenceError: trimmed is not defined`** in `routes/chat.js` post-stream assistant persistence (the OpenCode response was never saved and surfaced as a "Network error") — fixed to use `responseText`.
+- **Concurrent `createSession` race**: per-session mutex around resolve-or-create; dead `RETURNING`/recovery code removed.
+- **Context loss after daemon restart**: when the OC session is recreated, the adapter rehydrates by resending the full history for that one turn.
+- **Orphan user row**: on a terminal adapter error the just-inserted user message is now deleted.
+- **Merge dedup**: `GET /api/sessions/:id/messages` Hermes↔OpenCode dedup is now whitespace-tolerant (multi-part OpenCode text joins with `\n` vs Hermes concatenated deltas).
+- **Token streaming**: `src/lib/api.ts` now handles adapter `{type:'delta'}` events (previously only the OpenAI `choices[].delta` shape was read, so streaming was inert for both executors and the response appeared all at once).
+
+### OpenCode tool-call support (TODO B2)
+
+- The adapter handles the daemon's `permission.updated` SSE event and auto-approves via `POST /session/:id/permissions/:id` (`lib/opencode.js`), so tools (bash/edit/read/…) now execute inline in 1230UI chats instead of only in the OpenCode web UI.
+- New config `OPENCODE_AUTO_APPROVE_TOOLS` (env, default `1`); documented in `.env.example` with a security note.
+
+### Tests
+
+- 305 tests (was 176). v0.9.3 features: sessions executor field + `?executor=` filter + pin/archive binding preservation (`tests/sessions-routes.test.js`); OpenCode adapter — history-not-resent, rehydration, permission auto-approve (`tests/adapters-opencode.test.js`, `tests/opencode-stream.test.js`, `tests/opencode-client.test.js`); per-session stream store (`tests/chatInputStore.test.js`). Audit hardening: chat SSE flow incl. in-flight dedup + disconnect handling (`tests/chat-routes.test.js`); session files upload/list/content/download/delete (`tests/files-routes.test.js`); assistants CRUD + validation + fork-on-edit (`tests/assistants-routes.test.js`); global files + models + system executor-config (`tests/globalFiles-models-routes.test.js`, `tests/system-routes-extra.test.js`); central error middleware (`tests/errorHandler.test.js`); pure helpers — message-list grouping/dedup, model maps, like cooldown (`src/components/messageListUtils.test.ts`, `src/hooks/useModels.test.ts`, `src/hooks/useLike.test.ts`).
+
+### Configuration
+
+- `OPENCODE_AUTO_APPROVE_TOOLS` (default `1`) — auto-approve OpenCode tool permission requests.
+
+---
+
+### Tududi Application (2026-06-16)
+
+Adds a self-hosted Tududi task / notes manager as a fourth right-pane Application. Server-side proxy at `/api/tududi/*` keeps the bearer token out of the browser. Three-tab UI (Tasks / Notes / Projects) inside the Applications pane.
+
+#### Backend
+
+- **`routes/tududi.js` (new, 175 lines)** — generic HTTP forwarder mounted at `/api/tududi/*`. Strips hop-by-hop / `set-cookie` / `content-encoding` / incoming `authorization`; attaches `Authorization: Bearer <TUDUDI_API_TOKEN>` server-side. 15 s `AbortController` timeout; 503 (`tududi_not_configured`) on missing token, 504 on timeout, 502 on network error. Body forwarded verbatim. Both `/api/tududi/api/*` and `/api/tududi/v1/*` shapes pass through.
+- **`GET /api/tududi/health` (in the same router)** — 5 s `GET /api/profile` probe; returns `{ configured, reachable, status, error }`. No token leak. Used by the Tududi app header to show a green/red status dot.
+- **`config.js`** — three new env vars validated by Zod at startup: `TUDUDI_API_URL` (default `https://todo.thinkout.ru`), `TUDUDI_API_TOKEN` (optional), `TUDUDI_TIMEOUT_MS` (default 15000).
+- **`db/seed.js`** — seeds a `tududi` row in the `applications` table on first run: key `tududi`, icon `ListChecks`, enabled by default, `sort_order=3`, `desktop_only=1`, description "Tasks, notes and inbox from Tududi". Idempotent — `INSERT OR IGNORE`.
+
+#### Frontend
+
+- **`src/applications/tududi/TududiApp.tsx`** — three tabs (Tasks / Notes / Projects) in a single component; health-dot in the header; settings link to `/settings/tududi`; external link to `https://todo.thinkout.ru`. Mounted in `src/applications/registry.ts` under the `tududi` key.
+- **`src/applications/tududi/views/TasksView.tsx`** — list grouped by project; filter chips for status (not_started / in_progress / done / waiting / planned); sort by due date / priority / created; **TaskDetail.tsx** for full inline editing (name, status, priority, due date, project, note, tags, subtasks). Recurring-task name fix: `displayName(task)` prefers `original_name` over the placeholder `"Monthly"` / `"Daily"` / `"Weekly"` / `"Yearly"`.
+- **`src/applications/tududi/views/NotesView.tsx`** — 2-column card grid; project filter chips; inline Markdown editor with live preview (via `MarkdownRenderer`), 1 s auto-save with `Saving… / Saved` indicator, 10-color picker, search (title + content) and sort dropdown (`updated_at` / `title` / `created_at`); delete with confirmation; project link per card.
+- **`src/applications/tududi/views/ProjectsView.tsx`** — card grid with progress bars (done/total tasks), note counts, due dates; "Tasks" / "Notes" buttons navigate to the filtered view; "New Project" creation form.
+- **`src/lib/api/tududi.ts` (new, 215 lines)** — typed client wrapping the proxy. Methods: `health`, `listTasks`, `getTask`, `createTask`, `createSubtask`, `updateTask`, `completeTask`, `deleteTask`, `listNotes`, `getNote`, `createNote`, `updateNote`, `deleteNote`, `listProjects`, `createProject`, `listTags`. `TududiApiError` (status, message, detail) for non-2xx responses. Status / priority enum maps exported for UI use.
+- **`src/pages/TududiSettingsPage.tsx` (new)** — `/settings/tududi` page. Shows the live health probe, the proxy URL, the upstream URL, and the "API Token is stored in .env" disclaimer.
+- **`src/pages/SettingsPage.tsx`** — adds a "Tududi" row under the Assistants / Applications / Cloud Connect group, linking to `/settings/tududi`.
+- **`src/App.tsx`** — new route `/settings/tududi` (lazy-loaded).
+- **Tududi is a desktop-only app.** Inherits the `desktop_only=1` from the seed row, so on `< 1024 px` it is not reachable — the Applications pane is hidden on mobile.
+
+#### Tududi API quirks (handled in the client)
+
+- `/api/tasks`, `/api/notes`, `/api/projects` are plural for reads; `/api/task`, `/api/note` are singular for writes; `/api/project` POST may return 400 in some versions.
+- `updateTask` / `getTask` / `createTask` return the bare object (not `{ task: ... }`). Same for notes.
+- `createSubtask(parentId, name)` uses the parent's **numeric** `id` — not the `uid` string. Sending the uid yields `400 "Invalid parent task."`.
+- `task.name` is `"Monthly"` for recurrence instances; the real title is in `task.original_name`. `displayName(task)` handles this. Edits to recurring tasks should not overwrite the parent template.
+- `task.due_date` is `YYYY-MM-DD` only.
+- Tags must be created implicitly (by applying them to a note) and then referenced by name. Tags on task create return `400` ("Tag name is required") until they exist.
+
+#### Files changed
+
+| File | Status | Notes |
+|---|---|---|
+| `routes/tududi.js` | **new** | 175 lines — proxy + health |
+| `src/lib/api/tududi.ts` | **new** | 215 lines — typed client |
+| `src/applications/tududi/TududiApp.tsx` | **new** | tabs + health dot + links |
+| `src/applications/tududi/views/TasksView.tsx` | **new** | list + filter + sort |
+| `src/applications/tududi/views/TaskDetail.tsx` | **new** | inline edit view |
+| `src/applications/tududi/views/NotesView.tsx` | **new** | grid + inline Markdown editor |
+| `src/applications/tududi/views/ProjectsView.tsx` | **new** | cards + nav |
+| `src/applications/tududi/index.ts` | **new** | exports TududiApp |
+| `src/applications/registry.ts` | modified | +1 entry |
+| `src/applications/types.ts` | unchanged | ApplicationComponentProps covers it |
+| `src/pages/TududiSettingsPage.tsx` | **new** | /settings/tududi |
+| `src/pages/SettingsPage.tsx` | modified | +Tududi row |
+| `src/App.tsx` | modified | +route |
+| `config.js` | modified | +3 env vars |
+| `app.js` | modified | +router mount |
+| `db/seed.js` | modified | +tududi application seed |
+| `.env.example` | modified | +Tududi section |
+| `package.json` | unchanged | no new deps |
+| **Total** | — | **~+1500** |
+
+#### Configuration
+
+```bash
+# .env (new env vars)
+TUDUDI_API_URL=https://todo.thinkout.ru
+TUDUDI_API_TOKEN=tt_your_token_here
+# TUDUDI_TIMEOUT_MS=15000
+```
+
+`TUDUDI_API_TOKEN` is optional — the rest of 1230-UI keeps working without it. When unset, the app shows a red status dot and the proxy returns `503 tududi_not_configured`.
+
+#### Migration notes
+
+- **Existing users (no Tududi setup):** no action required. The app is seeded as `enabled=1` and shows a red status dot in the UI; click the settings link to verify or set the token.
+- **New Tududi users:** (1) create an API key in Tududi → Profile → Settings → API Keys; (2) set `TUDUDI_API_URL` and `TUDUDI_API_TOKEN` in `.env`; (3) `systemctl restart 1230-ui`; (4) open `/settings/tududi` to confirm "Connected".
+
+#### Known limitations (v0.9.2)
+
+- No runtime UI for editing the URL or token — edit `.env` and restart.
+- No unit tests for the proxy or the client yet (tracked in `TODO.md` and `docs/TUDUDI_INTEGRATION.md §2.5`).
+- No i18n keys — all `tududi.*` strings are inline English in the components, matching the precedent set by the other applications. Will be extracted as part of the v1.0 i18n sweep.
+- Inbox is intentionally not implemented (out of scope — managed via the Tududi web UI).
+- The `Inbox` mention in the `TududiApp` description string is aspirational; only Tasks / Notes / Projects tabs are rendered. Tracked in `TODO.md` §C5.
+
+---
+
+### Multi-executor support (executor selection per assistant)
+
+Spike for adding OpenCode as a SECOND chat executor alongside Hermes. Per-assistant `executor` column (`'hermes' | 'opencode'`, default `'hermes'`) on the `assistants` table. The chat dispatcher (`routes/chat.js:451-485`) joins `session_meta.assistant_id → assistants.executor` per request and spawns either `run_chat.py` (Hermes) or `run_chat_opencode.py` (OpenCode). Both wrappers must use the same argv/stdin/NDJSON contract; only the spawned binary and env vars differ. Per-session lock is structural: `session_meta.assistant_id` is set once at session creation and `fork-on-edit` on `PATCH /api/assistants/:id` keeps old sessions bound to the archived assistant row (and therefore the old executor). The free-chat path (no assistant) stays Hermes. Full design in [docs/executor-selection.md](docs/executor-selection.md). Out of scope for the spike: OpenCode Settings page, per-user default executor, executor health indicator, true OpenCode session storage, per-executor model catalog.
+
+---
+
+### Code audit & hardening (2026-06-18)
+
+A systematic audit of the 0.9.3 codebase (`docs/AUDIT.md`) followed by a hardening pass. No user-facing features were added; this is security, robustness, maintainability, and UX-correctness work. All changes are behavior-preserving unless noted.
+
+#### Backend — security & correctness
+
+- **`trust proxy` enabled** (`app.js`) — behind the reverse proxy, `req.ip` and the per-IP rate-limit buckets now reflect the real client instead of a single shared proxy IP (previously every rate limiter shared one bucket).
+- **No more plaintext fallback for secrets** (`routes/system.js`) — if AES-256-GCM `encrypt()` throws while saving the Hermes API key or OpenCode password, the request now returns `500` and persists nothing. Previously it silently stored the secret in cleartext (`{ ct: secret, iv: '', tag: '' }`).
+- **`opencodeClient` is reconfigurable at runtime** (`lib/opencode.js`) — the OpenCode HTTP client is rebuilt when Settings → Executor Configuration → OpenCode is saved, so URL/username/password changes take effect without a process restart. Consumers use `getOpencodeClient()`; a live ESM binding keeps the two non-refactored importers working.
+- **Central error middleware + SSE-aware request logging** (`middleware/errorHandler.js`, `middleware/logger.js`, mounted in `app.js`) — unhandled route errors now produce a consistent `{ error }` envelope (5xx hides internals; 4xx forwards the app message) and never leak stacks in production. The request logger hooks the response emitter (`finish`/`close`) so `POST /api/chat` (SSE) and file downloads are logged, not only `res.json` responses.
+- **`copyFile` returns `storedName`** (`routes/globalFiles.js`) — fixed a latent bug where a file copied via File Manager → "copy to chat" was never actually attached to the outgoing message (the response omitted `storedName`, so ChatInput dropped it). Typed as `SessionFile` on the client.
+- **Dedup** — `fixFilenameEncoding` extracted to `lib/fileUtils.js` (was duplicated in `files.js` / `globalFiles.js`); the dead TypeScript duplicate `middleware/security.ts` removed.
+
+#### Frontend — chat core refactor
+
+- **`ChatPage` split: 958 → ~500 lines.** Extracted `useChatSession` (load + focus-refetch + stream-end transition), `useChatScroll` (auto-scroll / `isAtBottom` / unread), `useChatNavigationGuard` (leave-guard), and a `MessageList` component + pure `messageListUtils` (message-block grouping + render-item flattening + dedup helpers). Streaming continuity via `chatInputStore` is unchanged — `ChatPage` stays a subscriber.
+- **Message list virtualized with `react-virtuoso`** (`MessageList.tsx`) — long sessions no longer render the entire history (each row re-ran `MarkdownRenderer`). Auto-scroll mirrors the old `isAtBottom` behavior (never yanks the view when scrolled up); tool-call details, reasoning, agent-file cards, copy state all work inside virtualized rows. `react-virtuoso` is now actually used (was a dead dependency).
+- **Global `chat:*` window event bus removed.** `chatInput`/`chatPage` now communicate through typed store actions (`chatInputStore`: `pendingInputActions` / `pendingChatActions` FIFO queues with monotonic nonces) instead of `window.dispatchEvent(new CustomEvent(...))`. StrictMode-safe, race-free, traceable. (Side effect: fixed a double attached-file prefix on send.)
+- **Leave-guard and archive-confirm use the accessible `Modal`** — was a raw `fixed inset-0` div (no focus trap) and `window.confirm`.
+- **Per-route `ErrorBoundary`** (`App.tsx`) — a crash in one lazy page is isolated and recoverable (Retry / Go back) instead of taking down the whole shell.
+- **Optimistic-bubble dedup hardened** (`committedUserMatchesPending`) — exact trimmed equality (tolerating the attached-file prefix) instead of a fragile `endsWith` suffix check that could eat a legitimate message.
+- **Per-session send/blocked state** (`Layout.tsx`) — the global ChatInput now derives its `sending`/blocked state from the **active session's** live slice instead of a single global flag, so a stream running in one session no longer disables the input in another session of the same executor.
+- **Markdown renderer** — split into a `react-refresh`-safe module; code-block highlight theme follows the app light/dark theme (was always dark); theme class applied pre-paint via an inline `index.html` script (no flash of wrong theme on reload).
+- **i18n completed** — all four locales (en/ru/es/de) at full key parity; hardcoded RU/EN UI strings (Markdown renderer buttons, settings labels, time-of-day brackets, aria-labels, API error messages) extracted to translation keys.
+- **DRY hooks** — `useAsync` (removed the duplicated fetch/loading/error/cancelled pattern across ~8 pages), `useModels` (shared model-map builder), `useLike` (shared like + cooldown).
+- **Small fixes** — ApplicationsPage icon bug (always rendered `Eye`), Toast cap (max 4), keyboard focus ring restored on form fields, `import * as LucideIcons` replaced with an explicit icon map (tree-shaking restored). Dead code removed (`sessionStore`, `assistantsStore`, `types/session.ts`, `mockData.ts`).
+
+#### API client — soft validation
+
+- **Runtime response validation with `zod`** (`src/lib/api.ts`) — `getSessions` / `getSession` / `getMessages` / `getAssistants` / `getAssistant` parse against schemas. On schema drift the client **warns in the console and falls back to the raw response** instead of throwing (a hard throw had blanked session content when the backend sent `null` for nullable fields). `zod` is now actually used (was a dead dependency). A shared `request()` helper removed the duplicated `if (!res.ok) throw` boilerplate.
+
+#### Deferred (tracked in `docs/AUDIT.md`)
+
+- Agent-generated file path sandboxing (A1), Content-Security-Policy (A5), and versioned DB migrations (D7) were reviewed and intentionally deferred — see the audit for rationale.
+
+---
+
+## [0.9.2] - 2026-06-10 (Cloud Connect — WebDAV file picker + inline content expansion)
+
+### Multi-Executor Support (OpenCode as second executor) — 2026-06-11
+
+Shipped Variant B of the dual-executor feature. The chat backend is now pluggable: every assistant carries an `executor` column (`'hermes' | 'opencode-1230'`, default `'hermes'`), and the dispatcher in `routes/chat.js` routes requests to the matching adapter. A user can pick the executor per assistant; it is locked for the session's lifetime. See [docs/executor-selection.md](docs/executor-selection.md) for the full design and the `ExecutorAdapter` interface.
+
+#### Architecture
+
+Adapter pattern with `routes/chat.js` as the **core** (owns the browser SSE contract, dedup, watchdog, DB writes) and two **adapters** translating their native protocol into `AsyncIterable<ChatEvent>`:
+
+- `run_chat.py` — Hermes Adapter (subprocess + NDJSON, **unchanged**)
+- `lib/opencode.js` — OpenCode Adapter (HTTP + SSE to `opencode serve:4097`)
+
+Adding a third executor is now ~1 file + 1 line in the adapter table; zero dispatcher changes. See `docs/executor-selection.md` §0 for the interface contract and §0.1a for the post-spike backlog.
+
+#### Backend additions
+
+- **`lib/opencode.js` (new, 448 lines)** — OpenCode Adapter. `OpenCodeClient` class wraps the daemon's REST API (`/global/health`, `/session`, `/session/:id/prompt_async`, `/session/:id/abort`, `/config/providers`) with optional Basic auth, per-request timeout, and normalised error handling. `streamOpenCodeSession()` is an async generator that subscribes to `GET /event`, filters frames by `sessionID`, and yields normalised `ChatEvent` payloads (`delta`, `reasoning`, `tool_start`, `done`, `error`). SSE parser is hand-rolled (no `eventsource` package) so we can also see frames for other sessions on the bus and filter on `sessionID`. `OpenCodeError` exposes `status`, `body`, `code` for the SSE error event.
+- **`routes/chat.js` (+353 lines)** — `handleOpenCodeChat()` function with the same watchdog/dedup/`[DONE]`/agent-files/SIGTERM-on-`req.on('close')` conventions as the Hermes path. The dispatch happens after computing `currentMessage` + `history`; both paths share those locals. The Hermes path itself is **untouched at the protocol layer** — same argv, same env, same NDJSON handling, same error translation.
+- **`routes/sessions.js`** — `/api/sessions/:id/messages` merges messages from **both** the Hermes `state.db` row and any persisted OpenCode history (via `session_meta.opencode_session_id`). Required after the messages-wiped fix (see below).
+- **`routes/system.js`** — new `GET /api/system/executors` endpoint that runs a 2 s `OpenCodeClient.health()` probe and returns the visibility map. Frontend uses it to hide the OC option in the picker when the daemon is down.
+- **`config.js`** — new env vars: `OPENCODE_URL` (default `http://127.0.0.1:4097`), `OPENCODE_SERVER_USERNAME`, `OPENCODE_SERVER_PASSWORD` (both optional; passed as Basic auth header).
+- **`db/helpers.js`**, **`db/migrate.js`** — `assistants.executor` column added with `DEFAULT 'hermes'` (idempotent `PRAGMA table_info` check); `session_meta.opencode_session_id` column added with `DEFAULT NULL` to remember the OC session id across 1230UI restarts.
+- **`routes/assistants.js`** — `sanitizeAssistantInput` accepts and validates the new `executor` field; INSERT/PATCH/fork-on-edit SQL updated. `ASSISTANT_EXECUTORS = new Set(['hermes', 'opencode-1230'])` rejects unknown values.
+
+#### Data model
+
+```sql
+ALTER TABLE assistants     ADD COLUMN executor TEXT NOT NULL DEFAULT 'hermes';
+ALTER TABLE session_meta   ADD COLUMN opencode_session_id TEXT DEFAULT NULL;
+```
+
+Why `opencode_session_id` lives on `session_meta`, not `assistants`: 1:1 mapping between 1230UI session and OC session. Same assistant + different sessions must NOT share an OC session. On resume, OC Adapter looks up `opencode_session_id`; if 404 on the daemon, creates a new one and persists.
+
+#### Configuration
+
+```bash
+# .env (new env vars)
+OPENCODE_URL=http://127.0.0.1:4097
+OPENCODE_SERVER_USERNAME=             # optional
+OPENCODE_SERVER_PASSWORD=             # optional
+```
+
+#### OpenCode serve setup
+
+- Separate daemon from the user's `opencode web` on 4096 — uses port **4097** to avoid conflict. Localhost only.
+- systemd unit at `/etc/systemd/system/opencode-1230ui.service` (created, **not yet enabled** — see §0.1a A1 in executor-selection.md). `Restart=always` + `RestartSec=5`. Loads `EnvironmentFile=-/opt/1230-ui/.env`.
+- OpenCode project `1230ui` created in `/root/.local/share/opencode/opencode.db` with worktree `/opt/1230-ui` — new OC sessions created via 1230UI land here, NOT in the global project. Pre-existing `1230ui-*` sessions from before the spike are stranded in `global` and need a one-time migration (see §0.1a A3).
+
+#### Frontend
+
+- **`AssistantEditPage.tsx`** — new "Executor" field: radio-pill picker with `Hermes` (default) and `OpenCode` options. Disabled with an inline hint when OC is not configured (driven by `GET /api/system/executors`).
+- **`AssistantTile.tsx`** — small "via OpenCode" badge on the tile when `executor === 'opencode-1230'`.
+- **`types/api.ts`** — `Assistant.executor: 'hermes' | 'opencode-1230' | null` field; new `ExecutorsStatus` interface for the `/api/system/executors` response.
+- **`lib/api.ts`** — `getExecutorsStatus()` calls `GET /api/system/executors`; assistant create/update payload includes `executor`.
+- **`locales/en/translation.json`** — 6 new i18n keys under the `assistants` namespace: `assistants.executorLabel`, `assistants.executorHint`, `assistants.executor.hermes`, `assistants.executor.opencode-1230`, `assistants.executorBadge.hermes` (+ `.opencode-1230`), `assistants.executorUnavailable` (+ `executorDownOnSave`, `executorChecking`, `executorRetry`, `executorDownInline`, `chat.viaExecutor`, `chat.freeChatExecutorHint`). All four locales (en/ru/es/de) ship translations.
+
+### Multi-Executor Hardening (2026-06-12)
+
+#### Bug fix during spike
+
+**Messages wiped for OC sessions after navigation** — the 1781180149780 symptom. When a user chatted with an OC-bound assistant, the assistant turn was visible in the live stream but the row disappeared from `GET /api/sessions/:id/messages` because that endpoint only read from Hermes's `state.db`. The fix: `routes/sessions.js` now merges messages from both backends (Hermes `state.db` for the row, plus the OC session history fetched via `GET /session/:id` on the daemon). Documented in [TROUBLESHOOTING.md §8](TROUBLESHOOTING.md) — *"OpenCode session shows empty messages after reload / opening the Applications pane"*.
+
+#### Files changed
+
+| File | Status | Lines (Δ) |
+|---|---|---|
+| `lib/opencode.js` | **new** | +448 |
+| `routes/chat.js` | modified | +353 |
+| `routes/sessions.js` | modified | +30 (message merge) |
+| `routes/system.js` | modified | +20 (`/api/system/executors`) |
+| `routes/assistants.js` | modified | +20 (executor CRUD) |
+| `db/migrate.js` | modified | +12 (idempotent column adds) |
+| `db/helpers.js` | modified | +5 (provider lookup helper) |
+| `config.js` | modified | +6 (env vars) |
+| `src/pages/AssistantEditPage.tsx` | modified | +50 (executor picker) |
+| `src/components/AssistantTile.tsx` | modified | +8 (badge) |
+| `src/types/api.ts` | modified | +10 (new types) |
+| `src/lib/api.ts` | modified | +15 (getExecutorsStatus) |
+| `src/i18n/locales/en/translation.json` | modified | +5 (keys) |
+| `/etc/systemd/system/opencode-1230ui.service` | **new** | +20 |
+| **Total** | — | **~+1002** |
+
+#### Known limitations (see [TROUBLESHOOTING.md §8](TROUBLESHOOTING.md) for the messages-wiped bug writeup)
+
+- **Tool calls in OpenCode happen in the daemon's own UI** (port 4096), not in 1230UI. The OC adapter ignores `permission.asked` events for the spike (`--no-tools` mode).
+- **`usage.input_tokens` / `usage.output_tokens` are 0 for text-only OC replies** — OpenCode's `step-finish` event only fires when the run contains tool steps. Backfill tracked in `executor-selection.md` §0.1a A2.
+- **Hermes path is structurally privileged** — the dispatch falls through to the inlined Hermes code in `routes/chat.js`; there is no `HermesAdapter` class yet. Refactor tracked in §0.1a B1.
+- **OC sessions are persisted in Hermes `state.db`** (acceptable compromise for the spike) — future work: dedicated `oc_sessions` table.
+
+#### Migration notes
+
+- **Existing users (no OC setup):** No action required. The new column has `DEFAULT 'hermes'`, so all existing assistants keep their Hermes behaviour. The OC option is hidden in the UI because `GET /api/system/executors` reports OC as not configured.
+- **New OC users:** (1) install `opencode` binary, (2) `cp docs/deploy/opencode-1230ui.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now opencode-1230ui.service`, (3) set `OPENCODE_URL` in `.env` (default `http://127.0.0.1:4097` works out-of-the-box for the local daemon), (4) open an assistant and pick "OpenCode" in the executor picker.
+- **Pre-spike OC sessions** (sessions created in the user's `opencode web:4096` UI before this spike) live in the OC `global` project, not `1230ui`. They are still visible in `opencode web:4096` but **not** in 1230UI's session list (different `opencode_session_id` mapping). One-time migration script tracked in `executor-selection.md` §0.1a A3.
+
+#### Verification
+
+- `npm run lint` clean, `npm run typecheck` clean, `npm test` 22/22 pass (unit tests for sanitizeBody and time utilities), `npm run build` OK.
+- Integration tests for executor dispatch, OC session lifecycle, watchdog, dedup, and message merge are tracked in `TODO.md §B` and have not yet been written.
+- Manual test: create an assistant with `executor=opencode-1230`, send a message, verify (a) `route/chat.js` logs `adapter.slug=opencode-1230`, (b) the OpenCode daemon records the new session in project `1230ui`, (c) `state.db.sessions.model` matches the UI selection, (d) restarting 1230UI preserves the OC session via `session_meta.opencode_session_id`.
+
+#### Post-spike hardening (rolled into v0.9.2)
+
+A follow-up audit ([docs/brief-multi-executor-audit.md](docs/brief-multi-executor-audit.md)) tracked 30 hardening items. This release closes the following ones:
+
+- **Title sync with OpenCode daemon** — `PATCH /api/sessions/:id/title` now also calls `PATCH /session/:id` on the OC daemon for any session bound to an OC executor. The local rename in Hermes `state.db` and the OC-side title now stay in sync. Failures of the OC update are non-fatal (logged + returned as `ocSync` in the response) so the rename UX never breaks because the OC daemon is down. Implementation: `lib/opencode.js` gained `updateSession(id, {title})`; `routes/sessions.js` PATCH handler now async.
+- **Idempotency for OC session creation** — two concurrent `POST /api/chat` for the same `session_id` no longer both call `createSession()` on the OC daemon. The adapter now uses `INSERT … ON CONFLICT(session_id) DO NOTHING … RETURNING opencode_session_id`; if the returning row is empty, the existing binding is reused and the freshly-created OC session is orphaned (harmless — empty session). Race detected and logged explicitly. Implementation: `lib/adapters/opencode.js` `chat()` step 1.
+- **Listener leak fix in `AbortSignal` plumbing** — the hand-rolled `anySignal()` helper (`lib/opencode.js`) leaked listeners under load because `addEventListener('abort', …, { once: true })` was never paired with `removeEventListener`. Replaced with the standard `AbortSignal.any([ctrl.signal, signal])` (Node 20+). The `_fetch` timeout signal and the caller's signal are now combined via the platform API, which cleans up its own listeners.
+- **Backfill `assistants.executor = 'hermes'`** — `db/migrate.js` now runs a defensive `UPDATE assistants SET executor = 'hermes' WHERE executor IS NULL OR executor = ''` after the column add. No-op for existing rows (DEFAULT covered them) but enforces the invariant for any row that could have been touched during the migration window.
+- **Vitest coverage for executor logic** — five new test files in `tests/`, 88 new tests, 110/110 green:
+  - `tests/opencode-parseSseChunk.test.js` (19) — SSE parser edge cases
+  - `tests/opencode-client.test.js` (25) — `OpenCodeClient` REST wrapper (mocked `fetch`)
+  - `tests/adapters-opencode.test.js` (20) — `OpenCodeAdapter` session resolution + race detection + event translation
+  - `tests/adapters-hermes.test.js` (15) — `HermesAdapter` child-process integration (mocked `spawn`)
+  - `tests/adapters-registry.test.js` (9) — `ADAPTERS` registry symmetry
+- **Documentation sync**:
+  - `README.md` — new "OpenCode executor" section in **How it works** with the dispatcher diagram.
+  - `TROUBLESHOOTING.md` — new §9 ("OpenCode daemon unreachable — executor picker is empty") and §10 ("Tool card stuck after tool_start — no tool_complete event arrives"). §8 already documents the messages-wiped fix.
+  - `docs/EXECUTOR_ADAPTERS.md` — new file. Step-by-step guide "How to add a third executor" with a worked example (claude-direct) and the full `ExecutorAdapter` contract reference.
+  - `CHANGELOG.md:64` — corrected the i18n key names that did not match the actual code (was a stale leftover from the original spike).
+
+---
+
+### Model Routing Overhaul (patch 2026-06-11 — direct AIAgent invocation)
+
+Replaces the previous HTTP proxy to Hermes's `api_server` (which silently forced `config.yaml`'s `model.default` and ignored the user's per-request model) with a direct Python subprocess that constructs an `AIAgent` with the exact `model` / `provider` / `base_url` / `api_key` chosen in the UI. Every prior symptom of the routing bug — wrong model answering, stuck `[DONE]` markers, duplicate-turn retry storms, orphan Python processes — is fixed in this change. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full two-process design and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for the bug-by-bug writeup.
+
+#### Backend
+
+- **`run_chat.py` (new, root of repo)** — Python 3 wrapper invoked by `routes/chat.js` per request. Runs inside the Hermes Agent venv (`HERMES_PYTHON_PATH`, default `python3`, see [docs/CONFIGURATION.md](docs/CONFIGURATION.md)). Calls `resolve_runtime_provider()` to fetch `api_key` / `base_url` / `api_mode` for the user-selected provider, then constructs `AIAgent(model=..., provider=..., base_url=..., api_key=..., session_id=..., max_iterations=10, skip_context_files=True, skip_memory=True, ...)` with explicit kwargs so `config.yaml` defaults are bypassed. Persists the chosen model to `state.db.sessions.model` via `SessionDB._execute_write()` (`run_chat.py:184-194`). Streams NDJSON events to stdout: `delta`, `reasoning`, `tool_start`, `tool_complete`, `done`, `error` (`run_chat.py:51-77`). Forces line-buffered output via `sys.stdout.reconfigure(line_buffering=True)` (`run_chat.py:38-48`) so the parent process's pipe receives each event immediately — without this, a child whose stdout is a pipe can buffer up to 8 KB until the process exits. Exit codes: `0` on success, `1` on any error; error details are emitted as NDJSON on stderr and captured by Node.
+- **`routes/chat.js`** — HTTP-proxy path (`fetch(${HERMES_API_URL}/v1/chat/completions, ...)` with hardcoded `model: 'hermes-agent'`) replaced with `child_process.spawn` of `run_chat.py`:
+  - argv: `--session-id`, `--model`, `--provider`, `--max-iterations 10` (`routes/chat.js:451-459`).
+  - Spawn flags: `-u` (unbuffered) + `PYTHONUNBUFFERED=1` + `PYTHONIOENCODING=utf-8` env (`routes/chat.js:463-471`) — three layers of belt-and-suspenders buffering defeat.
+  - NDJSON line-by-line parser translates wrapper events to SSE the frontend already understands (`routes/chat.js:665-676`, `routes/chat.js:694-771`).
+  - In-flight deduplication: `INFLIGHT` map keyed by `${session_id}:${hash(lastUserMessage)}` with a 30 s TTL (`routes/chat.js:322-341`); duplicate requests return HTTP 409 with `code: 'DUPLICATE_INFLIGHT'`. This is the server-side safety net for the frontend retry-storm bug.
+  - 90 s no-output watchdog (`FIRST_OUTPUT_TIMEOUT_MS = 90_000`, `routes/chat.js:499`) — kills the child with SIGKILL and emits a `NO_OUTPUT_TIMEOUT` SSE error if Python produces no stdout for 90 s. Reset on every chunk so a stalled mid-stream child is also killed within 90 s of its last output (`routes/chat.js:614-663`).
+  - 10 min hard ceiling (`HARD_TIMEOUT_MS = 10 * 60 * 1000`, `routes/chat.js:506-514`) — guarantees the connection eventually closes even if the watchdog misfires.
+  - `req.on('close')` cleanup: SIGTERM → 5 s → SIGKILL escalation (`routes/chat.js:516-522`) so orphan `run_chat.py` processes cannot survive a browser tab close.
+  - `data: [DONE]\n\n` SSE sentinel emitted right after the `done` event (`routes/chat.js:749`) — OpenAI-spec compliance for third-party SSE consumers, belt-and-suspenders for the frontend's own `type: 'done'` handler.
+- **`db/helpers.js`** — `getProviderForModelId(modelId)` added (`db/helpers.js:56-70`); does a `JOIN providers p ON p.id = m.provider_id` to resolve the Hermes provider slug from the `models` table. `getProviderFromModel()` now consults the DB first and only falls back to a string heuristic on cache miss (`db/helpers.js:79-93`). Fixes the bug where the user-selected model was silently overridden because the heuristic returned `unknown` for any model whose name didn't contain a known substring.
+
+#### Frontend
+
+- **`src/lib/api.ts`** — `sendMessage` accepts `maxRetries` via options (default `0` instead of the previous `3`, `src/lib/api.ts:149`). New `type: 'done'` handler treats the server payload's `final_response` and `usage` fields as authoritative when present (`src/lib/api.ts:266-283`). Rescue path: if the connection closes with accumulated `fullContent` but no `done` event arrived, fire `onDone(fullContent)` instead of erroring with `STREAM_ABORTED` (`src/lib/api.ts:345-353`). The `data: [DONE]` SSE sentinel is also handled (`src/lib/api.ts:236-249`).
+- **`src/pages/ChatPage.tsx`** — `doSend` now passes `maxRetries: 0` (`src/pages/ChatPage.tsx:406`) and `useRef`-tracks the last-sent content for the manual Retry button. The previous default of 3 caused a single user click to spawn 4 duplicate turns in `agent.log` and 4 duplicate user messages in the UI; the manual Retry button is preserved for user-initiated retries.
+
+#### Bug fixes (before → after)
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| UI shows "MiniMax-M3" but LLM answers as "qwen3.6-plus" | HTTP proxy to `api_server` used hardcoded `model: 'hermes-agent'`; `config.yaml.model.default` won. | `run_chat.py` constructs `AIAgent(model=..., provider=..., ...)` with explicit kwargs; `getProviderFromModel()` resolves the provider via DB JOIN. |
+| `Network error: STREAM_ABORTED` on a successful turn | Frontend never saw a `done` event or `[DONE]` marker; treated every clean response as aborted. | `routes/chat.js:733-750` emits `type: 'done'` with `final_response`+`usage`; `api.ts:266-283` handles it; `data: [DONE]\n\n` sentinel added for OpenAI-spec compatibility. |
+| 1 user click → 4 duplicate turns in `agent.log` and 4 duplicate user bubbles | Frontend auto-retried 3 times on any stream error. | `ChatPage.tsx:406` passes `maxRetries: 0`; `routes/chat.js:322-406` returns HTTP 409 for duplicate in-flight requests. |
+| Orphan `python run_chat.py` processes after browser disconnect | `req.on('close')` did not exist; children kept running. | `routes/chat.js:516-522` SIGTERM → 5 s → SIGKILL. |
+| Hermes gateway restarts every 5 minutes | `hermes-gateway.service` user unit conflicted with `hermes-api.service`; `TimeoutStopSec=90s` < `drain_timeout`. | Disabled `hermes-gateway.service`; `TimeoutStopSec=90s → 210s` in `/etc/systemd/system/hermes-api.service`. See *Server environment* below. |
+| Long silence then burst of events at end of stream | Python child buffered up to 8 KB of stdout in non-TTY mode. | `sys.stdout.reconfigure(line_buffering=True)` (`run_chat.py:38-48`) + `python -u` + `PYTHONUNBUFFERED=1` + `PYTHONIOENCODING=utf-8`. |
+
+#### Server environment (out-of-repo fixes, not in this codebase)
+
+These are server-level systemd and unit fixes on BIG. They are listed here for traceability but the patches live in `/etc/systemd/system/`, not in 1230UI:
+
+- **Dual systemd unit conflict** — `hermes-gateway.service` (a user-level unit left over from an earlier setup) was racing with `hermes-api.service`; every 5 minutes the gateway would signal a reload and the api service would restart, killing in-flight HTTP connections. Removed the user unit (`systemctl --user disable --now hermes-gateway.service`).
+- **`TimeoutStopSec` too short** — `/etc/systemd/system/hermes-api.service` had `TimeoutStopSec=90s`, but `drain_timeout` on the API server is 120 s. When systemd tried to stop the service during reload, it SIGKILLed the process at 90 s while requests were still in flight. Bumped to `TimeoutStopSec=210s` (3.5× drain timeout) so a graceful stop always finishes.
+
+#### Migration notes
+
+- **Set `HERMES_PYTHON_PATH` explicitly** — the existing `config.js` default is `python3` (system Python). For the new code path to import `run_agent`, `hermes_cli`, and `hermes_state` from the Hermes venv, set `HERMES_PYTHON_PATH=/usr/local/lib/hermes-agent/venv/bin/python` in `.env` (or wherever the venv lives on your install). The wrapper's shebang (`run_chat.py:1`) is the authoritative path if the systemd `ExecStart` invokes the script directly.
+- **Server environment only matters for BIG-class deployments** — the systemd unit fixes are listed for the BIG host. Single-user installs running `node server.js` from a shell do not need any of that.
+- **No new npm or pip dependencies** — `run_chat.py` uses modules already in the Hermes venv.
+
+#### Files changed
+
+`run_chat.py` (new, 333 lines), `routes/chat.js` (full rewrite of `POST /api/chat`), `db/helpers.js` (`getProviderForModelId` + DB-first lookup), `src/lib/api.ts` (`maxRetries` option, `done` handler, rescue path), `src/pages/ChatPage.tsx` (`maxRetries: 0`).
+
+#### Verification
+
+`npm run lint` clean, `npm run typecheck` clean, `npm test` 22/22 pass, `npm run build` OK. Manual test: send the same prompt under two different models in sequence — both use the model the UI shows, and `state.db.sessions.model` matches the UI selection.
+
+---
+
+### Cloud Connect Application (Task #39)
+
+Browse WebDAV cloud storage from inside 1230UI and insert file links into chat. Cloud links are automatically expanded to inline content before sending to Hermes — the agent receives file content directly without tool calls.
+
+#### Backend
+
+- **`db/migrate.js`** — new `cloud_connections` table (idempotent): stores label, url, username, AES-256-GCM encrypted password, status, last_tested_at, last_error
+- **`lib/cloud/crypto.js` (new)** — AES-256-GCM encrypt/decrypt for credentials + HMAC-SHA256 signed URL tokens (HKDF-derived key)
+- **`routes/cloudConnections.js` (new)** — CRUD endpoints: GET/POST/PATCH/DELETE `/api/cloud-connections`, POST `/:id/test` (WebDAV connection test)
+- **`routes/cloudFiles.js` (new)` — directory listing (`GET /:id/list`), signed URL issuance (`POST /:id/issue-link`), proxy stream (`GET /api/cloud/:id/:token/:expiresAt/:path`)
+- **`routes/chat.js`** — cloud-link interceptor: scans user messages for `/api/cloud/...` URLs before sending to Hermes
+  - Text files (md/txt/json/csv/py/js/ts/yml/xml/sh/sql/log/toml/ini/conf) → `{ type: "text", text: "--- filename ---\n<content>" }`
+  - Images (png/jpg/webp/gif/svg/bmp/ico) → `{ type: "image_url", image_url: { url: "data:image/png;base64,..." } }`
+  - Binary files ≤ 1MB → text description with metadata
+  - Files > 5MB → "File too large" placeholder
+  - WebDAV clients cached per connection for efficiency
+- **`config.js`** — `CLOUD_CONNECT_KEY` env variable validation (optional, 32 bytes base64)
+- **`db/seed.js`** — seed `cloud_connect` application on startup
+- **`app.js`** — mount `cloudConnectionsRouter` and `cloudFilesRouter`
+
+#### Frontend
+
+- **`src/types/api.ts`** — new types: `CloudConnection`, `CloudEntry`, `IssuedLink`
+- **`src/lib/api.ts`** — 6 new API functions: `listCloudConnections`, `createCloudConnection`, `testCloudConnection`, `updateCloudConnection`, `deleteCloudConnection`, `listCloudEntries`, `issueCloudLinks`
+- **`src/store/cloudConnectStore.ts` (new)` — Zustand store: connections, selectedConnectionId, currentPath, entries, selectedPaths, loading/error state, navigation, selection
+- **`src/applications/cloud-connect/` (new)** — Cloud Connect application:
+  - **`CloudConnectApp.tsx`** — entry component: empty state, connection form, browser
+  - **`components/ConnectionChips.tsx`** — connection switcher with status dots
+  - **`components/EntryList.tsx`** — breadcrumb navigation + lazy directory listing + checkbox selection
+  - **`components/InsertBar.tsx`** — "N files selected" + "Insert into chat" button
+  - **`components/AddConnectionForm.tsx`** — inline form (label, url, username, password) with test-on-save
+  - **`index.ts`** — export
+- **`src/applications/registry.ts`** — register `cloud_connect: CloudConnectApp`
+- **`src/components/ChatInput.tsx`** — `chat:insertText` event listener for appending markdown links
+- **i18n** — `cloudConnect.*` keys × 2 languages (en, ru)
+
+#### Infrastructure
+
+- **`/etc/nginx/sites-enabled/kesha.thinkout.ru.conf`** — `/api/cloud/` location bypasses Authelia (HMAC + TTL protected)
+- **`.env.example`** — `CLOUD_CONNECT_KEY` documentation
+
+#### Security
+
+- Credentials encrypted at rest with AES-256-GCM (12-byte random IV per encryption)
+- Signed proxy URLs use HMAC-SHA256 with HKDF-derived key, bound to (connectionId, path, expiresAt)
+- Default TTL: 3600 seconds
+- `/api/cloud/` bypasses Authelia but is cryptographically protected
+- Max inline file size: 5MB (configurable constant)
+
+#### New dependency
+
+- `webdav ^5.7.0` — WebDAV client for Node.js
+
+#### Changed files
+
+`db/migrate.js`, `db/seed.js`, `config.js`, `.env.example`, `app.js`, `routes/chat.js`, `src/types/api.ts`, `src/lib/api.ts`, `src/components/ChatInput.tsx`, `src/applications/registry.ts`, i18n locales (en, ru), nginx config.
+
+#### New files
+
+`routes/cloudConnections.js`, `routes/cloudFiles.js`, `lib/cloud/crypto.js`, `src/store/cloudConnectStore.ts`, `src/applications/cloud-connect/` (CloudConnectApp.tsx, components/ConnectionChips.tsx, EntryList.tsx, InsertBar.tsx, AddConnectionForm.tsx, index.ts).
+
 ## [0.9.1] - 2026-06-10 (Applications architecture, File Preview, File Manager, file retention)
 
 ### File Preview Application (Task #37)

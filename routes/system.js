@@ -11,13 +11,19 @@ import { Router } from 'express';
 import { execLimiter } from '../middleware/security.js';
 import { db, uiDb } from '../db/connections.js';
 import config from '../config.js';
+import { encrypt, decrypt } from '../lib/cloud/crypto.js';
+import { getSetting, upsertSetting } from '../lib/systemSettings.js';
+import { reconfigureOpencodeClient } from '../lib/opencode.js';
 
 const router = Router();
 
-const HERMES_API_URL = config.hermesApiUrl;
-const HERMES_API_KEY = config.hermesApiKey;
 const HERMES_AGENT_PATH = config.hermesAgentPath;
 const CACHE_TTL = 3_600_000; // 1 hour in ms
+
+// In-memory cache for the executor availability probe. The OpenCode daemon
+// is on localhost; a 5 s cache is plenty to absorb page-reload storms.
+let _executorsCache = { at: 0, value: ['hermes'] };
+const EXECUTORS_CACHE_MS = 5_000;
 
 // ── GET /api/system/status ─────────────────────────────────────────────────
 router.get('/status', async (req, res) => {
@@ -25,8 +31,8 @@ router.get('/status', async (req, res) => {
     // Hermes API connectivity
     let hermesStatus = 'disconnected';
     try {
-      const response = await fetch(`${HERMES_API_URL}/health`, {
-        headers: { 'Authorization': `Bearer ${HERMES_API_KEY}` },
+      const response = await fetch(`${config.hermesApiUrl}/health`, {
+        headers: { 'Authorization': `Bearer ${config.hermesApiKey}` },
         signal: AbortSignal.timeout(3000),
       });
       if (response.ok) hermesStatus = 'connected';
@@ -146,8 +152,8 @@ router.post('/exec', execLimiter, async (req, res) => {
 export async function getHealthHandler(req, res) {
   let hermesApiStatus = 'unknown';
   try {
-    const response = await fetch(`${HERMES_API_URL}/health`, {
-      headers: { 'Authorization': `Bearer ${HERMES_API_KEY}` },
+    const response = await fetch(`${config.hermesApiUrl}/health`, {
+      headers: { 'Authorization': `Bearer ${config.hermesApiKey}` },
       signal: AbortSignal.timeout(3000),
     });
     hermesApiStatus = response.ok ? 'ok' : 'error';
@@ -159,11 +165,187 @@ export async function getHealthHandler(req, res) {
     status: 'ok',
     dbConnected: !!db,
     hermesApi: hermesApiStatus,
-    hermesApiUrl: HERMES_API_URL,
+    hermesApiUrl: config.hermesApiUrl,
     timestamp: Date.now(),
   });
 }
 
 router.get('/health', getHealthHandler);
+
+// ── GET /api/system/executors ──────────────────────────────────────────────
+// Probe OpenCode and return the list of executors currently usable.
+// Hermes is always available as long as run_chat.py is on disk (we don't
+// probe Hermes here — the chat handler falls back to Hermes on any
+// OpenCode failure anyway). Cached for 5 s in-process.
+router.get('/executors', async (req, res) => {
+  if (Date.now() - _executorsCache.at < EXECUTORS_CACHE_MS) {
+    return res.json({ executors: _executorsCache.value });
+  }
+  const executors = ['hermes'];
+  const headers = { Accept: 'application/json' };
+  if (config.opencodeUsername && config.opencodePassword) {
+    const creds = Buffer.from(`${config.opencodeUsername}:${config.opencodePassword}`).toString('base64');
+    headers.Authorization = `Basic ${creds}`;
+  }
+  try {
+    const r = await fetch(`${config.opencodeUrl}/global/health`, {
+      headers,
+      signal: AbortSignal.timeout(2_000),
+    });
+    if (r.ok) {
+      const body = await r.json().catch(() => null);
+      if (body?.healthy) executors.push('opencode-1230');
+    }
+  } catch {
+    // OpenCode unreachable — leave it out of the list.
+  }
+  _executorsCache = { at: Date.now(), value: executors };
+  res.json({ executors });
+});
+
+// ── GET /api/system/executor-config/:slug ─────────────────────────────────
+// Returns current executor configuration (secret masked).
+// (getSetting/upsertSetting live in lib/systemSettings.js — shared with routes/tududi.js.)
+
+router.get('/executor-config/:slug', (req, res) => {
+  const { slug } = req.params;
+  try {
+    if (slug === 'hermes-agent') {
+      const pythonPath = getSetting('executor_hermes_python_path') || config.hermesPythonPath;
+      const apiUrl = getSetting('executor_hermes_api_url') || config.hermesApiUrl;
+      const apiKeyCt = getSetting('executor_hermes_api_key_ct');
+      const apiKeyIv = getSetting('executor_hermes_api_key_iv');
+      const apiKeyTag = getSetting('executor_hermes_api_key_tag');
+      const hasApiKey = Boolean(apiKeyCt && apiKeyIv && apiKeyTag);
+      return res.json({ slug: 'hermes-agent', pythonPath, apiUrl, hasApiKey });
+    }
+    if (slug === 'opencode-1230') {
+      const url = getSetting('executor_opencode_url') || config.opencodeUrl;
+      const username = getSetting('executor_opencode_username') || config.opencodeUsername || '';
+      const passwordCt = getSetting('executor_opencode_password_ct');
+      const passwordIv = getSetting('executor_opencode_password_iv');
+      const passwordTag = getSetting('executor_opencode_password_tag');
+      const hasPassword = Boolean(passwordCt && passwordIv && passwordTag);
+      return res.json({ slug: 'opencode-1230', url, username, hasPassword });
+    }
+    return res.status(404).json({ error: `Unknown executor slug: ${slug}` });
+  } catch (error) {
+    console.error('Failed to get executor config:', error);
+    res.status(500).json({ error: 'Failed to get executor configuration' });
+  }
+});
+
+// ── POST /api/system/executor-config/:slug ────────────────────────────────
+// Saves executor configuration to system_settings. Encrypts secret at rest.
+router.post('/executor-config/:slug', async (req, res) => {
+  const { slug } = req.params;
+  try {
+    const now = Date.now();
+
+    if (slug === 'hermes-agent') {
+      const { pythonPath, apiUrl, apiKey } = req.body || {};
+      if (!pythonPath || typeof pythonPath !== 'string') {
+        return res.status(400).json({ error: 'pythonPath is required' });
+      }
+      if (!apiUrl || typeof apiUrl !== 'string') {
+        return res.status(400).json({ error: 'apiUrl is required' });
+      }
+      try {
+        new URL(apiUrl);
+      } catch {
+        return res.status(400).json({ error: 'apiUrl must be a valid URL' });
+      }
+
+      let apiKeyEncrypted = null;
+      if (typeof apiKey === 'string' && apiKey.length > 0) {
+        try {
+          apiKeyEncrypted = encrypt(apiKey);
+        } catch (encErr) {
+          console.error('Failed to encrypt Hermes API key:', encErr);
+          return res.status(500).json({ error: 'Failed to encrypt secret — check CLOUD_CONNECT_KEY configuration' });
+        }
+      }
+
+      const saveSettings = uiDb.transaction(() => {
+        upsertSetting('executor_hermes_python_path', pythonPath.trim(), now);
+        upsertSetting('executor_hermes_api_url', apiUrl.trim(), now);
+
+        if (apiKeyEncrypted) {
+          upsertSetting('executor_hermes_api_key_ct', apiKeyEncrypted.ct, now);
+          upsertSetting('executor_hermes_api_key_iv', apiKeyEncrypted.iv, now);
+          upsertSetting('executor_hermes_api_key_tag', apiKeyEncrypted.tag, now);
+        } else if (apiKey === '') {
+          upsertSetting('executor_hermes_api_key_ct', '', now);
+          upsertSetting('executor_hermes_api_key_iv', '', now);
+          upsertSetting('executor_hermes_api_key_tag', '', now);
+        }
+      });
+      saveSettings();
+
+      config.hermesPythonPath = pythonPath.trim();
+      config.hermesApiUrl = apiUrl.trim();
+      if (typeof apiKey === 'string' && apiKey.length > 0) {
+        config.hermesApiKey = apiKey;
+      } else if (apiKey === '') {
+        config.hermesApiKey = null;
+      }
+
+      return res.json({ success: true });
+    }
+
+    if (slug === 'opencode-1230') {
+      const { url, username, password } = req.body || {};
+      if (!url || typeof url !== 'string') {
+        return res.status(400).json({ error: 'url is required' });
+      }
+
+      let passwordEncrypted = null;
+      if (typeof password === 'string' && password.length > 0) {
+        try {
+          passwordEncrypted = encrypt(password);
+        } catch (encErr) {
+          console.error('Failed to encrypt OpenCode password:', encErr);
+          return res.status(500).json({ error: 'Failed to encrypt secret — check CLOUD_CONNECT_KEY configuration' });
+        }
+      }
+
+      const saveSettings = uiDb.transaction(() => {
+        upsertSetting('executor_opencode_url', url.trim(), now);
+        upsertSetting('executor_opencode_username', (username || '').trim(), now);
+
+        if (passwordEncrypted) {
+          upsertSetting('executor_opencode_password_ct', passwordEncrypted.ct, now);
+          upsertSetting('executor_opencode_password_iv', passwordEncrypted.iv, now);
+          upsertSetting('executor_opencode_password_tag', passwordEncrypted.tag, now);
+        } else if (password === '') {
+          upsertSetting('executor_opencode_password_ct', '', now);
+          upsertSetting('executor_opencode_password_iv', '', now);
+          upsertSetting('executor_opencode_password_tag', '', now);
+        }
+      });
+      saveSettings();
+
+      config.opencodeUrl = url.trim();
+      config.opencodeUsername = (username || '').trim() || null;
+
+      if (typeof password === 'string' && password.length > 0) {
+        config.opencodePassword = password;
+      } else if (password === '') {
+        config.opencodePassword = null;
+      }
+
+      reconfigureOpencodeClient();
+
+      _executorsCache = { at: 0, value: ['hermes'] };
+
+      return res.json({ success: true });
+    }
+
+    return res.status(404).json({ error: `Unknown executor slug: ${slug}` });
+  } catch (error) {
+    console.error('Failed to save executor config:', error);
+    res.status(500).json({ error: 'Failed to save executor configuration' });
+  }
+});
 
 export default router;

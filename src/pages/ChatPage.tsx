@@ -1,77 +1,133 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useLocation, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, type ChatMessage, type ChatError } from '../lib/api';
-import type { Message, Session } from '../types/api';
-import MarkdownRenderer from '../components/MarkdownRenderer';
-
-import { AgentFileGroup } from '../components/AgentFileCard';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { Copy, Check, ChevronDown, AlertCircle } from 'lucide-react';
-import { useChatInputStore } from '../store/chatInputStore';
+import { AlertCircle } from 'lucide-react';
+import { useChatInputStore, type LiveMessageStatus } from '../store/chatInputStore';
+import { useWorkspaceStore } from '../store/workspaceStore';
 import type { ChatInputHandle } from '../components/ChatInput';
-import { NoMessagesIllustration } from '../assets/illustrations';
+import { Modal } from '../components/Modal';
+import { MessageList } from '../components/MessageList';
+import { committedUserMatchesPending } from '../components/messageListUtils';
 
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useNotifications } from '../hooks/useNotifications';
 import { useNotificationsStore } from '../store/notificationsStore';
-// highlight.js CSS is loaded lazily in MarkdownRenderer (UX-13)
+import { useChatSession } from '../hooks/useChatSession';
+import { useChatScroll } from '../hooks/useChatScroll';
+import { useChatNavigationGuard } from '../hooks/useChatNavigationGuard';
 
-// ── Task #35: SessionFilesBar moved to ChatInput.tsx ───────────────────────
+interface ChatPageProps {
+  sessionId?: string | null;
+  isActive?: boolean;
+}
 
-export function ChatPage() {
+export function ChatPage({ sessionId, isActive = true }: ChatPageProps = {}) {
   const { t } = useTranslation();
-  const { id } = useParams<{ id: string }>();
+  const routeId = useParams<{ id: string }>().id;
+  const id = sessionId !== undefined ? sessionId : routeId;
   const location = useLocation();
-  const initialMessageRef = useRef((location.state as { initialMessage?: string })?.initialMessage);
-  const [session, setSession] = useState<Session | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
-  const [, setProcessStatus] = useState<'thinking' | 'generating' | 'executing_tool'>('thinking');
-  const [, setExecutingTool] = useState<string | null>(null);
-  const [activeToolCalls, setActiveToolCalls] = useState<Map<string, { toolName: string; label?: string }>>(new Map());
-  const [completedToolCalls, setCompletedToolCalls] = useState<Array<{ id: string; toolName: string; label?: string }>>([]);
-
-  const [streamingContent, setStreamingContent] = useState('');
+  const locationState = location.state as { initialMessage?: string } | null;
+  const initialMessageRef = useRef(locationState?.initialMessage);
   const [error, setError] = useState<ChatError | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const isAtBottomRef = useRef(true);
-  const prevMessageCountRef = useRef(0);
-  const [isAtBottom, setIsAtBottom] = useState(true);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const abortRef = useRef<AbortController | null>(null);
-  const initialSentRef = useRef(false);
-  const lastSentContentRef = useRef<string>('');
-  const streamStartedAtRef = useRef<number | null>(null);
-  // Task #24: tracks the id of the assistant message currently being streamed,
-  // so the `agent_files` SSE event can attach download cards to it.
-  const currentAssistantIdRef = useRef<number | null>(null);
-  const [isSessionBlocked, setIsSessionBlocked] = useState(
-    () => Boolean(id && sessionStorage.getItem(`blocked:${id}`))
+  const [retryTrigger, setRetryTrigger] = useState(0);
+  const [copiedMessageId, setCopiedMessageId] = useState<number | null>(null);
+  const navigate = useNavigate();
+
+  const [isSessionBlocked] = useState(
+    () => Boolean(id && sessionStorage.getItem(`blocked:${id}`)),
   );
   const setChatActive = useChatInputStore((s) => s.setActiveSession);
-  const setChatSending = useChatInputStore((s) => s.setSending);
-  const setChatBlocked = useChatInputStore((s) => s.setSessionBlocked);
   const setNavMeta = useChatInputStore((s) => s.setNavSessionMeta);
   const setSessionActions = useChatInputStore((s) => s.setSessionActions);
   const inputHasText = useChatInputStore((s) => s.hasAttachedFiles);
 
-  useEffect(() => {
-    setChatActive(id ?? null);
-    return () => {
-      setChatActive(null);
-      setNavMeta(null);
-      setSessionActions(null);
-    };
-  }, [id, setChatActive, setNavMeta, setSessionActions]);
+  // B11: the store is the single owner of the in-flight stream. ChatPage is a
+  // SUBSCRIBER — it renders the active session's live slice and dispatches
+  // sends/stops to the store. Navigation therefore never aborts a stream.
+  const live = useChatInputStore((s) => (id ? s.liveMessages[id] : undefined));
+  const initLive = useChatInputStore((s) => s.initLive);
+  const clearLive = useChatInputStore((s) => s.clearLive);
 
-  useEffect(() => { setChatSending(sending); }, [sending, setChatSending]);
-  useEffect(() => { setChatBlocked(isSessionBlocked); }, [isSessionBlocked, setChatBlocked]);
+  const liveStatus: LiveMessageStatus = live?.status ?? 'idle';
+  const streamingContent = live?.streamingContent ?? '';
+  const liveActiveToolCalls = useMemo(() => live?.activeToolCalls ?? [], [live?.activeToolCalls]);
+  const liveCompletedToolCalls = useMemo(() => live?.completedToolCalls ?? [], [live?.completedToolCalls]);
+  const liveAgentFiles = live?.agentFiles ?? [];
+  const pendingUserContent = live?.pendingUserContent ?? null;
+  const sending = liveStatus === 'streaming' || liveStatus === 'recovering';
+  const isWaiting = sending && !streamingContent && liveActiveToolCalls.length === 0;
+  const chatError = error ?? (liveStatus === 'error' ? (live?.error ?? null) : null);
+  const sendingRef = useRef(sending);
+  useEffect(() => { sendingRef.current = sending; }, [sending]);
+  const isActiveRef = useRef(isActive);
+  useEffect(() => { isActiveRef.current = isActive; });
+
+  const { enabled: notificationsEnabled } = useNotificationsStore();
+  const { notify, setBadge, clearBadge } = useNotifications({
+    enabled: notificationsEnabled,
+  });
+
+  const { isAtBottom, isAtBottomRef, unreadCount, setUnreadCount, onAtBottomChange } =
+    useChatScroll({ clearBadge });
+
+  const { session, setSession, messages, loading, loadError } = useChatSession({
+    id,
+    retryTrigger,
+    isActive,
+    locationState,
+    liveStatus,
+    sendingRef,
+    isAtBottomRef,
+    unreadCount,
+    setUnreadCount,
+    clearLive,
+    notify,
+    setBadge,
+  });
+
+  // B11: dedup the in-flight overlay against the committed messages so we
+  // never double-render a bubble once the server has persisted the turn.
+  const lastCommittedUser = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i].role === 'user') return messages[i];
+    }
+    return null;
+  }, [messages]);
+  const lastCommittedAssistant = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const m = messages[i];
+      if (m.role === 'assistant' && m.content) return m;
+    }
+    return null;
+  }, [messages]);
+  // C8: exact (trimmed) equality against the last committed user message,
+  // tolerating the attached-file prefix — never a fragile suffix match.
+  const showPendingUserBubble = !!pendingUserContent
+    && pendingUserContent.trim().length > 0
+    && !committedUserMatchesPending(lastCommittedUser?.content, pendingUserContent);
+  const showStreamingBubble = streamingContent.trim().length > 0
+    && !(lastCommittedAssistant?.content?.trim() === streamingContent.trim());
+
+  useEffect(() => {
+    if (id) initLive(id);
+    // B11: no abort on id-change / unmount. The stream is owned by the
+    // store (streamControllers module map) and lives in liveMessages, so
+    // switching sessions or navigating away must NOT terminate a running
+    // turn. All in-flight state is derived from the store, so there is no
+    // per-turn local state to reset here either.
+  }, [id, initLive]);
+
+  useEffect(() => {
+    if (!isActive) return;
+    setChatActive(id ?? null);
+    return () => { setChatActive(null); };
+  }, [isActive, id, setChatActive]);
+
   // Sync session metadata to navbar store whenever session loads or title changes
   useEffect(() => {
+    if (!isActive) return;
     if (!session) return;
     setNavMeta({
       title: session.title,
@@ -79,10 +135,34 @@ export function ChatPage() {
       assistantName: session.assistant?.name ?? null,
       assistantIcon: session.assistant?.icon ?? null,
     });
-  }, [session, setNavMeta]);
+    return () => setNavMeta(null);
+  }, [isActive, session, setNavMeta]);
+
+  async function handleDeleteSession() {
+    if (!id) return;
+    try {
+      await api.deleteSession(id);
+      clearLive(id);
+      const ws = useWorkspaceStore.getState();
+      const slots = ws.activeSessionByExecutor;
+      for (const ex of ['hermes', 'opencode-1230'] as const) {
+        if (slots[ex] === id) ws.clearActiveSession(ex);
+      }
+      ws.setActiveTab('sessions');
+      navigate('/sessions');
+    } catch (err) {
+      console.error('Failed to delete session:', err);
+      setError({
+        type: 'server_error',
+        message: t('chat.failedToDeleteSession'),
+        retryable: false,
+      });
+    }
+  }
 
   // Register session actions for Navbar to invoke
   useEffect(() => {
+    if (!isActive) return;
     setSessionActions({
       onStartEditTitle: () => {
         // Navbar handles its own edit state; this is a no-op placeholder
@@ -105,12 +185,9 @@ export function ChatPage() {
       onDeleteSession: handleDeleteSession,
       onStop: handleStop,
     });
+    return () => setSessionActions(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, setSessionActions]);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [copiedMessageId, setCopiedMessageId] = useState<number | null>(null);
-  const [retryTrigger, setRetryTrigger] = useState(0);
-  const navigate = useNavigate();
+  }, [id, isActive, setSessionActions]);
 
   // ChatInput is rendered by Layout (sibling of MobileNav). We reach it via
   // the chatInputStore (which holds ChatInput's imperative handle).
@@ -118,100 +195,61 @@ export function ChatPage() {
   const inputHandle = useChatInputStore((s) => s.handle);
   useEffect(() => { chatInputRef.current = inputHandle; }, [inputHandle]);
 
-  // UX-4: Navigation guard — show confirmation modal when input has unsent text.
-  // BrowserRouter does not support useBlocker (data-router only), so we implement
-  // the guard manually:
-  //  - beforeunload  → native browser dialog on tab close / hard navigation
-  //  - popstate      → back/forward button intercept
-  //  - click capture → intercept <Link> / <a> clicks before React Router handles them
-  // Task #23: also block navigation when there are unsent attached files.
-  const [leaveGuardPending, setLeaveGuardPending] = useState(false);
-  const pendingUrlRef = useRef<string | null>(null);
-  const inputHasTextRef = useRef(inputHasText);
-  useEffect(() => { inputHasTextRef.current = inputHasText; }, [inputHasText]);
+  const initialSentRef = useRef(false);
+  const lastSentContentRef = useRef<string>('');
 
-  // 1. Browser-native guard for tab close / external navigation
+  // C2/UX-4: leave-guard, delegated to useChatNavigationGuard. The hook owns
+  // the beforeunload / popstate / click-capture listeners, the pending URL,
+  // and the `leaveGuardPending` flag. The Modal below renders off that flag.
+  const { leaveGuardPending, handleLeaveConfirm, handleLeaveCancel } =
+    useChatNavigationGuard({
+      isActiveRef,
+      inputHasText,
+      clearInput: () => chatInputRef.current?.clearInput(),
+      navigate,
+    });
+
+  // Refs that always point at the latest doSend / handleStop. The
+  // pending-chat-action drain effect is registered ONCE on mount, so the
+  // callbacks it captures must read the live closure through these refs
+  // — otherwise a stale closure pins `messages = []` from the first render
+  // and POST /api/chat is sent with `messages: [userMessage]` (no history),
+  // which the Hermes agent sees as `history=0` and cannot maintain context.
+  const doSendRef = useRef<(content: string) => void>(() => {});
+  const handleStopRef = useRef<() => void>(() => {});
+
   useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (inputHasTextRef.current) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, []);
-
-  // 2. Back/forward button guard
-  useEffect(() => {
-    const handler = (e: PopStateEvent) => {
-      if (!inputHasTextRef.current) return;
-      // Push the current state back so the URL doesn't change
-      window.history.pushState(e.state, '', window.location.href);
-      pendingUrlRef.current = null; // popstate doesn't give us the target URL easily
-      setLeaveGuardPending(true);
-    };
-    window.addEventListener('popstate', handler);
-    return () => window.removeEventListener('popstate', handler);
-  }, []);
-
-  // 3. Click intercept for in-app <Link> / <a> tags
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (!inputHasTextRef.current) return;
-      const target = (e.target as Element).closest('a[href]');
-      if (!target) return;
-      const href = (target as HTMLAnchorElement).getAttribute('href');
-      if (!href || href.startsWith('#') || href.startsWith('http') || href.startsWith('mailto')) return;
-      // Same page — no guard needed
-      const currentPath = window.location.pathname;
-      if (href === currentPath) return;
-      e.preventDefault();
-      e.stopPropagation();
-      pendingUrlRef.current = href;
-      setLeaveGuardPending(true);
-    };
-    // Capture phase so we intercept before React Router's Link handler
-    document.addEventListener('click', handler, true);
-    return () => document.removeEventListener('click', handler, true);
-  }, []);
-
-  const handleLeaveConfirm = useCallback(() => {
-    setLeaveGuardPending(false);
-    chatInputRef.current?.clearInput();
-    if (pendingUrlRef.current) {
-      navigate(pendingUrlRef.current);
-      pendingUrlRef.current = null;
-    }
-  }, [navigate]);
-
-  const handleLeaveCancel = useCallback(() => {
-    setLeaveGuardPending(false);
-    pendingUrlRef.current = null;
-  }, []);
-
-  const { enabled: notificationsEnabled } = useNotificationsStore();
-  const { notify, setBadge, clearBadge } = useNotifications({
-    enabled: notificationsEnabled,
+    doSendRef.current = doSend;
+    handleStopRef.current = handleStop;
   });
 
-  // Listen for send/stop events from ChatInput (which lives in Layout).
+  // D3: drain the pending chat-action queue (replaces the chat:send /
+  // chat:stop window listeners). Registered once; reads the live closures
+  // through doSendRef / handleStopRef and the active-session flag through
+  // isActiveRef, so only the active ChatPage instance (Workspace mounts one
+  // per executor) actually runs doSend / handleStop — exactly like the old
+  // listeners' `if (!isActiveRef.current) return` guards. The nonce guard
+  // guarantees each request fires once (StrictMode-safe) and preserves
+  // ordering for rapid successive sends/stops.
+  const pendingChatActions = useChatInputStore((s) => s.pendingChatActions);
+  const lastChatNonce = useRef(0);
   useEffect(() => {
-    const onSend = (e: Event) => {
-      const detail = (e as CustomEvent<{ content: string }>).detail;
-      doSend(detail.content);
-    };
-    const onStop = () => {
-      handleStop();
-    };
-    window.addEventListener('chat:send', onSend);
-    window.addEventListener('chat:stop', onStop);
-    return () => {
-      window.removeEventListener('chat:send', onSend);
-      window.removeEventListener('chat:stop', onStop);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const fresh = pendingChatActions.filter((a) => a.nonce > lastChatNonce.current);
+    if (fresh.length === 0) return;
+    lastChatNonce.current = fresh[fresh.length - 1].nonce;
+    if (isActiveRef.current) {
+      for (const action of fresh) {
+        if (action.type === 'send') {
+          doSendRef.current(action.content);
+        } else {
+          handleStopRef.current();
+        }
+      }
+    }
+    useChatInputStore.setState((s) => ({
+      pendingChatActions: s.pendingChatActions.filter((a) => a.nonce > lastChatNonce.current),
+    }));
+  }, [pendingChatActions]);
 
   useKeyboardShortcuts([
     {
@@ -225,260 +263,65 @@ export function ChatPage() {
     },
   ]);
 
-  async function handleDeleteSession() {
-    if (!id) return;
-    try {
-      await api.deleteSession(id);
-      navigate('/sessions');
-    } catch (err) {
-      console.error('Failed to delete session:', err);
-      setError({
-        type: 'server_error',
-        message: t('chat.failedToDeleteSession'),
-        retryable: false,
-      });
-    }
-  }
-
-  const locationState = location.state as { initialMessage?: string } | null;
-
+  // Keep initialMessageRef in sync with location.state, and reset the
+  // "already sent" guard whenever the target session / retry changes.
+  const initialMessageFromState = locationState?.initialMessage;
   useEffect(() => {
-    if (!id) return;
-    let cancelled = false;
+    initialMessageRef.current = initialMessageFromState;
+  }, [initialMessageFromState]);
+  useEffect(() => {
     initialSentRef.current = false;
-    
-    // Сохраняем initialMessage из location.state, если он есть
-    initialMessageRef.current = locationState?.initialMessage;
-    
-    (async () => {
-      try {
-        setLoadError(null);
-        const sessionData = await api.getSession(id);
-        if (cancelled) return;
-        setSession(sessionData);
-      } catch (err) {
-        console.error('Failed to load session:', err);
-        if (cancelled) return;
-        setLoadError(err instanceof Error ? err.message : t('chat.sessionNotFound'));
-      }
-      
-      try {
-        const messagesData = await api.getMessages(id);
-        if (cancelled) return;
-        setMessages(messagesData);
-      } catch (err) {
-        console.error('Failed to load messages:', err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [id, retryTrigger, locationState, t]);
+  }, [id, retryTrigger]);
 
   useEffect(() => {
-    if (isAtBottomRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    } else if (messages.length !== prevMessageCountRef.current) {
-      const diff = messages.length - prevMessageCountRef.current;
-      if (diff > 0) setUnreadCount((prev) => prev + diff);
-    }
-    prevMessageCountRef.current = messages.length;
-  }, [messages, streamingContent, clearBadge]);
-
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    const handleScroll = () => {
-      const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-      if (atBottom !== isAtBottomRef.current) {
-        isAtBottomRef.current = atBottom;
-        setIsAtBottom(atBottom);
-        if (atBottom) {
-          setUnreadCount(0);
-          clearBadge();
-        }
-      }
-    };
-    container.addEventListener('scroll', handleScroll, { passive: true });
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, [clearBadge]);
-
-  useEffect(() => {
+    if (!isActive) return;
     const initialMessage = initialMessageRef.current;
-    // Отправляем initialMessage только если:
-    // 1. Есть initialMessage из location.state
-    // 2. Сессия загружена
-    // 3. Ещё не отправляли в этой сессии
-    // 4. В сессии НЕТ сообщений (значит это первый заход после создания)
     if (!loading && session && initialMessage && !initialSentRef.current && messages.length === 0) {
       initialSentRef.current = true;
       doSend(initialMessage);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- doSend is intentionally excluded: initialMessage should only be sent once when available, not on every doSend recreation. initialSentRef prevents duplicate sends.
-  }, [loading, session, messages.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, session, messages.length, isActive]);
 
   function doSend(content: string) {
     const userContent = content.trim();
     if (!userContent || sending) return;
 
-    // Prepend attached file paths (Task #23). Only ready files are included.
-    const attached = chatInputRef.current?.getAttachedFiles() ?? [];
-    const fileLines = attached
-      .filter((f) => f.path)
-      .map((f) => `[Attached file: ${f.path}]`)
-      .join('\n');
-    const fullContent = fileLines
-      ? `${fileLines}\n\n${userContent}`
-      : userContent;
+    const resolvedModel = session?.model || localStorage.getItem('selectedModel') || null;
+    if (!resolvedModel) {
+      setError({
+        type: 'invalid_request',
+        message: 'No model selected for this session',
+        retryable: false,
+        suggestion: 'Pick a model from the session settings and try again.',
+      });
+      return;
+    }
 
-    const userMessage: Message = {
-      id: Date.now(),
-      sessionId: id!,
-      role: 'user',
-      content: fullContent,
-      timestamp: Date.now() / 1000,
-    };
+    const history: ChatMessage[] = messages
+      .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content))
+      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content || '' }));
 
-    setMessages(prev => [...prev, userMessage]);
-    chatInputRef.current?.clearInput();
-    setSending(true);
-    setStreamingContent('');
-    setError(null);
-    setIsWaitingForResponse(true);
-    setProcessStatus('thinking');
-    setExecutingTool(null);
-    setActiveToolCalls(new Map());
+    const attachedFilePaths = (chatInputRef.current?.getAttachedFiles() ?? [])
+      .map((f) => f.path)
+      .filter((p): p is string => Boolean(p));
+
     lastSentContentRef.current = userContent;
-    streamStartedAtRef.current = Date.now();
+    chatInputRef.current?.clearInput();
+    setError(null);
 
-    // Task #24: pre-allocate the assistant message id and append an empty
-    // message to the list right away. This way the `agent_files` SSE event
-    // (emitted before the stream's [DONE]) can find the message to attach
-    // download cards to, and we just update its content when streaming ends.
-    const assistantMessageId = Date.now() + 1;
-    currentAssistantIdRef.current = assistantMessageId;
-    setMessages(prev => [
-      ...prev,
-      {
-        id: assistantMessageId,
-        sessionId: id!,
-        role: 'assistant',
-        content: '',
-        timestamp: Date.now() / 1000,
-      },
-    ]);
-
-    const chatMessages: ChatMessage[] = [...messages, userMessage]
-      .filter(m => m.role === 'user' || (m.role === 'assistant' && m.content))
-      .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content || '' }));
-
-    const controller = api.sendMessage(chatMessages, {
-      sessionId: id,
-      model: session?.model || 'qwen3.6-plus',
-      onStatus: (status, toolName) => {
-        setProcessStatus(status);
-        if (status === 'executing_tool' && toolName) {
-          setExecutingTool(toolName);
-        } else if (status === 'generating') {
-          setExecutingTool(null);
-        }
-      },
-      onChunk: (chunk) => {
-        setIsWaitingForResponse(false);
-        setStreamingContent(prev => prev + chunk);
-      },
-      onToolCallStart: (id, toolName, label) => {
-        setActiveToolCalls(prev => {
-          const next = new Map(prev);
-          next.set(id, { toolName, label });
-          return next;
-        });
-      },
-      onToolCallEnd: (id) => {
-        setActiveToolCalls(prev => {
-          const next = new Map(prev);
-          const completed = next.get(id);
-          if (completed) {
-            setCompletedToolCalls(prev => [...prev, { id, ...completed }]);
-          }
-          next.delete(id);
-          return next;
-        });
-      },
-      onAgentFiles: (files) => {
-        if (!files || files.length === 0) return;
-        // currentAssistantIdRef may already be null if onDone fired first.
-        // Fall back to finding the last assistant message in the list.
-        const assistantId = currentAssistantIdRef.current;
-        setMessages(prev => {
-          const targetId = assistantId ?? [...prev].reverse().find(m => m.role === 'assistant')?.id;
-          if (targetId == null) return prev;
-          return prev.map(m =>
-            m.id === targetId
-              ? { ...m, agentFiles: [...(m.agentFiles ?? []), ...files] }
-              : m
-          );
-        });
-      },
-      onDone: async (fullContent) => {
-        setIsWaitingForResponse(false);
-        setActiveToolCalls(new Map());
-        setCompletedToolCalls([]);
-
-        setExecutingTool(null);
-        const latencyMs = streamStartedAtRef.current ? Date.now() - streamStartedAtRef.current : undefined;
-        streamStartedAtRef.current = null;
-        // Update the pre-allocated assistant message in-place with the final
-        // content. Clear the ref after a short delay — onAgentFiles fires
-        // after onDone (agent_files SSE arrives after [DONE]) and still needs
-        // the ref. The fallback in onAgentFiles handles the null case anyway.
-        const assistantId = currentAssistantIdRef.current;
-        if (assistantId != null) {
-          setMessages(prev => prev.map(m =>
-            m.id === assistantId
-              ? { ...m, content: fullContent, latencyMs }
-              : m
-          ));
-          setTimeout(() => { currentAssistantIdRef.current = null; }, 2000);
-        }
-        setStreamingContent('');
-        setSending(false);
-        abortRef.current = null;
-
-        if (!isAtBottomRef.current) {
-          setUnreadCount(prev => prev + 1);
-          setBadge(unreadCount + 1);
-        }
-
-        const preview = fullContent.slice(0, 100) + (fullContent.length > 100 ? '...' : '');
-        notify(t('chat.responseReceived'), preview);
-      },
-      onError: (chatError) => {
-        console.error('[ChatPage] Chat error:', chatError);
-        setError(chatError);
-        if (chatError.type === 'content_moderation' && !chatError.retryable) {
-          setIsSessionBlocked(true);
-          if (id) sessionStorage.setItem(`blocked:${id}`, 'true');
-        }
-        // Remove both the user message and the pre-allocated assistant placeholder.
-        setMessages(prev => prev.filter(m => m.id !== userMessage.id && m.id !== currentAssistantIdRef.current));
-        currentAssistantIdRef.current = null;
-        setIsWaitingForResponse(false);
-        setStreamingContent('');
-        setSending(false);
-        abortRef.current = null;
-      },
+    useChatInputStore.getState().startStream(id!, {
+      model: resolvedModel,
+      history,
+      content: userContent,
+      attachedFilePaths,
     });
-
-    abortRef.current = controller;
   }
 
   function handleRetry() {
     if (!lastSentContentRef.current) return;
     setError(null);
+    if (id) clearLive(id);
     doSend(lastSentContentRef.current);
   }
 
@@ -495,29 +338,17 @@ export function ChatPage() {
   }
 
   function handleStop() {
-    abortRef.current?.abort();
-    if (streamingContent) {
-      const fullContent = streamingContent + '\n\n*[stopped]*';
-      const assistantId = currentAssistantIdRef.current;
-      if (assistantId != null) {
-        setMessages(prev => prev.map(m =>
-          m.id === assistantId ? { ...m, content: fullContent } : m
-        ));
-        currentAssistantIdRef.current = null;
-      } else {
-        const assistantMessage: Message = {
-          id: Date.now() + 1,
-          sessionId: id!,
-          role: 'assistant',
-          content: fullContent,
-          timestamp: Date.now() / 1000,
-        };
-        setMessages(prev => [...prev, assistantMessage]);
-      }
-    }
-    setStreamingContent('');
-    setSending(false);
-    abortRef.current = null;
+    if (id) useChatInputStore.getState().stopStream(id);
+  }
+
+  if (!id) {
+    return (
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-6 text-center">
+        <h2 className="text-lg font-semibold text-fg-primary mb-1">{t('chat.noActiveSessionTitle', { defaultValue: 'No active session' })}</h2>
+        <p className="text-sm text-fg-muted max-w-sm mb-6">{t('chat.noActiveSessionDesc', { defaultValue: 'Open the Sessions tab and choose a session for this executor.' })}</p>
+        <OpenSessionsButton />
+      </div>
+    );
   }
 
   if (!loading && loadError && !session) {
@@ -579,223 +410,43 @@ export function ChatPage() {
   }
 
   return (
-    <div ref={scrollContainerRef} className="flex-1 min-h-0 flex flex-col relative overflow-y-auto">
+    <div className="flex-1 min-h-0 flex flex-col relative">
+      <MessageList
+        sessionId={id}
+        messages={messages}
+        session={session}
+        copiedMessageId={copiedMessageId}
+        onCopyMessage={handleCopyMessage}
+        isAtBottom={isAtBottom}
+        isAtBottomRef={isAtBottomRef}
+        unreadCount={unreadCount}
+        onAtBottomChange={onAtBottomChange}
+        overlay={{
+          showEmpty: messages.length === 0,
+          showPendingUserBubble,
+          pendingUserContent,
+          liveActiveToolCalls,
+          liveCompletedToolCalls,
+          showStreamingBubble,
+          streamingContent,
+          sending,
+          liveAgentFiles,
+          isWaiting,
+        }}
+      />
 
-      <div>
-          <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 space-y-3">
-            {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <NoMessagesIllustration className="w-20 h-20 mb-4 text-fg-muted" />
-              <h2 className="text-lg font-semibold text-fg-primary mb-1">
-                {t('chat.startConversation')}
-              </h2>
-              <p className="text-sm text-fg-muted max-w-sm mb-8">
-                {t('chat.startConversationDesc')}
-              </p>
-              {/* Prompt suggestions — click to prefill the chat input */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
-                {[
-                  t('chat.suggestion1', { defaultValue: 'Объясни простыми словами' }),
-                  t('chat.suggestion2', { defaultValue: 'Помоги составить план' }),
-                  t('chat.suggestion3', { defaultValue: 'Исправь ошибки в тексте' }),
-                  t('chat.suggestion4', { defaultValue: 'Переведи на русский' }),
-                ].map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    onClick={() => window.dispatchEvent(new CustomEvent('chat:prefill', { detail: { text: suggestion } }))}
-                    className="text-left px-4 py-3 rounded-xl border border-border-default bg-bg-primary hover:bg-bg-secondary hover:border-blue-300 dark:hover:border-blue-700 transition-all text-sm text-fg-secondary"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {(() => {
-            const items: React.ReactNode[] = [];
-
-            // Split messages into turn-blocks: each block starts with a user message
-            // (or the implicit first turn). All tool calls within a block are
-            // collected and rendered as a single collapsible row before the
-            // final assistant message of that block.
-            type Block = { user: typeof messages[0] | null; tools: typeof messages; assistant: typeof messages[0] | null };
-            const blocks: Block[] = [];
-            let cur: Block = { user: null, tools: [], assistant: null };
-
-            for (const msg of messages) {
-              if (msg.role === 'user') {
-                if (cur.user || cur.tools.length || cur.assistant) blocks.push(cur);
-                cur = { user: msg, tools: [], assistant: null };
-              } else if (msg.role === 'tool') {
-                cur.tools.push(msg);
-              } else if (msg.role === 'assistant') {
-                if (cur.assistant) {
-                  // intermediate empty assistant — skip
-                  if (!cur.assistant.content?.trim() && !cur.assistant.agentFiles?.length) {
-                    // discard
-                  } else {
-                    blocks.push(cur);
-                    cur = { user: null, tools: [], assistant: msg };
-                    continue;
-                  }
-                }
-                cur.assistant = msg;
-              }
-            }
-            blocks.push(cur);
-
-            for (const block of blocks) {
-              // User bubble
-              if (block.user) {
-                const m = block.user;
-                items.push(
-                  <div key={m.id} className="flex justify-end group">
-                    <div className="max-w-[75%] min-w-0">
-                      <div className="px-3 py-2 rounded-2xl rounded-tr-sm bg-white dark:bg-gray-800 text-fg-primary text-sm shadow-sm">
-                        <MarkdownRenderer content={m.content || ''} className="user-message" />
-                      </div>
-                      <div className="flex justify-end mt-1 px-1">
-                        <button type="button" onClick={() => handleCopyMessage(m.id, m.content || '')}
-                          aria-label={copiedMessageId === m.id ? t('chat.messageCopied') : t('chat.copyMessage')}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md bg-bg-secondary text-fg-muted hover:text-fg-primary">
-                          {copiedMessageId === m.id ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              // All tool calls for this turn — one collapsed row
-              if (block.tools.length > 0) {
-                const groupKey = `tool-group-${block.tools[0].id}`;
-                items.push(
-                  <details key={groupKey} className="group">
-                    <summary className="flex items-center gap-1.5 cursor-pointer list-none text-xs text-fg-muted hover:text-fg-secondary transition-colors w-fit">
-                      <svg className="w-3 h-3 transition-transform group-open:rotate-90 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                      {t('chat.completedTools', { count: block.tools.length })}
-                    </summary>
-                    <div className="mt-1 ml-4 space-y-0.5">
-                      {block.tools.map(tc => (
-                        <div key={tc.id} className="flex items-center gap-1.5 text-xs text-fg-muted">
-                          <Check className="w-3 h-3 text-green-500 flex-shrink-0" />
-                          <span className="font-mono">{tc.toolName}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                );
-              }
-
-              // Assistant message
-              if (block.assistant) {
-                const m = block.assistant;
-                if (m.content?.trim() || m.agentFiles?.length) {
-                  items.push(
-                    <div key={m.id} className="group">
-                      <div className="text-sm text-fg-primary">
-                        <MarkdownRenderer content={m.content || ''} className="assistant-message" />
-                      </div>
-                      {m.agentFiles && m.agentFiles.length > 0 && id && (
-                        <div className="mt-2 space-y-1">
-                          <AgentFileGroup files={m.agentFiles} sessionId={id} />
-                        </div>
-                      )}
-                      <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {m.latencyMs !== undefined && (
-                          <span className="text-xs text-fg-muted mr-1">{(m.latencyMs / 1000).toFixed(1)}s</span>
-                        )}
-                        <button type="button" onClick={() => handleCopyMessage(m.id, m.content || '')}
-                          aria-label={copiedMessageId === m.id ? t('chat.messageCopied') : t('chat.copyMessage')}
-                          className="p-1 rounded-md bg-bg-secondary text-fg-muted hover:text-fg-primary transition-colors">
-                          {copiedMessageId === m.id ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                }
-              }
-            }
-            return items;
-          })()}
-
-          {activeToolCalls.size > 0 && (
-            <div key="active-tools" className="space-y-1">
-              {Array.from(activeToolCalls.entries()).map(([tcId, tc]) => (
-                <div key={tcId} className="flex items-center gap-2 text-xs text-fg-muted">
-                  <div className="w-1.5 h-1.5 bg-fg-muted rounded-full animate-pulse flex-shrink-0" />
-                  <span className="font-mono">{tc.toolName}</span>
-                  {tc.label && <span>{tc.label}</span>}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {completedToolCalls.length > 0 && (
-            <details key="completed-tools" className="group">
-              <summary className="flex items-center gap-1.5 cursor-pointer list-none text-xs text-fg-muted hover:text-fg-secondary transition-colors w-fit">
-                <svg className="w-3 h-3 transition-transform group-open:rotate-90 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-                {t('chat.completedTools', { count: completedToolCalls.length })}
-              </summary>
-              <div className="mt-1 ml-4 space-y-0.5">
-                {completedToolCalls.map(tc => (
-                  <div key={tc.id} className="flex items-center gap-1.5 text-xs text-fg-muted">
-                    <Check className="w-3 h-3 text-green-500 flex-shrink-0" />
-                    <span className="font-mono">{tc.toolName}</span>
-                    {tc.label && <span>{tc.label}</span>}
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
-
-          {streamingContent && (
-            <div key="streaming" className="text-sm text-fg-primary">
-              <MarkdownRenderer content={streamingContent} className="assistant-message" />
-              <span className="inline-block w-0.5 h-4 bg-fg-primary align-middle ml-0.5 animate-[blink_1s_step-end_infinite]" aria-hidden="true" />
-            </div>
-          )}
-
-          {isWaitingForResponse && !streamingContent && activeToolCalls.size === 0 && (
-            <div key="waiting" className="flex items-center gap-1.5 py-1">
-              <div className="w-1.5 h-1.5 bg-fg-muted rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <div className="w-1.5 h-1.5 bg-fg-muted rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <div className="w-1.5 h-1.5 bg-fg-muted rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-            </div>
-          )}
-          
-          <div ref={messagesEndRef} />
-        </div>
-
-        {!isAtBottom && (
-          <div className="sticky bottom-3 flex justify-center pointer-events-none">
-            <button
-              type="button"
-              onClick={() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })}
-              aria-label={unreadCount > 0 ? t('chat.scrollToNewMessages', { count: unreadCount }) : t('chat.scrollToBottom', { defaultValue: 'Scroll to bottom' })}
-              className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-bg-primary border border-border-default hover:bg-bg-secondary text-fg-primary text-xs font-medium shadow-lg transition-colors"
-            >
-              <ChevronDown className="w-3.5 h-3.5" />
-              {unreadCount > 0 ? t('chat.newMessagesBadge', { count: unreadCount }) : t('chat.scrollToBottom', { defaultValue: '↓' })}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {error && (
+      {chatError && (
         <div className="px-3 sm:px-4 py-3 bg-bg-primary border-t border-border-default">
           <div className="max-w-4xl mx-auto">
             <ErrorMessage
-              error={error}
-              onRetry={error.retryable ? handleRetry : undefined}
+              error={chatError}
+              onRetry={chatError.retryable ? handleRetry : undefined}
             />
             <button
-              onClick={() => setError(null)}
+              onClick={() => {
+                if (error) setError(null);
+                else if (id) clearLive(id);
+              }}
               aria-label={t('chat.closeErrorMessage')}
               className="text-xs text-fg-muted hover:text-fg-secondary mt-2"
             >
@@ -805,35 +456,51 @@ export function ChatPage() {
         </div>
       )}
 
-      {/* UX-4: Navigation guard modal */}
-      {leaveGuardPending && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-bg-primary rounded-xl border border-border-default shadow-xl max-w-sm w-full p-6">
-            <h2 className="text-base font-semibold text-fg-primary mb-2">
-              {t('chat.leavePageTitle')}
-            </h2>
-            <p className="text-sm text-fg-secondary mb-5">
-              {t('chat.leavePageDesc')}
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={handleLeaveCancel}
-                className="px-4 py-2 rounded-lg bg-bg-secondary hover:bg-bg-muted text-fg-primary text-sm font-medium transition-colors"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                type="button"
-                onClick={handleLeaveConfirm}
-                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"
-              >
-                {t('chat.leavePageConfirm')}
-              </button>
-            </div>
+      {/* C2/UX-4: Navigation guard modal */}
+      <Modal
+        isOpen={leaveGuardPending}
+        onClose={handleLeaveCancel}
+        title={t('chat.leavePageTitle')}
+        size="sm"
+        closeOnBackdrop={false}
+        showCloseButton={false}
+      >
+        <div className="p-6">
+          <p className="text-sm text-fg-secondary mb-5">
+            {t('chat.leavePageDesc')}
+          </p>
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={handleLeaveCancel}
+              className="px-4 py-2 rounded-lg bg-bg-secondary hover:bg-bg-muted text-fg-primary text-sm font-medium transition-colors"
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={handleLeaveConfirm}
+              className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"
+            >
+              {t('chat.leavePageConfirm')}
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
+  );
+}
+
+function OpenSessionsButton() {
+  const { t } = useTranslation();
+  const setActiveTab = useWorkspaceStore((s) => s.setActiveTab);
+  return (
+    <button
+      type="button"
+      onClick={() => setActiveTab('sessions')}
+      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+    >
+      {t('chat.openSessionsTab', { defaultValue: 'Open Sessions' })}
+    </button>
   );
 }

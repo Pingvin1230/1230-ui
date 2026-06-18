@@ -1,6 +1,7 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Home, MessageSquare, Plus } from 'lucide-react';
+import { useWorkspaceStore } from '../store/workspaceStore';
 
 interface NavItem {
   to: string;
@@ -12,6 +13,8 @@ interface NavItem {
 export function MobileNav() {
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
+  const setActiveTab = useWorkspaceStore((s) => s.setActiveTab);
 
   const ITEMS: NavItem[] = [
     { to: '/', label: t('nav.home'), icon: Home, end: true },
@@ -31,6 +34,12 @@ export function MobileNav() {
             <NavLink
               to={to}
               end={end}
+              onClick={() => {
+                if (to === '/sessions') {
+                  setActiveTab('sessions');
+                  navigate('/sessions');
+                }
+              }}
               className={({ isActive }) => {
                 // On /chat/:id highlight Sessions as the parent section
                 const active = isActive || (to === '/sessions' && isChat);

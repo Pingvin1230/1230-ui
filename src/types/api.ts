@@ -7,6 +7,7 @@ export interface Assistant {
   style: string | null;
   depth: string | null;
   systemPrompt: string | null;
+  executor: 'hermes' | 'opencode-1230';
   isArchived: boolean;
   archivedAt: string | null;
   createdAt: string;
@@ -28,6 +29,7 @@ export interface Session {
   pinned?: number;
   archived?: number;
   assistant?: Assistant | null;
+  executor: 'hermes' | 'opencode-1230';
   fileCount?: number;
 }
 
@@ -52,13 +54,13 @@ export interface Message {
   sessionId: string;
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string | null;
-  toolCallId?: string;
-  toolCalls?: ToolCall[];
-  toolName?: string;
+  toolCallId?: string | null;
+  toolCalls?: ToolCall[] | null;
+  toolName?: string | null;
   timestamp: number;
-  tokenCount?: number;
-  latencyMs?: number;
-  agentFiles?: AgentFile[];
+  tokenCount?: number | null;
+  latencyMs?: number | null;
+  agentFiles?: AgentFile[] | null;
 }
 
 export interface ApiResponse<T> {
@@ -78,4 +80,31 @@ export interface Application {
   config: Record<string, unknown>;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface CloudConnection {
+  id: number;
+  label: string;
+  url: string;
+  username: string;
+  status: 'unknown' | 'ok' | 'auth_failed' | 'network_error';
+  lastTestedAt: number | null;
+  lastError: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CloudEntry {
+  path: string;
+  name: string;
+  isDirectory: boolean;
+  size: number | null;
+  modifiedAt: number | null;
+  mimeType: string | null;
+}
+
+export interface IssuedLink {
+  path: string;
+  urlPath: string;
+  filename: string;
 }

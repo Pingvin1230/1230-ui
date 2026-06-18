@@ -38,88 +38,145 @@ npm run preview      # Preview production build locally
 ```
 1230-ui/
 ├── src/                          # Frontend (React 19 + TypeScript 6 + Vite 8)
+│   ├── applications/             # Application plugins (right split-pane)
+│   │   ├── registry.ts           #   key → React component map
+│   │   ├── types.ts              #   ApplicationComponentProps
+│   │   ├── file-preview/         #   FilePreviewApp
+│   │   ├── file-manager/         #   FileManagerApp
+│   │   ├── cloud-connect/        #   CloudConnectApp (WebDAV browser)
+│   │   ├── tududi/               #   TududiApp (Tasks / Notes / Projects)
+│   │   │   ├── TududiApp.tsx
+│   │   │   └── views/
+│   │   │       ├── TasksView.tsx
+│   │   │       ├── TaskDetail.tsx
+│   │   │       ├── NotesView.tsx
+│   │   │       └── ProjectsView.tsx
+│   │   └── placeholder/          #   PlaceholderApp (default for unknown keys)
 │   ├── components/               # UI components
+│   │   ├── ApplicationsPane.tsx  # Right split-pane container
 │   │   ├── ApiKeyInput.tsx       # Password input with show/hide toggle
+│   │   ├── AgentFileCard.tsx     # In-message download card
 │   │   ├── AssistantCard.tsx     # Legacy horizontal card (superseded by AssistantManageTile)
 │   │   ├── AssistantManageTile.tsx # Tile for /assistants management page (portal dropdown)
-│   │   ├── AssistantTile.tsx     # Tile for /new session page
+│   │   ├── AssistantTile.tsx     # Tile for /new session page; "via OpenCode" badge
 │   │   ├── ColorPicker.tsx       # 8-color radio palette for assistant editor
 │   │   ├── ErrorBoundary.tsx     # Catches React component errors
 │   │   ├── ErrorMessage.tsx      # Structured API error display
 │   │   ├── HermesStatusIndicator.tsx # Header status icon (green/red/gray) + tooltip
+│   │   ├── OpenCodeStatusIndicator.tsx # OpenCode executor status dot
+│   │   ├── OpenCodeProviderCard.tsx    # OpenCode-specific provider row
 │   │   ├── IconPicker.tsx        # 30-emoji picker for assistant editor
 │   │   ├── Layout.tsx            # Main layout (Navbar + Sidebar + Content)
 │   │   ├── MarkdownRenderer.tsx  # Markdown + syntax highlighting
 │   │   ├── MobileNav.tsx         # Bottom nav for mobile (hidden on md+, iOS safe-area)
 │   │   ├── Modal.tsx             # Reusable modal with focus-trap
-│   │   ├── Navbar.tsx            # Top bar (search + Hermes status + user menu)
+│   │   ├── Navbar.tsx            # Top bar (search + status + apps pane toggle + user menu)
 │   │   ├── PageSkeleton.tsx      # Skeleton for lazy-loaded pages
 │   │   ├── ProviderCard.tsx      # Single provider row in Providers page
 │   │   ├── SessionCard.tsx       # Session card: 3-row layout, right-side checkbox (zero layout shift), swipe-to-delete, long-press bulk
 │   │   ├── Sidebar.tsx           # Left rail nav — desktop only (hidden md:flex)
 │   │   ├── Toast.tsx             # Toast notifications with queue and auto-dismiss
-│   │   └── ToolCall.tsx          # Collapsible tool-call visualization
+│   │   ├── ToolCall.tsx          # Collapsible tool-call visualization
+│   │   └── settings/             # Shared sub-components for /settings/* pages
 │   ├── pages/                    # Application pages (all lazy-loaded via React.lazy)
-│   │   ├── AssistantEditPage.tsx # Create/edit assistant (sticky action bar)
+│   │   ├── AssistantEditPage.tsx # /assistants/:id, /assistants/new — create/edit + executor picker
 │   │   ├── AssistantsPage.tsx    # /assistants — tile grid, tab filters, context menus
-│   │   ├── ChatPage.tsx          # Chat interface (streaming SSE, markdown, tool calls)
-│   │   ├── DashboardPage.tsx     # Home: greeting, Quick Chat (pill model picker), Assistants tiles, Recent Sessions
+│   │   ├── ApplicationsPage.tsx  # /applications — enable / reorder applications
+│   │   ├── ChatPage.tsx          # /chat/:id — streaming chat, markdown, tool calls, apps pane
+│   │   ├── CloudSettingsPage.tsx # /settings/cloud — Cloud Connect CRUD
+│   │   ├── DashboardPage.tsx     # / — greeting, Quick Chat, Assistants tiles, Recent Sessions
+│   │   ├── HermesSettingsPage.tsx # /settings/executors/hermes-agent
 │   │   ├── NewSessionPage.tsx    # /new — assistant tiles + standard model tile
+│   │   ├── OpenCodeSettingsPage.tsx # /settings/executors/opencode — URL / username / password
 │   │   ├── ProvidersPage.tsx     # /settings/providers — API key management
-│   │   ├── SessionsPage.tsx      # Session list (react-virtuoso, date grouping)
-│   │   └── SettingsPage.tsx      # Models, system commands, Hermes status, About
+│   │   ├── SessionsPage.tsx      # /sessions — virtualised list, search, bulk actions
+│   │   ├── SettingsPage.tsx      # /settings — main settings hub
+│   │   └── TududiSettingsPage.tsx # /settings/tududi — Tududi connection status
 │   ├── hooks/                    # React hooks
-│   │   ├── useHermesStatusPoll.ts # Polls GET /api/system/status every 60 s
+│   │   ├── useDocumentVisibility.ts
+│   │   ├── useExecutorConfig.ts  # Read / write /api/system/executor-config
+│   │   ├── useHermesStatusPoll.ts # Polls /api/system/status every 60 s
 │   │   ├── useKeyboardShortcuts.ts # Ctrl+K / Ctrl+N / Ctrl+Enter
+│   │   ├── useMobile.ts          # < 768 px
 │   │   ├── useNotifications.ts   # Browser Notification API helpers
+│   │   ├── useOpenCodeStatusPoll.ts # Polls /api/system/executors every 60 s
 │   │   ├── useSwipe.ts           # Native touch: swipe-left + long-press (no deps)
+│   │   ├── useTimeBracketColor.ts
 │   │   └── useToast.ts           # Toast queue API
 │   ├── lib/                      # Utilities
 │   │   ├── api.ts                # API client (fetch, retry, SSE streaming)
+│   │   ├── api/                  # Per-domain API clients
+│   │   │   └── tududi.ts         #   Tududi proxy client + types + TududiApiError
 │   │   ├── assistantColors.ts    # Color → Tailwind class map + FALLBACK_COLOR
-│   │   └── time.ts               # formatTimeAgo, formatFullDateTime,
-│   │                             # formatRelativeTimestamp (shared, i18n-aware)
+│   │   ├── fileUtils.ts          # formatFileSize
+│   │   └── time.ts               # formatTimeAgo, formatFullDateTime, formatRelativeTimestamp
 │   ├── store/                    # Zustand stores (all persisted to localStorage)
-│   │   ├── assistantsStore.ts    # Assistants fetch / upsert / remove
-│   │   ├── hermesStatusStore.ts  # Hermes status cache (5-min staleness guard)
-│   │   ├── notificationsStore.ts # Browser notification toggle
-│   │   ├── searchStore.ts        # Global session search query (URL-synced)
-│   │   ├── sessionStore.ts       # Session state
-│   │   ├── sessionsSortStore.ts  # created | lastMessage sort mode
-│   │   ├── sidebarStore.ts       # Sidebar open/closed
-│   │   └── themeStore.ts         # Dark/light mode
+│   │   ├── applicationsStore.ts  #   application registry, fetch / update
+│   │   ├── appsPaneStore.ts      #   right split-pane toggle
+│   │   ├── assistantsStore.ts    #   assistants list, fetch / upsert / remove
+│   │   ├── chatInputStore.ts     #   draft message text, attached files
+│   │   ├── cloudConnectStore.ts  #   cloud connections, current path, selection
+│   │   ├── filePreviewStore.ts   #   selected file id, viewer mode
+│   │   ├── hermesStatusStore.ts  #   Hermes status cache (5-min staleness guard)
+│   │   ├── notificationsStore.ts #   Browser notification toggle
+│   │   ├── openCodeStatusStore.ts #  OpenCode executor health
+│   │   ├── searchStore.ts        #   global session search query (URL-synced)
+│   │   ├── sessionStore.ts       #   session state
+│   │   ├── sessionsSortStore.ts  #   created | lastMessage sort mode
+│   │   ├── sidebarStore.ts       #   sidebar open/closed
+│   │   └── themeStore.ts         #   dark/light mode
 │   ├── i18n/                     # 4-language translations (en, ru, es, de)
 │   ├── types/                    # TypeScript type definitions
-│   │   ├── api.ts                # Session, Message, Assistant API shapes
-│   │   └── assistant.ts          # ASSISTANT_PALETTE, ASSISTANT_ICONS, AssistantColorId
+│   │   ├── api.ts                #   Session, Message, Assistant, Application, CloudConnection, IssuedLink API shapes
+│   │   ├── assistant.ts          #   ASSISTANT_PALETTE, ASSISTANT_ICONS, EXECUTOR_OPTIONS, AssistantColorId, AssistantExecutorId
+│   │   └── session.ts
 │   ├── assets/                   # SVG illustrations (empty states)
 │   ├── styles/                   # markdown.css (prose styles for chat)
 │   ├── App.tsx                   # Root component (routes, lazy pages, ErrorBoundary)
 │   ├── index.css                 # Design tokens (@theme), dark mode vars, base styles
 │   └── main.tsx                  # Entry point
 │
-├── server.js                     # Entry point (39 lines): open DBs → migrate → seed → listen
-├── app.js                        # Express app: middleware + route mounting (87 lines)
-├── config.js                     # Zod-validated config loader
+├── server.js                     # Entry point: open DBs → migrate → seed → load executor config → cleanup expired files → listen
+├── app.js                        # Express app: middleware + route mounting
+├── config.js                     # Zod-validated config loader (env + system_settings override)
 │
 ├── db/                           # Database layer
 │   ├── connections.js            # Open db / hermesDbWrite / uiDb; export closeAll()
 │   ├── migrate.js                # initSchema(): CREATE TABLE + idempotent ALTER TABLE
-│   ├── seed.js                   # seedStarterAssistants()
-│   └── helpers.js                # rowToAssistant, getDefaultModelId, getProviderFromModel
+│   ├── seed.js                   # seedStarterAssistants() + seedStarterApplications() (4 apps)
+│   ├── helpers.js                # rowToAssistant, getDefaultModelId, getProviderFromModel, getProviderForModelId
+│   └── fileTypes.js              # Shared MIME map, ALLOWED_EXTENSIONS
+│
+├── lib/                          # Backend libraries
+│   ├── adapters/                 # Executor adapters (v0.9.2+)
+│   │   ├── base.js               #   ExecutorAdapter abstract class + ChatContext / ChatEvent typedefs
+│   │   ├── hermes.js             #   HermesAdapter — subprocess + NDJSON bridge to run_chat.py
+│   │   ├── opencode.js           #   OpenCodeAdapter — HTTP + SSE to opencode serve
+│   │   └── index.js              #   ADAPTERS registry (slug → instance)
+│   ├── cloud/
+│   │   └── crypto.js             # AES-256-GCM encrypt/decrypt + HMAC-SHA256 signed URL tokens
+│   └── opencode.js               # Legacy OpenCodeClient REST wrapper (used by lib/adapters/opencode.js)
 │
 ├── routes/                       # Express route modules (one per domain)
-│   ├── system.js                 # /api/system/*, /api/health
-│   ├── sessions.js               # /api/sessions/*, /api/messages
-│   ├── chat.js                   # /api/chat (SSE streaming)
-│   ├── models.js                 # /api/models/*
-│   ├── assistants.js             # /api/assistants/*
-│   ├── providers.js              # /api/providers/*
-│   └── likes.js                  # /api/like
+│   ├── applications.js           # /api/applications
+│   ├── assistants.js             # /api/assistants
+│   ├── chat.js                   # /api/chat (executor dispatcher + SSE)
+│   ├── cloudConnections.js       # /api/cloud-connections
+│   ├── cloudFiles.js             # /api/cloud
+│   ├── files.js                  # /api/sessions/:id/files
+│   ├── globalFiles.js            # /api/files (File Manager app)
+│   ├── likes.js                  # /api/like
+│   ├── models.js                 # /api/models
+│   ├── opencode.js               # /api/opencode (small OpenCode-facing router)
+│   ├── providers.js              # /api/providers
+│   ├── sessions.js               # /api/sessions, /api/messages
+│   ├── system.js                 # /api/system, /api/health
+│   └── tududi.js                 # /api/tududi/* proxy
 │
 ├── middleware/
-│   ├── security.js               # Runtime: rate limiters + recursive XSS sanitization
-│   └── security.ts               # TypeScript source (authoritative, checked by tsc)
+│   ├── security.js               # Rate limiters + recursive XSS sanitization
+│   ├── logger.js                 # Request logging (SSE/stream-aware)
+│   └── errorHandler.js           # Central { error } envelope for unhandled errors
 │
 ├── scripts/                      # Python helpers (interface to Hermes)
 │   ├── save_messages.py          # Save messages to Hermes DB
@@ -127,13 +184,21 @@ npm run preview      # Preview production build locally
 │   ├── list_bundled_providers.py # Enumerate Hermes api_key providers with metadata
 │   └── manage_provider_key.py    # Atomic set/remove of ~/.hermes/.env key
 │
+├── run_chat.py                   # Per-request Hermes wrapper (spawned by routes/chat.js)
+│
 ├── tests/                        # Backend tests (Vitest)
-│   └── security.test.js          # 9 tests for sanitizeBody
+│   ├── adapters-hermes.test.js
+│   ├── adapters-opencode.test.js
+│   ├── adapters-registry.test.js
+│   ├── opencode-client.test.js
+│   ├── opencode-parseSseChunk.test.js
+│   └── security.test.js
 ├── .github/
 │   └── workflows/
 │       └── ci.yml                # CI: lint + typecheck + test + build on push/PR
 ├── data/                         # Runtime data (git-ignored)
-│   └── 1230-ui.db                # UI database (SQLite, auto-created on first run)
+│   ├── 1230-ui.db                # UI database (SQLite, auto-created on first run)
+│   └── uploads/                  # User-uploaded files
 ├── dist/                         # Production build output (git-ignored)
 ├── public/                       # Static files served as-is
 ├── docs/                         # Developer documentation
@@ -150,11 +215,25 @@ npm run preview      # Preview production build locally
 └── .gitignore
 ```
 
+### Adding a new executor (one-file change)
+
+The dispatcher in `routes/chat.js` looks up the executor by slug from `lib/adapters/index.js`. Adding a third backend is a one-file change — see [EXECUTOR_ADAPTERS.md](EXECUTOR_ADAPTERS.md) for the full step-by-step guide, the `ExecutorAdapter` contract, and a worked `claude-direct` example.
+
+### Adding a new application (three-file change)
+
+To add a new right-pane app, you need to:
+
+1. **Backend** — register the app in `db/seed.js` with `INSERT OR IGNORE INTO applications (key, name, icon, …)`. Run `npm test` to confirm the seed is idempotent on existing installs.
+2. **Frontend** — create `src/applications/<key>/` with `<Key>App.tsx` and an `index.ts` re-export, then add an entry to `src/applications/registry.ts`. The component must accept `ApplicationComponentProps` (`{ sessionId, config }`).
+3. **Routing** — none. The Applications pane reads the enabled apps list from `GET /api/applications` and resolves each one through the registry. No code in `App.tsx`, `Layout.tsx`, or `ApplicationsPane.tsx` needs to change.
+
+If the app needs a server-side proxy (like Tududi), add a new router under `routes/` and mount it in `app.js`.
+
 ## Code Style
 
 ### TypeScript
 - **Frontend:** 100% TypeScript. New files go in `src/`.
-- **Backend middleware:** Write in `middleware/security.ts`; the compiled output `security.js` stays as the runtime entry (server.js is still plain JS).
+- **Backend:** plain JavaScript (ESM). Security/rate-limit/XSS middleware lives in `middleware/security.js`; `middleware/logger.js` (request logging) and `middleware/errorHandler.js` (central error envelope) alongside it. `server.js` / `app.js` / `routes/*` / `lib/*` are all JS.
 - Strict mode is on: `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch`.
 - API shapes belong in `src/types/api.ts`.
 

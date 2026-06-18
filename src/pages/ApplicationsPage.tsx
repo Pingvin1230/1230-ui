@@ -1,9 +1,26 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ArrowUp, ArrowDown, Eye, Settings } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowUp,
+  ArrowDown,
+  Eye,
+  FolderOpen,
+  Cloud,
+  ListChecks,
+  Settings,
+  type LucideIcon,
+} from 'lucide-react';
 import { useApplicationsStore } from '../store/applicationsStore';
 import type { Application } from '../types/api';
+
+const APPLICATION_ICONS: Record<string, LucideIcon> = {
+  Eye,
+  FolderOpen,
+  Cloud,
+  ListChecks,
+};
 
 export function ApplicationsPage() {
   const { t } = useTranslation();
@@ -80,9 +97,7 @@ export function ApplicationsPage() {
             </div>
           ) : (
             sortedApps.map((app, idx) => {
-              const IconComponent = app.icon
-                ? (Eye as React.ComponentType<{ className?: string }>)
-                : null;
+              const IconComponent = app.icon ? APPLICATION_ICONS[app.icon] ?? null : null;
 
               return (
                 <div

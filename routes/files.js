@@ -30,6 +30,7 @@ import multer from 'multer';
 import { fileURLToPath } from 'url';
 import { apiLimiter } from '../middleware/security.js';
 import { getMimeTypeForPath, ALLOWED_EXTENSIONS } from '../db/fileTypes.js';
+import { fixFilenameEncoding } from '../lib/fileUtils.js';
 import { db, uiDb } from '../db/connections.js';
 import config from '../config.js';
 
@@ -101,25 +102,6 @@ const upload = multer({
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-
-/**
- * Fixes double-encoded UTF-8 filenames (mojibake).
- * Some browsers/upload paths send UTF-8 bytes that get re-encoded as UTF-8.
- * E.g. "Снимок" → "Ð¡Ð½Ð¸Ð¼Ð¾Ðº" in the DB.
- */
-function fixFilenameEncoding(name) {
-  if (!name) return name;
-  try {
-    // If the string contains characters in the Ð/Ñ range (U+00C0–U+00FF),
-    // it's likely double-encoded UTF-8.
-    if (/[\u00C0-\u00FF]/.test(name)) {
-      return Buffer.from(name, 'latin1').toString('utf8');
-    }
-  } catch {
-    // ignore — return original
-  }
-  return name;
-}
 
 function rowToFile(row, projectRootAbs) {
   return {
@@ -297,7 +279,8 @@ router.get('/:id/files/:fileId/content', (req, res) => {
   const stat = fs.statSync(absolutePath);
   res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
   res.setHeader('Content-Length', stat.size);
-  res.setHeader('Content-Disposition', `inline; filename="${row.filename}"`);
+  const encodedFilename = encodeURIComponent(row.filename);
+  res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodedFilename}`);
   fs.createReadStream(absolutePath).pipe(res);
 });
 
