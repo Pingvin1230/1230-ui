@@ -2,14 +2,8 @@
   "apps": [{
     "name": "1230-ui",
     "script": "server.js",
-    "cwd": "/opt/1230-ui",
+    "cwd": "./",
     "node_args": "--experimental-modules",
-    "env": {
-      "PORT": 3001,
-      "HERMES_DB_PATH": "/home/pingvin1230/.hermes/state.db",
-      "HERMES_API_URL": "http://127.0.0.1:8642",
-      "HERMES_API_KEY": "1230-ui-secret-key-2026"
-    },
     "instances": 1,
     "autorestart": true,
     "watch": false,
