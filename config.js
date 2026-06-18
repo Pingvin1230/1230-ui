@@ -55,10 +55,11 @@ function validateConfig() {
     TUDUDI_TIMEOUT_MS: process.env.TUDUDI_TIMEOUT_MS,
   };
 
+  const isTest = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
   const parsed = envSchema.safeParse(raw);
 
-  if (!parsed.success) {
-    const errors = parsed.error.errors.map(e => {
+  if (!parsed.success && !isTest) {
+    const errors = parsed.error.issues.map(e => {
       const field = e.path.join('.');
       const issue = e.message;
       switch (field) {
@@ -81,45 +82,69 @@ function validateConfig() {
     process.exit(1);
   }
 
-  const cfg = parsed.data;
+  // In test mode without a .env (e.g. CI), fall back to defaults so importing
+  // this module never crashes the test runner. Production stays fail-fast above.
+  const cfg = parsed.success ? parsed.data : {
+    PORT: 3001,
+    HERMES_DB_PATH: raw.HERMES_DB_PATH,
+    UI_DB_PATH: raw.UI_DB_PATH || path.join(__dirname, 'data', '1230-ui.db'),
+    HERMES_AGENT_PATH: raw.HERMES_AGENT_PATH || '/usr/local/lib/hermes-agent',
+    HERMES_API_URL: raw.HERMES_API_URL || 'http://127.0.0.1:8642',
+    HERMES_API_KEY: raw.HERMES_API_KEY || 'test-key',
+    HERMES_PYTHON_PATH: raw.HERMES_PYTHON_PATH || 'python3',
+    CORS_ORIGINS: raw.CORS_ORIGINS,
+    LIKES_WEBHOOK_URL: raw.LIKES_WEBHOOK_URL,
+    LIKES_COOLDOWN_SEC: 3600,
+    FILE_RETENTION_DAYS: 30,
+    CLOUD_CONNECT_KEY: raw.CLOUD_CONNECT_KEY,
+    OPENCODE_URL: raw.OPENCODE_URL || 'http://127.0.0.1:4097',
+    OPENCODE_SERVER_USERNAME: raw.OPENCODE_SERVER_USERNAME,
+    OPENCODE_SERVER_PASSWORD: raw.OPENCODE_SERVER_PASSWORD,
+    OPENCODE_AUTO_APPROVE_TOOLS: '1',
+    TUDUDI_API_URL: raw.TUDUDI_API_URL || 'https://todo.thinkout.ru',
+    TUDUDI_API_TOKEN: raw.TUDUDI_API_TOKEN,
+    TUDUDI_TIMEOUT_MS: 15000,
+  };
 
-  // Validate paths exist on disk
-  const pathChecks = [
-    { name: 'HERMES_DB_PATH', value: cfg.HERMES_DB_PATH, mustExist: true, type: 'file' },
-    { name: 'HERMES_AGENT_PATH', value: cfg.HERMES_AGENT_PATH, mustExist: true, type: 'dir' },
-    { name: 'HERMES_PYTHON_PATH', value: cfg.HERMES_PYTHON_PATH, mustExist: false, type: 'file' },
-  ];
-
-  for (const check of pathChecks) {
-    if (!check.mustExist) continue;
-    if (!fs.existsSync(check.value)) {
-      console.error(`\n❌ Path not found: ${check.name}="${check.value}"`);
-      if (check.type === 'file') {
-        console.error(`  → This file must exist. Check your HERMES_DB_PATH in .env.\n`);
-      } else {
-        console.error(`  → This directory must exist. Check your HERMES_AGENT_PATH in .env.\n`);
-      }
-      process.exit(1);
-    }
-  }
-
-  // Validate Hermes DB is a file
-  if (fs.existsSync(cfg.HERMES_DB_PATH) && !fs.statSync(cfg.HERMES_DB_PATH).isFile()) {
-    console.error(`\n❌ HERMES_DB_PATH must be a file, got directory: "${cfg.HERMES_DB_PATH}"\n`);
-    process.exit(1);
-  }
-
-  // Validate scripts exist
   const scripts = {
     saveMessages: path.join(__dirname, 'scripts', 'save_messages.py'),
     syncProviders: path.join(__dirname, 'scripts', 'sync_providers.py'),
   };
 
-  for (const [name, scriptPath] of Object.entries(scripts)) {
-    if (!fs.existsSync(scriptPath)) {
-      console.error(`\n⚠️  Script not found: ${name}="${scriptPath}"`);
-      console.error(`  → This script is required for database operations.\n`);
+  // Path/script existence checks are skipped in test mode (CI has no Hermes
+  // DB / agent install); production stays fail-fast.
+  if (!isTest) {
+    const pathChecks = [
+      { name: 'HERMES_DB_PATH', value: cfg.HERMES_DB_PATH, mustExist: true, type: 'file' },
+      { name: 'HERMES_AGENT_PATH', value: cfg.HERMES_AGENT_PATH, mustExist: true, type: 'dir' },
+      { name: 'HERMES_PYTHON_PATH', value: cfg.HERMES_PYTHON_PATH, mustExist: false, type: 'file' },
+    ];
+
+    for (const check of pathChecks) {
+      if (!check.mustExist) continue;
+      if (!fs.existsSync(check.value)) {
+        console.error(`\n❌ Path not found: ${check.name}="${check.value}"`);
+        if (check.type === 'file') {
+          console.error(`  → This file must exist. Check your HERMES_DB_PATH in .env.\n`);
+        } else {
+          console.error(`  → This directory must exist. Check your HERMES_AGENT_PATH in .env.\n`);
+        }
+        process.exit(1);
+      }
+    }
+
+    // Validate Hermes DB is a file
+    if (fs.existsSync(cfg.HERMES_DB_PATH) && !fs.statSync(cfg.HERMES_DB_PATH).isFile()) {
+      console.error(`\n❌ HERMES_DB_PATH must be a file, got directory: "${cfg.HERMES_DB_PATH}"\n`);
       process.exit(1);
+    }
+
+    for (const [name, scriptPath] of Object.entries(scripts)) {
+      if (!fs.existsSync(scriptPath)) {
+        console.error(`\n⚠️  Script not found: ${name}="${scriptPath}"`);
+        console.error(`  → This script is required for database operations.\n`);
+        process.exit(1);
+      }
     }
   }
 
